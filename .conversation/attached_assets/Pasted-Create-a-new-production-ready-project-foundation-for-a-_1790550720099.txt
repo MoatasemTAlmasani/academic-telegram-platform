@@ -1,0 +1,115 @@
+Create a new production-ready project foundation for a Telegram-based academic and student services platform.
+
+IMPORTANT:
+This is Phase 0 only.
+Do NOT build the complete application yet.
+Do NOT implement the Telegram bot business logic yet.
+Do NOT implement the publishing scheduler yet.
+Do NOT create the full admin dashboard yet.
+
+The project will eventually contain:
+
+- Telegram Bot
+- FastAPI backend
+- PostgreSQL database
+- Redis
+- Admin Dashboard
+- Academic/student services
+- Customer requests
+- File management
+- Quotes
+- Telegram destination management
+- Bulk Telegram link validation
+- Campaign management
+- Publishing queue
+- Scheduler
+- Analytics
+- Role-based access control
+- Security and audit logging
+
+For Phase 0, prepare only the professional project foundation.
+
+Requirements:
+
+1. Create a clean and scalable repository structure suitable for:
+   
+   - Python
+   - FastAPI
+   - aiogram
+   - PostgreSQL
+   - SQLAlchemy
+   - Alembic
+   - Redis
+   - Background workers
+   - React/TypeScript admin dashboard in a future phase
+
+2. Create a clear separation between:
+   
+   - backend
+   - bot
+   - database
+   - services
+   - workers
+   - configuration
+   - tests
+   - documentation
+
+3. Create:
+   
+   - README.md
+   - .gitignore
+   - .env.example
+   - basic configuration module
+   - requirements/dependency management
+   - initial application entry point
+   - health-check endpoint
+
+4. Use environment variables for all secrets and configuration.
+   NEVER hard-code:
+   
+   - Telegram Bot Token
+   - database passwords
+   - API keys
+   - Redis credentials
+   - JWT secrets
+
+5. Prepare configuration placeholders for:
+   
+   - DATABASE_URL
+   - REDIS_URL
+   - TELEGRAM_BOT_TOKEN
+   - TELEGRAM_WEBHOOK_SECRET
+   - APP_ENV
+   - SECRET_KEY
+
+6. Add basic logging and error-handling structure.
+
+7. Add a basic test structure and create at least one simple health-check test.
+
+8. Add documentation explaining:
+   
+   - project purpose
+   - architecture direction
+   - how to run the project
+   - environment variables
+   - development commands
+
+9. Do not add unnecessary dependencies.
+
+10. Do not create fake Telegram groups, channels, users, API keys, or credentials.
+
+11. Do not attempt to automatically join Telegram groups or channels.
+
+12. The future Telegram destination system must only work with groups/channels where the bot has been legitimately added and has the required permissions.
+
+13. After completing Phase 0:
+
+- run the available tests
+- run the application
+- verify the health endpoint
+- report any errors
+- show me the final project structure
+- explain what was created
+
+STOP after Phase 0.
+Do not proceed to Phase 1 without my approval.
