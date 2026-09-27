@@ -1,0 +1,1 @@
+"""Academic and student services module boundary."""

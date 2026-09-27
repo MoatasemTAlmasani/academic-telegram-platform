@@ -1,0 +1,1 @@
+"""Audit and security logging module boundary."""

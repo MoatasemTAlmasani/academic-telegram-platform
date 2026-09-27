@@ -1,0 +1,320 @@
+You are now working on PHASE 1 of the project.
+
+Project:
+A professional Telegram-based Academic & Student Services Platform.
+
+IMPORTANT:
+
+- Phase 0 has already been completed.
+- Do NOT skip ahead to later phases.
+- Do NOT build the complete application.
+- Do NOT implement the full Telegram bot.
+- Do NOT implement bulk Telegram destination import yet.
+- Do NOT implement campaigns or scheduler yet.
+- Do NOT implement the complete admin dashboard yet.
+- Focus ONLY on Architecture & Foundation.
+
+OBJECTIVE:
+Create a professional, scalable architecture that can support the complete platform in future phases.
+
+TECHNOLOGY DIRECTION:
+
+Backend:
+
+- Python 3.12+
+- FastAPI
+- SQLAlchemy 2.x
+- Alembic
+- PostgreSQL
+- Pydantic v2
+- Redis
+- aiogram for Telegram
+- Background worker architecture
+
+Frontend:
+
+- React
+- TypeScript
+- Tailwind CSS
+- The frontend can remain a planned/foundation component in this phase.
+
+ARCHITECTURE REQUIREMENTS:
+
+1. Use a modular architecture.
+
+Separate the system into clear domains/modules such as:
+
+- authentication
+- users
+- services
+- requests
+- files
+- quotes
+- telegram
+- campaigns
+- publishing
+- notifications
+- analytics
+- audit
+- administration
+
+Do not implement all business logic yet.
+Create the architectural boundaries so they can be implemented independently later.
+
+2. Apply separation of concerns.
+
+The following layers should remain conceptually separated:
+
+API
+↓
+Application / Use Cases
+↓
+Domain
+↓
+Infrastructure
+↓
+Database / External Services
+
+Avoid putting business logic directly inside FastAPI route handlers or Telegram handlers.
+
+3. Design the Telegram subsystem as a separate module.
+
+It must eventually support:
+
+- Telegram Bot
+- Telegram destinations
+- Groups
+- Channels
+- Destination validation
+- Bot permission checking
+- Bulk link import
+- Publishing queue
+- Scheduler
+- Publishing logs
+
+But in Phase 1 create ONLY the architecture/interfaces needed for these future capabilities.
+
+4. Design the future Bulk Telegram Destination system.
+
+The architecture must support:
+
+- importing many Telegram links
+- normalization
+- duplicate detection
+- validation
+- destination type detection
+- bot status detection
+- permission detection
+- status classification
+- revalidation
+- validation logs
+
+Possible future statuses:
+
+READY
+BOT_NOT_ADDED
+NO_POST_PERMISSION
+PRIVATE
+NOT_FOUND
+INVALID_LINK
+DUPLICATE
+ERROR
+
+Do not implement the actual validation engine yet.
+
+5. Design the future publishing architecture.
+
+The system must eventually support:
+
+Content
+→ Campaign
+→ Destination Selection
+→ Scheduler
+→ Publishing Queue
+→ Telegram API
+→ Success/Failure
+→ Logs
+
+Do not implement this workflow yet.
+
+6. Define configuration management.
+
+Create a centralized configuration system using environment variables.
+
+Expected configuration categories:
+
+Application:
+APP_ENV
+DEBUG
+SECRET_KEY
+
+Database:
+DATABASE_URL
+
+Redis:
+REDIS_URL
+
+Telegram:
+TELEGRAM_BOT_TOKEN
+TELEGRAM_WEBHOOK_SECRET
+
+Do not hard-code secrets.
+
+7. Define API versioning.
+
+Use a structure such as:
+
+/api/v1/
+
+The architecture should allow future versions without breaking the existing API.
+
+8. Define error handling.
+
+Create a consistent error response structure.
+
+Example:
+
+{
+"success": false,
+"error": {
+"code": "RESOURCE_NOT_FOUND",
+"message": "Resource not found"
+}
+}
+
+Do not expose sensitive internal errors to users.
+
+9. Define logging architecture.
+
+Support:
+
+- application logs
+- API logs
+- Telegram logs
+- background worker logs
+- publishing logs
+- security/audit logs
+
+Use structured logging where practical.
+
+10. Define health checks.
+
+Prepare endpoints for:
+
+/health
+/health/ready
+
+The readiness check should eventually be able to verify dependencies such as PostgreSQL and Redis.
+
+11. Define dependency boundaries.
+
+External services should be accessed through service interfaces/adapters rather than being directly embedded throughout the application.
+
+For example:
+
+TelegramService
+StorageService
+NotificationService
+PublishingService
+
+These can initially be interfaces/stubs where implementation belongs to later phases.
+
+12. Security architecture.
+
+Prepare the foundation for:
+
+- authentication
+- authorization
+- RBAC
+- rate limiting
+- input validation
+- secure secrets
+- audit logging
+- secure file handling
+- webhook verification
+
+Do not implement the entire security system yet.
+
+13. Testing architecture.
+
+Create a test structure that supports:
+
+- unit tests
+- integration tests
+- API tests
+- Telegram tests
+- database tests
+- worker tests
+
+Add only basic foundation tests in this phase.
+
+14. Documentation.
+
+Create/update:
+
+docs/
+├── ARCHITECTURE.md
+├── API.md
+├── DATABASE.md
+├── TELEGRAM.md
+├── SECURITY.md
+└── ROADMAP.md
+
+Document the decisions made in Phase 1.
+
+15. Architecture diagram.
+
+Create a clear textual architecture diagram showing:
+
+User
+↓
+Telegram Bot / Admin Dashboard
+↓
+FastAPI API
+↓
+Application Services
+↓
+Domain Modules
+↓
+Infrastructure
+↓
+PostgreSQL / Redis / Telegram API / File Storage
+
+16. Code quality.
+
+Use:
+
+- type hints
+- clear naming
+- small modules
+- docstrings where useful
+- no unnecessary dependencies
+- no duplicated configuration
+- no hard-coded credentials
+
+17. Do not over-engineer.
+
+The architecture must be professional but practical for a small team/developer.
+
+18. After implementation:
+
+- run tests
+- run lint/type checks if configured
+- start the application
+- verify health endpoints
+- verify there are no startup errors
+- show the final directory tree
+- summarize architectural decisions
+- list files created/modified
+- list any warnings or unresolved issues
+
+MOST IMPORTANT:
+
+STOP after Phase 1.
+
+Do not start Phase 2.
+Do not create the complete database schema.
+Do not create the complete Telegram bot.
+Do not create the publishing scheduler.
+
+Wait for my approval before continuing.

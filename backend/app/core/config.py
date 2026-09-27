@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     app_env: Literal["development", "testing", "staging", "production"] = (
         "development"
     )
+    debug: bool = False
     secret_key: SecretStr | None = None
     database_url: str | None = None
     redis_url: str | None = None

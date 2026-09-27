@@ -1,0 +1,1 @@
+"""Business capability boundaries for the platform."""
