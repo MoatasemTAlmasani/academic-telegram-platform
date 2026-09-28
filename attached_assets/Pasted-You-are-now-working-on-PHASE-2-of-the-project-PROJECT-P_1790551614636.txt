@@ -1,0 +1,615 @@
+You are now working on PHASE 2 of the project.
+
+PROJECT:
+Professional Telegram-based Academic & Student Services Platform.
+
+PHASE STATUS:
+
+- Phase 0: Completed.
+- Phase 1: Architecture & Foundation: Completed.
+- Now implement ONLY Phase 2: Database & Data Model.
+
+IMPORTANT:
+DO NOT start Phase 3.
+DO NOT build the complete Telegram bot.
+DO NOT build the complete admin dashboard.
+DO NOT implement the publishing scheduler.
+DO NOT implement campaigns.
+DO NOT implement the complete request workflow.
+DO NOT implement AI functionality.
+
+The objective of this phase is to create a professional, scalable relational database foundation and ORM models for future phases.
+
+==================================================
+
+1. DATABASE TECHNOLOGY
+   ==================================================
+
+Use:
+
+- PostgreSQL
+- SQLAlchemy 2.x
+- Alembic
+- Pydantic v2 where schemas are required
+
+Use SQLAlchemy declarative models with clear relationships.
+
+Use UUIDs or another robust identifier strategy for primary keys where appropriate.
+
+Do not use sequential public IDs for sensitive resources.
+
+==================================================
+2. DATABASE DESIGN PRINCIPLES
+
+Follow:
+
+- normalization
+- referential integrity
+- foreign keys
+- appropriate indexes
+- unique constraints
+- NOT NULL constraints where appropriate
+- timestamps
+- soft deletion where appropriate
+- auditability
+- scalability
+
+Avoid premature over-engineering.
+
+Do not duplicate data unnecessarily.
+
+==================================================
+3. CORE ENTITIES
+
+Prepare database models for the following domains.
+
+USER DOMAIN:
+
+users
+roles
+permissions
+user_roles
+role_permissions
+
+USER fields should support future:
+
+- Telegram identity
+- username
+- first name
+- last name
+- phone
+- email
+- language
+- timezone
+- status
+- created_at
+- updated_at
+- last_seen_at
+
+Do not store passwords in the users table unless the architecture specifically requires it.
+
+==================================================
+4. SERVICE DOMAIN
+
+Create:
+
+categories
+services
+
+Categories represent major areas such as:
+
+- Research & Studies
+- Graduation Projects
+- Data Analysis
+- Programming
+- Academic Writing
+- References & Citation
+- Presentations
+- Translation
+- Consultation
+- Training
+
+Services belong to categories.
+
+Support:
+
+- name
+- description
+- short_description
+- active/inactive
+- sort_order
+- created_at
+- updated_at
+
+Do not hard-code the service catalog into application logic.
+
+==================================================
+5. REQUEST DOMAIN
+
+Create the foundation for:
+
+service_requests
+
+The model should eventually support:
+
+- customer
+- service
+- title/topic
+- description
+- specialization
+- deadline
+- status
+- priority
+- notes
+- created_at
+- updated_at
+
+Use an extensible status design.
+
+Initial statuses:
+
+NEW
+UNDER_REVIEW
+WAITING_FOR_CUSTOMER
+QUOTATION_SENT
+APPROVED
+IN_PROGRESS
+UNDER_REVIEW
+COMPLETED
+CANCELLED
+REJECTED
+
+Avoid confusing duplicate database values if the same name appears in different business contexts. Document the status strategy.
+
+==================================================
+6. STAFF DOMAIN
+
+The role system must support future staff assignments.
+
+Prepare:
+
+staff_profiles
+
+Support future:
+
+- user
+- specialization
+- availability
+- active status
+
+Requests should eventually be assignable to staff members.
+
+Do not implement assignment logic yet.
+
+==================================================
+7. FILE DOMAIN
+
+Create:
+
+files
+
+Support:
+
+- owner
+- original_filename
+- stored_filename or object key
+- MIME type
+- size
+- storage provider
+- checksum/hash
+- scan status
+- access status
+- created_at
+
+Possible scan states:
+
+PENDING
+CLEAN
+INFECTED
+FAILED
+
+Do not implement malware scanning yet.
+
+Never expose internal filesystem paths as public URLs.
+
+==================================================
+8. QUOTATION DOMAIN
+
+Create:
+
+quotes
+
+Support:
+
+- request
+- quote number/reference
+- price
+- currency
+- description
+- deadline
+- notes
+- status
+- expires_at
+- created_at
+- updated_at
+
+Possible statuses:
+
+DRAFT
+SENT
+ACCEPTED
+CHANGE_REQUESTED
+REJECTED
+EXPIRED
+
+Do not implement payment processing yet.
+
+==================================================
+9. TELEGRAM DOMAIN
+
+This is extremely important for future phases.
+
+Create the foundation for:
+
+telegram_destinations
+
+telegram_validation_logs
+
+telegram destinations must support:
+
+- original_url
+- normalized_identifier
+- chat_id
+- username
+- title
+- chat_type
+- privacy status
+- bot status
+- posting permission
+- active/inactive
+- validation status
+- last_checked_at
+- last_success_at
+- last_error
+- created_at
+- updated_at
+
+Possible destination validation statuses:
+
+READY
+BOT_NOT_ADDED
+NO_POST_PERMISSION
+PRIVATE
+NOT_FOUND
+INVALID_LINK
+DUPLICATE
+ERROR
+
+Possible chat types:
+
+GROUP
+SUPERGROUP
+CHANNEL
+UNKNOWN
+
+Do not implement actual Telegram validation in this phase.
+
+Do not attempt to join groups or channels automatically.
+
+The future system must only publish to destinations where the bot has been legitimately added and authorized.
+
+==================================================
+10. CONTENT DOMAIN
+
+Prepare database foundation for future publishing:
+
+content_items
+content_templates
+
+Content should eventually support:
+
+- title
+- body
+- media
+- content type
+- status
+- created_by
+- updated_by
+- created_at
+- updated_at
+
+Do not implement publishing logic yet.
+
+==================================================
+11. CAMPAIGN DOMAIN
+
+Create the database foundation for:
+
+campaigns
+campaign_destinations
+
+Campaigns should eventually support:
+
+- name
+- description
+- status
+- start_at
+- end_at
+- created_by
+- created_at
+- updated_at
+
+Do not implement campaign execution yet.
+
+==================================================
+12. PUBLISHING DOMAIN
+
+Create database foundation for:
+
+publishing_jobs
+publishing_logs
+
+Publishing jobs should eventually support:
+
+- campaign
+- content
+- destination
+- scheduled_at
+- status
+- attempts
+- last_error
+- published_at
+- created_at
+- updated_at
+
+Possible statuses:
+
+PENDING
+PROCESSING
+SUCCESS
+FAILED
+RETRYING
+SKIPPED
+
+Do not implement scheduler logic yet.
+
+==================================================
+13. NOTIFICATION DOMAIN
+
+Prepare:
+
+notifications
+
+Support future:
+
+- user
+- type
+- title
+- message
+- read/unread
+- created_at
+
+==================================================
+14. AUDIT DOMAIN
+
+Create:
+
+audit_logs
+
+Support:
+
+- actor/user
+- action
+- entity type
+- entity ID
+- metadata
+- IP address where appropriate
+- user agent where appropriate
+- timestamp
+
+Do not store sensitive secrets in audit logs.
+
+==================================================
+15. DATABASE RELATIONSHIPS
+
+Define appropriate relationships, including:
+
+User
+→ Service Requests
+
+Category
+→ Services
+
+Service
+→ Service Requests
+
+Service Request
+→ Files
+
+Service Request
+→ Quotes
+
+User
+→ Staff Profile
+
+User
+→ Roles
+
+Role
+→ Permissions
+
+Campaign
+→ Destinations
+
+Campaign
+→ Publishing Jobs
+
+Content
+→ Publishing Jobs
+
+Destination
+→ Validation Logs
+
+User
+→ Audit Logs
+
+Ensure foreign keys and cascading behavior are carefully designed.
+
+Do not blindly use CASCADE everywhere.
+
+==================================================
+16. INDEXING
+
+Add indexes where they provide clear value.
+
+Consider indexes for:
+
+- Telegram username
+- Telegram chat_id
+- destination status
+- request status
+- request customer
+- request service
+- request deadline
+- quote status
+- campaign status
+- scheduled publishing jobs
+- audit timestamps
+
+Avoid unnecessary indexes.
+
+==================================================
+17. MIGRATIONS
+
+Create the initial Alembic migration.
+
+The migration must be reproducible.
+
+Test:
+
+upgrade
+downgrade where practical
+upgrade again
+
+Do not manually modify the database without migrations.
+
+==================================================
+18. SEED DATA
+
+Create minimal development seed data only if useful.
+
+If seed data is created:
+
+- clearly mark it as development data
+- do not create fake Telegram destinations
+- do not create fake credentials
+- do not create real customer information
+
+==================================================
+19. DATABASE SCHEMA DOCUMENTATION
+
+Update:
+
+docs/DATABASE.md
+
+Document:
+
+- tables
+- important fields
+- relationships
+- indexes
+- constraints
+- status values
+- migration process
+- seed process
+
+Also create an ERD representation using Mermaid if practical.
+
+Example:
+
+User
+├── Roles
+├── Requests
+├── Notifications
+└── Audit Logs
+
+Request
+├── Service
+├── Files
+└── Quotes
+
+Campaign
+├── Destinations
+└── Publishing Jobs
+
+==================================================
+20. VALIDATION
+
+After implementation:
+
+1. Run database migrations.
+2. Verify all tables are created.
+3. Verify foreign keys.
+4. Verify indexes.
+5. Verify unique constraints.
+6. Run application startup.
+7. Run existing tests.
+8. Add database model tests where useful.
+9. Test migration upgrade.
+10. Test basic database connectivity.
+
+Fix all errors discovered during this phase.
+
+==================================================
+21. CODE QUALITY
+
+Use:
+
+- type hints
+- clear naming
+- modular model files
+- reusable Base model
+- consistent timestamp handling
+- clear enums/status definitions
+- appropriate database constraints
+
+Avoid putting business logic inside database models unless justified.
+
+==================================================
+22. SECURITY
+
+Never store:
+
+- Telegram Bot Token
+- API keys
+- passwords
+- private credentials
+
+inside the database schema or seed data.
+
+Use environment variables/secrets management.
+
+Do not log sensitive credentials.
+
+==================================================
+23. FINAL REPORT
+
+When Phase 2 is complete, report:
+
+1. Final database architecture
+2. Tables created
+3. Relationships
+4. Important indexes
+5. Constraints
+6. Alembic migration status
+7. Tests performed
+8. Any errors fixed
+9. Any unresolved warnings
+10. Final project/database structure
+
+IMPORTANT:
+STOP HERE.
+
+Do NOT start Phase 3.
+
+Wait for explicit approval before continuing.

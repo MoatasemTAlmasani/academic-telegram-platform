@@ -6,10 +6,10 @@
 uv sync --dev
 ```
 
-The optional infrastructure dependencies can be installed later with:
+The infrastructure dependencies can be installed later with:
 
 ```bash
-uv sync --dev --extra infra
+uv sync --dev --group infra
 ```
 
 ## Run
