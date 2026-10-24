@@ -3,179 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#102b55">
-  <title>احتراف الأكاديمية | Professional Academy</title>
+  <meta name="theme-color" content="#0b3154">
+  <meta name="description" content="منصة موثوقة للخدمات الأكاديمية ومتابعة الطلبات الطلابية.">
+  <title>احتراف الأكاديمية | الخدمات الأكاديمية</title>
   <link rel="stylesheet" href="/miniapp/static/style.css">
 </head>
 <body>
-
-<div id="introScreens" class="intro-screens">
-  <section class="intro-screen intro-welcome" id="introWelcome">
-    <div class="intro-logo" aria-hidden="true">
-      <svg viewBox="0 0 100 70" width="76" height="58" fill="none">
-        <path d="M5 24 50 5 95 24 50 44 5 24Z" fill="white"/>
-        <path d="M23 34V49Q50 68 77 49V34L50 46 23 34Z" fill="white" opacity=".92"/>
-        <path d="M94 25V49" stroke="white" stroke-width="4" stroke-linecap="round"/>
-        <circle cx="94" cy="53" r="4" fill="#42d7df"/>
-      </svg>
-    </div>
-    <h1>احتراف الأكاديمية</h1>
-    <p class="intro-english">Professional Academy</p>
-    <p class="intro-tagline">خدماتك الأكاديمية في مكان واحد</p>
-    <p class="intro-subtitle">Your academic services in one place</p>
-    <div class="intro-books" aria-hidden="true"><span></span><span></span><span></span></div>
-    <div class="intro-dots" aria-label="1 of 3"><span class="selected"></span><span></span><span></span></div>
-    <button type="button" class="intro-button" id="startIntro">ابدأ الآن <span aria-hidden="true">←</span></button>
-  </section>
-
-  <section class="intro-screen intro-about" id="introAbout" hidden>
-    <button type="button" class="intro-skip" id="skipIntro">تخطي</button>
-    <div class="intro-illustration" aria-hidden="true">
-      <span>📚</span><span>🎓</span>
-    </div>
-    <h2>كل خدماتك الأكاديمية في مكان واحد</h2>
-    <p>من البحث العلمي إلى إعداد المشاريع والتنسيق الأكاديمي، نساعدك على إنجاز أعمالك بسهولة واحترافية.</p>
-    <p class="intro-subtitle">From research to academic projects, your journey starts here.</p>
-    <div class="intro-dots" aria-label="2 of 3">
-      <span></span><span class="selected"></span><span></span>
-    </div>
-    <button type="button" class="intro-button" id="finishIntro">
-      متابعة <span aria-hidden="true">←</span>
-    </button>
-  </section>
-</div>
-
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-mark">PA</div>
-      <div>
-        <strong data-i18n="brand">احتراف الأكاديمية</strong>
-        <small>Professional Academy</small>
+  <div id="app" class="app-shell">
+    <header id="topbar" class="topbar" hidden>
+      <a class="brand" href="#home" aria-label="احتراف الأكاديمية، الرئيسية">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <path d="m3 11 13-6 13 6-13 6-13-6Z" fill="currentColor"/>
+            <path d="M8 14v7c5 4 11 4 16 0v-7l-8 4-8-4Z" fill="currentColor" opacity=".8"/>
+            <path d="M28.5 12v8" stroke="#69d8d7" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong data-i18n="brand">احتراف الأكاديمية</strong>
+          <small data-i18n="brandSub">خدمات أكاديمية موثوقة</small>
+        </span>
+      </a>
+      <div class="top-actions">
+        <button id="languageBtn" class="language-button" type="button" aria-haspopup="dialog" aria-label="اختيار اللغة">English</button>
       </div>
-    </div>
-    <button id="languageBtn" class="language-btn" type="button">English</button>
-  </header>
+    </header>
 
-  <main id="top">
-    <section class="welcome" id="home">
-      <span class="eyebrow" data-i18n="welcomeLabel">مساحتك الأكاديمية</span>
-      <h1 data-i18n="welcome">مرحباً بك 👋</h1>
-      <p data-i18n="welcomeText">كيف يمكننا مساعدتك اليوم؟</p>
-      <label class="search-box" for="serviceSearch">
-        <span aria-hidden="true">⌕</span>
-        <input id="serviceSearch" type="search"
-          data-i18n-placeholder="searchPlaceholder"
-          placeholder="ابحث عن خدمة أو تخصص..."
-          autocomplete="off">
-      </label>
-    </section>
+    <main id="screen" aria-live="polite" aria-busy="false"></main>
 
-    <section class="section" id="services">
-      <div class="section-heading">
-        <div>
-          <h2 data-i18n="categoriesTitle">تصفح التخصصات</h2>
-          <p data-i18n="categoriesSubtitle">اختر التخصص المناسب لاحتياجك</p>
-        </div>
-        <span class="section-icon" aria-hidden="true">✳</span>
-      </div>
-      <div id="categoryGrid" class="category-grid" aria-live="polite"></div>
-      <button id="showAllCategories" class="secondary-btn" type="button"
-        data-i18n="showAllCategories">عرض جميع الأصناف</button>
+    <nav id="bottomNav" class="bottom-nav" aria-label="التنقل الرئيسي" hidden>
+      <a class="nav-item" href="#home" data-route-nav="home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/></svg>
+        <small data-i18n="navHome">الرئيسية</small>
+      </a>
+      <a class="nav-item" href="#categories" data-route-nav="categories">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+        <small data-i18n="navServices">الخدمات</small>
+      </a>
+      <a class="nav-item" href="#requests" data-route-nav="requests">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h8l5 5v13H7z"/><path d="M15 3v6h5M10 14h7M10 18h7M3 8v13"/></svg>
+        <small data-i18n="navRequests">طلباتي</small>
+      </a>
+      <a class="nav-item" href="#notifications" data-route-nav="notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg>
+        <small data-i18n="navNotifications">الإشعارات</small>
+      </a>
+      <a class="nav-item" href="#support" data-route-nav="support">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0M19 8h2v5h-2"/></svg>
+        <small data-i18n="navHelp">المساعدة</small>
+      </a>
+    </nav>
+  </div>
 
-      <div class="section-heading service-heading">
-        <div>
-          <h2 data-i18n="servicesTitle">الخدمات الأكاديمية</h2>
-          <p id="selectedCategoryLabel" data-i18n="servicesSubtitle">اختر الخدمة التي تناسب احتياجك</p>
-        </div>
-        <button id="clearCategory" class="secondary-btn" type="button"
-          data-i18n="clearCategory">إلغاء التصفية</button>
-      </div>
-      <div class="service-grid" id="serviceGrid" aria-live="polite">
-        <p class="form-message" data-i18n="loadingServices">جارٍ تحميل الخدمات...</p>
-      </div>
-    </section>
-
-    <section class="section request-panel" id="createRequest">
-      <div class="section-heading">
-        <div>
-          <h2 data-i18n="requestTitle">أنشئ طلبك</h2>
-          <p data-i18n="requestSubtitle">أخبرنا بما تحتاج إليه</p>
-        </div>
-        <span class="request-symbol" aria-hidden="true">＋</span>
-      </div>
-      <form id="requestForm">
-        <label for="service" data-i18n="serviceLabel">نوع الخدمة</label>
-        <select id="service" required>
-          <option value="" data-i18n="chooseService">اختر الخدمة</option>
-        </select>
-        <label for="details" data-i18n="detailsLabel">تفاصيل الطلب</label>
-        <textarea id="details" rows="3" required
-          data-i18n-placeholder="detailsPlaceholder"
-          placeholder="اكتب تفاصيل ما تحتاج إليه..."></textarea>
-        <button class="primary-btn" type="submit">
-          <span data-i18n="submitRequest">متابعة الطلب</span><span aria-hidden="true">←</span>
-        </button>
-        <p id="formMessage" class="form-message" role="status"></p>
-      </form>
-    </section>
-
-    <section class="section" id="myRequests">
-      <div class="section-heading">
-        <div>
-          <h2 data-i18n="trackingTitle">طلباتي</h2>
-          <p data-i18n="trackingSubtitle">تابع طلباتك وتحديثاتها</p>
-        </div>
-        <span class="tracking-icon" aria-hidden="true">◎</span>
-      </div>
-      <div class="empty-state">
-        <div class="empty-icon" aria-hidden="true">▤</div>
-        <strong data-i18n="emptyTitle">لا توجد طلبات حتى الآن</strong>
-        <p data-i18n="emptyText">ستظهر طلباتك هنا بعد ربط إرسالها بالخادم.</p>
-      </div>
-    </section>
-
-    <section class="section" id="notifications">
-      <div class="section-heading">
-        <div>
-          <h2 data-i18n="notificationsTitle">الإشعارات</h2>
-          <p data-i18n="notificationsSubtitle">تابع آخر التنبيهات والتحديثات</p>
-        </div>
-      </div>
-      <div id="notificationsList" class="empty-state">
-        <p data-i18n="noNotifications">لا توجد إشعارات حالياً</p>
-      </div>
-    </section>
-
-    <section class="section" id="account">
-      <div class="section-heading">
-        <div><h2 data-i18n="accountTitle">حسابي والإعدادات</h2></div>
-      </div>
-      <div class="settings-list">
-        <button type="button" class="setting-item" data-account-action="profile" data-i18n="profileSetting">الملف الشخصي</button>
-        <button type="button" class="setting-item" data-account-action="language" data-i18n="languageSetting">لغة التطبيق</button>
-        <button type="button" class="setting-item" data-account-action="notifications" data-i18n="notificationsSetting">الإشعارات</button>
-        <button type="button" class="setting-item" data-account-action="appearance" data-i18n="appearanceSetting">المظهر</button>
-      </div>
-    </section>
-
-    <section class="section" id="support">
-      <div class="section-heading">
-        <div>
-          <h2 data-i18n="supportTitle">الدعم والمساعدة</h2>
-          <p data-i18n="supportText">هل تحتاج إلى مساعدة؟ تواصل مع فريق الدعم.</p>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <nav class="bottom-nav" aria-label="Main navigation">
-    <a class="nav-item active" href="#home"><span aria-hidden="true">⌂</span><small data-i18n="home">الرئيسية</small></a>
-    <a class="nav-item" href="#services"><span aria-hidden="true">▦</span><small data-i18n="services">الخدمات</small></a>
-    <a class="nav-item" href="#myRequests"><span aria-hidden="true">＋</span><small data-i18n="myRequests">طلباتي</small></a>
-    <a class="nav-item" href="#notifications"><span aria-hidden="true">♧</span><small data-i18n="notifications">الإشعارات</small></a>
-    <a class="nav-item" href="#account"><span aria-hidden="true">♙</span><small data-i18n="account">حسابي</small></a>
-  </nav>
-
+  <div id="overlayRoot"></div>
+  <div id="toastRoot" aria-live="polite"></div>
   <script src="/miniapp/static/app.js"></script>
 </body>
 </html>
