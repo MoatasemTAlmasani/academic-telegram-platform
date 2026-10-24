@@ -1,0 +1,5936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Platform — Admin</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, Arial, sans-serif;
+            background: #07111f;
+            color: #e8f1fb;
+        }
+
+        button, input, select {
+            font: inherit;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .login-screen {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background:
+                radial-gradient(circle at top, #102b45 0%, #07111f 45%, #040a12 100%);
+            padding: 20px;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            background: #0c1a2b;
+            border: 1px solid #183650;
+            border-radius: 18px;
+            padding: 36px;
+            box-shadow: 0 25px 70px rgba(0,0,0,.45);
+        }
+
+        .brand-mark {
+            width: 52px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #00c8ff;
+            color: #03111d;
+            border-radius: 14px;
+            font-size: 25px;
+            font-weight: 800;
+            margin-bottom: 20px;
+        }
+
+        .login-card h1 {
+            margin: 0 0 8px;
+            font-size: 28px;
+        }
+
+        .muted {
+            color: #91a8bd;
+        }
+
+        label {
+            display: block;
+            margin: 20px 0 8px;
+            color: #b8cadb;
+            font-size: 14px;
+        }
+
+        input, select {
+            width: 100%;
+            background: #081522;
+            border: 1px solid #1d3a53;
+            color: #e8f1fb;
+            padding: 12px 14px;
+            border-radius: 10px;
+            outline: none;
+        }
+
+        input:focus, select:focus {
+            border-color: #00c8ff;
+            box-shadow: 0 0 0 3px rgba(0,200,255,.1);
+        }
+
+        .primary-btn {
+            width: 100%;
+            border: 0;
+            border-radius: 10px;
+            padding: 13px;
+            margin-top: 22px;
+            background: #00c8ff;
+            color: #03111d;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .primary-btn:hover {
+            background: #33d5ff;
+        }
+
+        .error {
+            margin-top: 14px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: #35151b;
+            color: #ff9da9;
+            border: 1px solid #71303a;
+        }
+
+        .app {
+            min-height: 100vh;
+            display: flex;
+        }
+
+        .sidebar {
+            width: 250px;
+            min-height: 100vh;
+            background: #091625;
+            border-right: 1px solid #173047;
+            padding: 24px 16px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+        }
+
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 4px 10px 28px;
+        }
+
+        .sidebar-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #00c8ff;
+            color: #03111d;
+            font-weight: 800;
+        }
+
+        .sidebar-title {
+            font-weight: 750;
+        }
+
+        .sidebar-subtitle {
+            color: #6f899e;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .nav-section {
+            color: #d7e7f3;
+            text-transform: uppercase;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .12em;
+            padding: 20px 12px 9px;
+            margin-top: 8px;
+            border-bottom: 1px solid rgba(120, 170, 205, 0.18);
+        }
+
+        .nav-btn {
+            width: 100%;
+            text-align: left;
+            border: 0;
+            background: transparent;
+            color: #9db2c5;
+            padding: 12px;
+            border-radius: 9px;
+            cursor: pointer;
+            margin-bottom: 4px;
+        }
+
+        .nav-btn:hover,
+        .nav-btn.active {
+            background: #10283d;
+            color: #00c8ff;
+        }
+
+        .logout {
+            position: absolute;
+            left: 16px;
+            right: 16px;
+            bottom: 20px;
+        }
+
+        .main {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+            min-height: 100vh;
+        }
+
+        .topbar {
+            height: 72px;
+            border-bottom: 1px solid #173047;
+            background: #081522;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+        }
+
+        .topbar-title {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .user-badge {
+            color: #91a8bd;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .page-header h2 {
+            margin: 0 0 6px;
+            font-size: 26px;
+        }
+
+        .page-header p {
+            margin: 0;
+            color: #7891a6;
+        }
+
+        .action-btn {
+            border: 1px solid #00c8ff;
+            background: #00c8ff;
+            color: #03111d;
+            padding: 10px 16px;
+            border-radius: 9px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 18px;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: #0c1a2b;
+            border: 1px solid #173047;
+            border-radius: 14px;
+            padding: 20px;
+        }
+
+        .stat-label {
+            color: #7891a6;
+            font-size: 13px;
+        }
+
+        .stat-value {
+            font-size: 29px;
+            font-weight: 800;
+            margin-top: 10px;
+        }
+
+        .panel {
+            background: #0c1a2b;
+            border: 1px solid #173047;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid #173047;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-header h3 {
+            margin: 0;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: 1fr 180px;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 15px 18px;
+            border-bottom: 1px solid #142c40;
+            white-space: nowrap;
+        }
+
+        th {
+            color: #7891a6;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        td {
+            color: #d7e4ef;
+            font-size: 14px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 5px 9px;
+            border-radius: 999px;
+            font-size: 12px;
+        }
+
+        .status.active {
+            background: #103526;
+            color: #5fe0a3;
+        }
+
+        .status.inactive {
+            background: #38271a;
+            color: #e9b76a;
+        }
+
+        .table-action {
+            background: transparent;
+            border: 1px solid #29445a;
+            color: #9db2c5;
+            padding: 6px 10px;
+            border-radius: 7px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+
+        .table-action:hover {
+            border-color: #00c8ff;
+            color: #00c8ff;
+        }
+
+        .empty {
+            text-align: center;
+            color: #71899d;
+            padding: 35px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 100;
+        }
+
+        .modal {
+            width: 100%;
+            max-width: 520px;
+            background: #0c1a2b;
+            border: 1px solid #23435c;
+            border-radius: 16px;
+            padding: 25px;
+        }
+
+        .modal h3 {
+            margin-top: 0;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 22px;
+        }
+
+        .secondary-btn {
+            border: 1px solid #29445a;
+            background: transparent;
+            color: #a9bbca;
+            padding: 10px 16px;
+            border-radius: 9px;
+            cursor: pointer;
+        }
+
+        .loading {
+            color: #00c8ff;
+            padding: 25px;
+            text-align: center;
+        }
+
+        @media (max-width: 1000px) {
+            .cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 700px) {
+            .sidebar {
+                width: 70px;
+                padding: 15px 8px;
+            }
+
+            .sidebar-title,
+            .sidebar-subtitle,
+            .nav-section {
+                display: none;
+            }
+
+            .sidebar-brand {
+                justify-content: center;
+                padding-bottom: 20px;
+            }
+
+            .nav-btn {
+                text-align: center;
+                font-size: 0;
+            }
+
+            .nav-btn::first-letter {
+                font-size: 18px;
+            }
+
+            .main {
+                margin-left: 70px;
+                width: calc(100% - 70px);
+            }
+
+            .content {
+                padding: 18px;
+            }
+
+            .cards {
+                grid-template-columns: 1fr;
+            }
+
+            .filters {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+<style id="user-modal-fix">
+#userModal {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    display: none;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 999999 !important;
+    background: rgba(0, 0, 0, 0.75) !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
+}
+
+#userModal .modal-backdrop {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
+    z-index: 0 !important;
+}
+
+#userModal .modal-dialog {
+    position: relative !important;
+    z-index: 1 !important;
+    width: min(760px, calc(100vw - 48px)) !important;
+    max-height: calc(100vh - 48px) !important;
+    overflow-y: auto !important;
+    margin: auto !important;
+    background: #ffffff !important;
+    border-radius: 14px !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35) !important;
+}
+
+#userModal .modal-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 20px !important;
+    padding: 24px !important;
+}
+
+#userModal form {
+    padding: 0 24px 24px 24px !important;
+}
+
+#userModal .form-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+}
+
+#userModal .form-group {
+    min-width: 0 !important;
+}
+
+#userModal input,
+#userModal select {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+#userModal .modal-actions {
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 10px !important;
+    margin-top: 24px !important;
+}
+
+#userModal .modal-close {
+    cursor: pointer !important;
+    border: 0 !important;
+    background: transparent !important;
+    font-size: 28px !important;
+    line-height: 1 !important;
+}
+
+@media (max-width: 700px) {
+    #userModal .form-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    #userModal .modal-dialog {
+        width: calc(100vw - 24px) !important;
+        max-height: calc(100vh - 24px) !important;
+    }
+}
+</style>
+
+
+<style id="access-control-settings-css">
+
+.access-layout {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.8fr)
+                         minmax(260px, 1.1fr)
+                         minmax(320px, 1.5fr);
+    gap: 20px;
+    align-items: start;
+}
+
+.access-list {
+    max-height: 520px;
+    overflow-y: auto;
+}
+
+.access-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    border-bottom: 1px solid #e5e7eb;
+    background: transparent;
+    padding: 14px;
+    cursor: pointer;
+}
+
+.access-item:hover {
+    background: #f8fafc;
+}
+
+.access-item.active {
+    background: #eef6ff;
+}
+
+.access-item strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.access-item .muted {
+    font-size: 12px;
+}
+
+.permission-checklist {
+    max-height: 520px;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.permission-check {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 11px 14px;
+    border-bottom: 1px solid #eef0f3;
+}
+
+.permission-check input {
+    margin-top: 3px;
+}
+
+.permission-code {
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.permission-description {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 3px;
+}
+
+.status-grid {
+    display: grid;
+    gap: 0;
+}
+
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 14px 0;
+    border-bottom: 1px solid #eef0f3;
+}
+
+.status-row:last-child {
+    border-bottom: 0;
+}
+
+.success {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #ecfdf5;
+    color: #047857;
+}
+
+@media (max-width: 1100px) {
+    .access-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .access-list,
+    .permission-checklist {
+        max-height: 360px;
+    }
+}
+
+</style>
+
+
+<style id="staff-management-css">
+#staffModal {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    display: none;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 999999 !important;
+    background: rgba(0, 0, 0, 0.75) !important;
+    padding: 24px !important;
+    box-sizing: border-box !important;
+}
+
+#staffModal .modal-content {
+    width: min(900px, 100%) !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+}
+
+#staffModal .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+@media (max-width: 700px) {
+    #staffModal .form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+</head>
+
+<body>
+
+<div id="loginScreen" class="login-screen">
+    <div class="login-card">
+        <div class="brand-mark">A</div>
+        <h1>Academic Platform</h1>
+        <p class="muted">Administrator Control Center</p>
+
+        <form id="loginForm">
+            <label for="username">Username</label>
+            <input id="username" type="text" autocomplete="username" required>
+
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password" required>
+
+            <button id="loginButton" class="primary-btn" type="submit">
+                Sign In
+            </button>
+
+            <div id="loginError" class="error hidden"></div>
+        </form>
+    </div>
+</div>
+
+<div id="appView" class="app hidden">
+
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="sidebar-logo">A</div>
+            <div>
+                <div class="sidebar-title">Academic Platform</div>
+                <div class="sidebar-subtitle">Admin Center</div>
+            </div>
+        </div>
+
+        <div class="nav-section">Management</div>
+
+        <button class="nav-btn active" data-page="dashboard">
+            ◉ &nbsp; Dashboard
+        </button>
+
+        <button class="nav-btn" data-page="users">
+            ◎ &nbsp; Users
+        </button>
+
+        <button class="nav-btn" data-page="services">
+            ◈ &nbsp; Services
+        </button>
+        <button class="nav-btn" data-page="requests">
+            📥 &nbsp; Requests
+        </button>
+
+        <button class="nav-btn" data-page="telegram-destinations">
+            📡 &nbsp; Destinations
+        </button>
+
+<button class="nav-btn" data-page="categories">
+    ◇ &nbsp; Categories
+</button>
+
+        <button class="nav-btn" data-page="staff">
+            ♟ &nbsp; Staff
+        </button>
+
+        <div class="nav-section">System</div>
+
+        <button class="nav-btn" data-page="access-control">
+            🔐 &nbsp; Access Control
+        </button>
+
+                <button class="nav-btn" data-page="audit">
+            <span>Audit Logs</span>
+        </button>
+        <button class="nav-btn" data-page="settings">
+            ⚙ &nbsp; Settings
+        </button>
+
+        <button id="logoutButton" class="nav-btn logout">
+            ⇥ &nbsp; Logout
+        </button>
+    </aside>
+
+    <main class="main">
+
+        <header class="topbar">
+            <div id="topbarTitle" class="topbar-title">Dashboard</div>
+            <div id="currentUser" class="user-badge"></div>
+        </header>
+
+        <section class="content">
+
+            <div id="page-telegram-destinations" class="page">
+                <div class="page-header">
+                    <div>
+                        <h2>📡 Telegram Destinations</h2>
+                        <p>Manage Telegram groups and channels used for publishing.</p>
+                    </div>
+                    <button class="action-btn" type="button" onclick="openTelegramDestinationModal()">
+                        + Add Destination
+                    </button>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>Publishing Destinations</h3>
+                    </div>
+                    <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-header">
+        <h3>📥 Import Telegram Links</h3>
+    </div>
+
+    <div style="padding:20px;">
+        <p style="color:var(--muted);margin-top:0;">
+            Upload a TXT or CSV file containing Telegram group/channel links.
+        </p>
+
+        <input
+            id="telegramDestinationsFile"
+            type="file"
+            accept=".txt,.csv"
+            style="margin-bottom:14px;"
+        >
+
+        <div>
+            <button
+                type="button"
+                class="action-btn"
+                onclick="importTelegramDestinationsFile()"
+            >
+                📥 Import Links
+            </button>
+        </div>
+
+        <div
+            id="telegramImportMessage"
+            style="margin-top:14px;"
+        ></div>
+    </div>
+</div>
+
+<div id="telegramDestinationsTable">
+                        <div class="empty-state">
+                            <div class="empty-icon">📡</div>
+                            <h3>No destinations loaded</h3>
+                            <p>Destination management will be connected to the API next.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="page-dashboard" class="page active">
+                <div class="page-header">
+                    <div>
+                        <h2>Dashboard Overview</h2>
+                        <p>Academic Services Platform administration</p>
+                    </div>
+                </div>
+
+                <div class="cards">
+                    <div class="card">
+                        <div class="stat-label">Users</div>
+                        <div id="statUsers" class="stat-value">—</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="stat-label">Services</div>
+                        <div id="statServices" class="stat-value">—</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="stat-label">Active Services</div>
+                        <div id="statActiveServices" class="stat-value">—</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="stat-label">System</div>
+                        <div class="stat-value">OK</div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>System Status</h3>
+                    </div>
+                    <div class="empty">
+                        Authentication and API services are operational.
+                    </div>
+                </div>
+            </div>
+
+            <div id="page-users" class="page">
+                <div class="page-header">
+                    <div>
+                        <h2>Users</h2>
+                        <p>Manage platform users and staff accounts</p>
+                    </div>
+
+                    <button id="addUserBtn" class="action-btn" type="button" onclick="openUserModal(null)">
+                        + Add User
+                    </button>
+                </div>
+
+                <div class="panel">
+                    <div id="usersContent" class="loading">Loading users...</div>
+                </div>
+            </div>
+
+            <div id="page-services" class="page">
+
+                <div class="page-header">
+                    <div>
+                        <h2>Services</h2>
+                        <p>Manage academic services offered by the platform</p>
+                    </div>
+
+                    <button id="addServiceButton" class="action-btn">
+                        + Add Service
+                    </button>
+                </div>
+
+                <div class="filters">
+                    <input id="serviceSearch"
+                           type="search"
+                           placeholder="Search services...">
+
+                    <select id="serviceStatus">
+                        <option value="">All statuses</option>
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+
+                <div class="panel">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Category</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Sort</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="servicesTable">
+                                <tr>
+                                    <td colspan="6" class="loading">
+                                        Loading services...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="page-requests" class="page">
+
+                <div class="page-header">
+                    <div>
+                        <h2>Requests</h2>
+                        <p>Manage and review customer service requests.</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="table-toolbar">
+                        <input type="text" id="requestSearch" placeholder="Search requests...">
+
+                        <select id="requestStatusFilter">
+                            <option value="">All Statuses</option>
+                            <option value="NEW">New</option>
+                            <option value="UNDER_REVIEW">Under Review</option>
+                            <option value="WAITING_FOR_CUSTOMER">Waiting for Customer</option>
+                            <option value="QUOTATION_SENT">Quotation Sent</option>
+                            <option value="APPROVED">Approved</option>
+                            <option value="IN_PROGRESS">In Progress</option>
+                            <option value="COMPLETED">Completed</option>
+                            <option value="CANCELLED">Cancelled</option>
+                            <option value="REJECTED">Rejected</option>
+                        </select>
+
+                        <select id="requestPriorityFilter">
+                            <option value="">All Priorities</option>
+                            <option value="LOW">Low</option>
+                            <option value="NORMAL">Normal</option>
+                            <option value="HIGH">High</option>
+                            <option value="URGENT">Urgent</option>
+                        </select>
+
+                        <button class="btn btn-primary" id="refreshRequestsBtn">
+                            ↻ Refresh
+                        </button>
+                    </div>
+
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Request</th>
+                                    <th>Customer</th>
+                                    <th>Service</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Deadline</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requestsTableBody">
+                                <tr>
+                                    <td colspan="8" style="text-align:center;">
+                                        No requests loaded yet.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+<div id="page-categories" class="page">
+
+    <div class="page-header">
+        <div>
+            <h2>Categories</h2>
+            <p class="page-description">
+                Manage academic service categories.
+            </p>
+        </div>
+
+        <button id="addCategoryButton" class="action-btn">
+            + Add Category
+        </button>
+    </div>
+
+    <div class="table-card">
+
+        <div class="table-toolbar">
+            <div>
+                <strong>Category Management</strong>
+            </div>
+
+            <div>
+                <input
+                    id="categorySearch"
+                    type="text"
+                    placeholder="Search categories..."
+                >
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th>Sort Order</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody id="categoriesTable">
+                    <tr>
+                        <td colspan="5" class="loading">
+                            Loading categories...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+
+<div id="categoryModal" class="modal hidden">
+    <div class="modal-content">
+
+        <div class="modal-header">
+            <h3 id="categoryModalTitle">Add Category</h3>
+
+            <button
+                type="button"
+                class="modal-close"
+                id="closeCategoryModal"
+            >
+                ×
+            </button>
+        </div>
+
+        <form id="categoryForm">
+
+            <input id="categoryId" type="hidden">
+
+            <div class="form-group">
+                <label for="categoryName">Name</label>
+                <input
+                    id="categoryName"
+                    type="text"
+                    maxlength="150"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="categoryDescription">Description</label>
+                <textarea
+                    id="categoryDescription"
+                    rows="4"
+                    maxlength="2000"
+                ></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="categorySortOrder">Sort Order</label>
+                <input
+                    id="categorySortOrder"
+                    type="number"
+                    min="0"
+                    value="0"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="categoryActive">Status</label>
+                <select id="categoryActive">
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                </select>
+            </div>
+
+            <div id="categoryError" class="error hidden"></div>
+
+            <div class="modal-actions">
+                <button
+                    type="button"
+                    class="secondary-btn"
+                    id="cancelCategoryButton"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    class="action-btn"
+                    id="saveCategoryButton"
+                >
+                    Save Category
+                </button>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<div id="page-staff" class="page">
+    <div class="page-header">
+        <div>
+            <h2>Staff</h2>
+            <p>Manage staff members and their academic roles.</p>
+        </div>
+
+        <button id="addStaffButton" class="action-btn" type="button">
+            + Add Staff
+        </button>
+    </div>
+
+    <div class="filters">
+        <input
+            id="staffSearch"
+            type="search"
+            placeholder="Search staff..."
+        >
+
+        <select id="staffStatus">
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+        </select>
+    </div>
+
+    <div class="panel">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Username</th>
+                        <th>Specialization</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody id="staffTable">
+                    <tr>
+                        <td colspan="5">
+                            <div class="loading">
+                                Loading staff...
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="staffModal" class="modal">
+    <div class="modal-content">
+
+        <div class="modal-header">
+            <div>
+                <h3 id="staffModalTitle">Add Staff</h3>
+                <p>Staff account and profile information</p>
+            </div>
+
+            <button
+                id="cancelStaff"
+                class="icon-btn"
+                type="button"
+            >
+                ×
+            </button>
+        </div>
+
+        <form id="staffForm">
+
+            <input id="staffId" type="hidden">
+
+            <div class="form-grid">
+
+                <div class="form-group">
+                    <label for="staffUsername">Username</label>
+                    <input
+                        id="staffUsername"
+                        type="text"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="staffPassword">Password</label>
+                    <input
+                        id="staffPassword"
+                        type="password"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="staffFirstName">First Name</label>
+                    <input id="staffFirstName" type="text">
+                </div>
+
+                <div class="form-group">
+                    <label for="staffLastName">Last Name</label>
+                    <input id="staffLastName" type="text">
+                </div>
+
+                <div class="form-group">
+                    <label for="staffEmail">Email</label>
+                    <input id="staffEmail" type="email">
+                </div>
+
+                <div class="form-group">
+                    <label for="staffPhone">Phone</label>
+                    <input id="staffPhone" type="text">
+                </div>
+
+                <div class="form-group">
+                    <label for="staffSpecialization">
+                        Specialization
+                    </label>
+                    <input
+                        id="staffSpecialization"
+                        type="text"
+                        placeholder="e.g. Network Engineering"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="staffAvailability">
+                        Availability
+                    </label>
+                    <input
+                        id="staffAvailability"
+                        type="text"
+                        placeholder="e.g. 09:00 - 17:00"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="staffStatusInput">Status</label>
+                    <select id="staffStatusInput">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="staffActive">Profile Active</label>
+                    <select id="staffActive">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+
+            </div>
+
+            <div id="staffError" class="error hidden"></div>
+
+            <div class="modal-actions">
+
+                <button
+                    id="cancelStaffButton"
+                    class="secondary-btn"
+                    type="button"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    id="saveStaffButton"
+                    class="primary-btn"
+                    type="submit"
+                >
+                    Save Staff
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
+<div id="page-access-control" class="page">
+                <div class="page-header">
+                    <div>
+                        <h2>Access Control</h2>
+                        <p>Manage roles, permissions, and role access.</p>
+                    </div>
+
+                    <button
+                        id="refreshAccessControl"
+                        class="action-btn"
+                        type="button">
+                        Refresh
+                    </button>
+                </div>
+
+                <div class="access-layout">
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Roles</h3>
+                        </div>
+
+                        <div id="rolesList" class="access-list">
+                            <div class="loading">
+                                Loading roles...
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Permissions</h3>
+                        </div>
+
+                        <div id="permissionsList" class="access-list">
+                            <div class="loading">
+                                Loading permissions...
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3 id="selectedRoleTitle">
+                                    Role Permissions
+                                </h3>
+
+                                <p id="selectedRoleDescription"
+                                   class="muted">
+                                    Select a role.
+                                </p>
+                            </div>
+
+                            <button
+                                id="saveRolePermissions"
+                                class="action-btn"
+                                type="button"
+                                disabled>
+                                Save Permissions
+                            </button>
+                        </div>
+
+                        <div id="rolePermissionsList"
+                             class="permission-checklist">
+                            <div class="empty">
+                                Select a role to manage permissions.
+                            </div>
+                        </div>
+
+                        <div id="accessControlError"
+                             class="error hidden"></div>
+
+                        <div id="accessControlSuccess"
+                             class="success hidden"></div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div id="page-settings" class="page">
+                <div class="page-header">
+                    <div>
+                        <h2>Settings</h2>
+                        <p>Platform configuration and system status.</p>
+                    </div>
+
+                    <button
+                        id="refreshSettings"
+                        class="action-btn"
+                        type="button">
+                        Refresh
+                    </button>
+                </div>
+
+                <div class="cards">
+                    <div class="card">
+                        <div class="stat-label">Application</div>
+                        <div id="settingsAppName" class="stat-value"
+                             style="font-size:18px;">Loading...</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="stat-label">Environment</div>
+                        <div id="settingsEnvironment" class="stat-value"
+                             style="font-size:18px;">Loading...</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="stat-label">API Status</div>
+                        <div id="settingsApiStatus" class="stat-value"
+                             style="font-size:18px;">Checking...</div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>General Settings</h3>
+                    </div>
+
+                    <form id="generalSettingsForm">
+                        <div class="form-grid">
+                            <div>
+                                <label for="generalAppName">Application Name</label>
+                                <input id="generalAppName" required>
+                            </div>
+
+                            <div>
+                                <label for="generalEnvironment">Environment</label>
+                                <select id="generalEnvironment" required>
+                                    <option value="development">Development</option>
+                                    <option value="staging">Staging</option>
+                                    <option value="production">Production</option>
+                                </select>
+                            </div>
+
+                            <div style="grid-column:1/-1;">
+                                <label for="generalAppDescription">Application Description</label>
+                                <input id="generalAppDescription">
+                            </div>
+
+                            <div>
+                                <label for="generalLanguage">Default Language</label>
+                                <select id="generalLanguage" required>
+                                    <option value="en">English</option>
+                                    <option value="ar">Arabic</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="generalTimezone">Default Timezone</label>
+                                <input id="generalTimezone" required placeholder="Asia/Aden">
+                            </div>
+
+                            <div>
+                                <label for="generalSupportEmail">Support Email</label>
+                                <input id="generalSupportEmail" type="email">
+                            </div>
+
+                            <div>
+                                <label for="generalSupportPhone">Support Phone</label>
+                                <input id="generalSupportPhone">
+                            </div>
+                        </div>
+
+                        <div style="margin-top:18px;">
+                            <button id="saveGeneralSettings"
+                                    class="action-btn"
+                                    type="submit">
+                                Save General Settings
+                            </button>
+                            <span id="generalSettingsMessage"
+                                  style="margin-left:12px;"></span>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>API Configuration</h3>
+                    </div>
+
+                    <div class="empty" style="text-align:left;">
+                        <strong>API Base:</strong>
+                        <span id="settingsApiBase">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>System Status</h3>
+                    </div>
+
+                    <div class="status-grid">
+                        <div class="status-row">
+                            <span>API Health</span>
+                            <strong id="settingsHealthStatus">
+                                Checking...
+                            </strong>
+                        </div>
+
+                        <div class="status-row">
+                            <span>Database Dependency</span>
+                            <strong id="settingsDatabaseStatus">
+                                Checking...
+                            </strong>
+                        </div>
+
+                        <div class="status-row">
+                            <span>Authentication Token</span>
+                            <strong id="settingsAuthStatus">
+                                Checking...
+                            </strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+<section class="page" id="page-audit">
+    <div class="page-header">
+        <div>
+            <h2>Audit Logs</h2>
+            <p>Security and administrative activity history.</p>
+        </div>
+        <button class="btn btn-primary" type="button" onclick="loadAuditLogs()">Refresh</button>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+            <div>
+                <h3 style="margin:0;">Filter Audit Logs</h3>
+                <p style="margin:6px 0 0;color:#6b7280;font-size:14px;">
+                    Search administrative activity by action or resource.
+                </p>
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="auditActionFilter">Action</label>
+                <input
+                    id="auditActionFilter"
+                    type="text"
+                    placeholder="e.g. user.created"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="auditResourceFilter">Resource Type</label>
+                <input
+                    id="auditResourceFilter"
+                    type="text"
+                    placeholder="e.g. user"
+                >
+            </div>
+
+            <div class="form-group" style="display:flex;align-items:end;">
+                <button
+                    class="btn btn-secondary"
+                    type="button"
+                    onclick="loadAuditLogs()"
+                    style="width:100%;"
+                >
+                    Apply Filters
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+                <h3 style="margin:0;">Activity History</h3>
+                <p style="margin:6px 0 0;color:#6b7280;font-size:14px;">
+                    Recorded security and administrative events.
+                </p>
+            </div>
+            <div id="auditStatus" style="font-size:14px;color:#6b7280;"></div>
+        </div>
+
+        <div style="overflow-x:auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Action</th>
+                        <th>Resource</th>
+                        <th>Description</th>
+                        <th>IP Address</th>
+                        <th>Actor</th>
+                    </tr>
+                </thead>
+                <tbody id="auditLogsBody">
+                    <tr>
+                        <td colspan="6" style="text-align:center;padding:30px;color:#6b7280;">
+                            Loading...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+
+<script>
+function auditEscapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+async function loadAuditLogs() {
+    const body = document.getElementById("auditLogsBody");
+    const status = document.getElementById("auditStatus");
+
+    if (!body) return;
+
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;">Loading...</td></tr>';
+    if (status) status.textContent = "";
+
+    const params = new URLSearchParams();
+    const action = document.getElementById("auditActionFilter")?.value.trim();
+    const resource = document.getElementById("auditResourceFilter")?.value.trim();
+
+    if (action) params.set("action", action);
+    if (resource) params.set("resource_type", resource);
+
+    try {
+        const token = localStorage.getItem("admin_access_token");
+
+        const response = await fetch(
+            "/api/v1/admin/audit-logs?" + params.toString(),
+            {
+                headers: token
+                    ? { "Authorization": "Bearer " + token }
+                    : {}
+            }
+        );
+
+        if (response.status === 401) {
+            body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;">Authentication required. Please login again.</td></tr>';
+            if (status) status.textContent = "Authentication required.";
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error("HTTP " + response.status + ": " + await response.text());
+        }
+
+        const data = await response.json();
+
+        if (!data.items || data.items.length === 0) {
+            body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#6b7280;">No audit logs found.</td></tr>';
+            if (status) status.textContent = "No records found.";
+            return;
+        }
+
+        body.innerHTML = data.items.map(item => `
+            <tr>
+                <td>${auditEscapeHtml(item.created_at || "-")}</td>
+                <td><strong>${auditEscapeHtml(item.action || "-")}</strong></td>
+                <td>${auditEscapeHtml(item.resource_type || "-")}</td>
+                <td>${auditEscapeHtml(item.description || "-")}</td>
+                <td>${auditEscapeHtml(item.ip_address || "-")}</td>
+                <td>${auditEscapeHtml(item.actor_id || "-")}</td>
+            </tr>
+        `).join("");
+
+        if (status) {
+            status.textContent = "Loaded " + data.items.length + " record(s).";
+        }
+    } catch (error) {
+        console.error("Audit logs error:", error);
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#b91c1c;">Failed to load audit logs.</td></tr>';
+        if (status) status.textContent = "Unable to load audit logs.";
+    }
+}
+</script>
+    </main>
+</div>
+
+<div id="serviceModal" class="modal-overlay hidden">
+    <div class="modal">
+
+        <h3 id="modalTitle">Add Service</h3>
+
+        <form id="serviceForm">
+
+            <input id="serviceId" type="hidden">
+
+            <label for="serviceName">Service Name</label>
+            <input id="serviceName" required>
+
+            <label for="serviceCategory">Category</label>
+            <select id="serviceCategory" required></select>
+
+            <label for="serviceDescription">Description</label>
+            <input id="serviceDescription">
+
+            <label for="serviceShortDescription">Short Description</label>
+            <input id="serviceShortDescription">
+
+            <label for="serviceSortOrder">Sort Order</label>
+            <input id="serviceSortOrder" type="number" value="0">
+
+            <div class="modal-actions">
+                <button type="button" id="cancelService" class="secondary-btn">
+                    Cancel
+                </button>
+
+                <button type="submit" class="action-btn">
+                    Save Service
+                </button>
+            </div>
+
+            <div id="serviceError" class="error hidden"></div>
+        </form>
+    </div>
+</div>
+
+
+<script>
+
+(function () {
+    "use strict";
+
+    var API = "/api/v1";
+    var token = localStorage.getItem("admin_access_token");
+
+    function $(id) {
+        return document.getElementById(id);
+    }
+
+    function escapeHtml(value) {
+        if (value === null || value === undefined) {
+            return "";
+        }
+
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function formatDate(value) {
+        if (!value) {
+            return "—";
+        }
+
+        try {
+            return new Date(value).toLocaleString();
+        } catch (e) {
+            return value;
+        }
+    }
+
+    async function apiFetch(url, options) {
+        options = options || {};
+        options.headers = options.headers || {};
+
+        if (token) {
+            options.headers["Authorization"] = "Bearer " + token;
+        }
+
+        var response = await fetch(url, options);
+
+        if (response.status === 401) {
+            logout();
+        }
+
+        return response;
+    }
+
+
+    async function login(event) {
+        event.preventDefault();
+
+        var usernameEl = $("username");
+        var passwordEl = $("password");
+        var errorEl = $("loginError");
+        var loginButton = $("loginButton");
+
+        if (errorEl) {
+            errorEl.textContent = "";
+            errorEl.style.display = "none";
+        }
+
+        var username = usernameEl ? usernameEl.value.trim() : "";
+        var password = passwordEl ? passwordEl.value : "";
+
+        if (!username || !password) {
+            if (errorEl) {
+                errorEl.textContent = "Please enter username and password.";
+                errorEl.style.display = "block";
+            }
+            return;
+        }
+
+        if (loginButton) {
+            loginButton.disabled = true;
+            loginButton.textContent = "Signing in...";
+        }
+
+        try {
+            var response = await fetch(API + "/auth/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    username: username,
+                    password: password
+                })
+            });
+
+            var data = await response.json();
+
+            if (!response.ok) {
+                var message = "Login failed.";
+
+                if (data && data.error && data.error.message) {
+                    message = data.error.message;
+                } else if (data && data.detail) {
+                    message = data.detail;
+                }
+
+                throw new Error(message);
+            }
+
+            var accessToken = null;
+
+            if (data && data.access_token) {
+                accessToken = data.access_token;
+            } else if (data && data.data && data.data.access_token) {
+                accessToken = data.data.access_token;
+            }
+
+            if (!accessToken) {
+                throw new Error("Login succeeded but no access token was returned.");
+            }
+
+            localStorage.setItem("admin_access_token", accessToken);
+
+            if (data && data.user) {
+                localStorage.setItem(
+                    "admin_user",
+                    JSON.stringify(data.user)
+                );
+            } else if (data && data.data && data.data.user) {
+                localStorage.setItem(
+                    "admin_user",
+                    JSON.stringify(data.data.user)
+                );
+            }
+
+            // Activate the application immediately after successful login.
+            token = accessToken;
+
+            var loginView = $("loginScreen");
+            var appView = $("appView");
+
+            if (loginView) {
+                loginView.classList.add("hidden");
+            }
+
+            if (appView) {
+                appView.classList.remove("hidden");
+            }
+
+            bindEvents();
+
+            apiFetch(API + "/auth/me")
+                .then(function (meResponse) {
+                    if (!meResponse.ok) {
+                        throw new Error("Authentication failed after login.");
+                    }
+
+                    return meResponse.json();
+                })
+                .then(function (user) {
+                    if ($("currentUser")) {
+                        $("currentUser").textContent =
+                            user.username ||
+                            user.email ||
+                            "Admin";
+                    }
+
+                    showPage("dashboard");
+                })
+                .catch(function (error) {
+                    console.error(error);
+
+                    if (errorEl) {
+                        errorEl.textContent =
+                            error.message ||
+                            "Login succeeded but dashboard initialization failed.";
+                        errorEl.style.display = "block";
+                    }
+                })
+                .finally(function () {
+                    if (loginButton) {
+                        loginButton.disabled = false;
+                        loginButton.textContent = "Sign In";
+                    }
+                });
+
+        } catch (error) {
+            if (errorEl) {
+                errorEl.textContent = error.message || "Login failed.";
+                errorEl.style.display = "block";
+            }
+
+            if (loginButton) {
+                loginButton.disabled = false;
+                loginButton.textContent = "Login";
+            }
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem("admin_access_token");
+        localStorage.removeItem("admin_user");
+        window.location.reload();
+    }
+
+
+    window.loadRequests = async function() {
+    const body = document.getElementById("requestsTableBody");
+    if (!body) return;
+
+    body.innerHTML =
+        '<tr><td colspan="8" style="text-align:center;">Loading requests...</td></tr>';
+
+    try {
+        const params = new URLSearchParams();
+
+        const searchEl = document.getElementById("requestSearch");
+        const statusEl = document.getElementById("requestStatusFilter");
+        const priorityEl = document.getElementById("requestPriorityFilter");
+
+        const search = searchEl ? searchEl.value.trim() : "";
+        const status = statusEl ? statusEl.value.trim() : "";
+        const priority = priorityEl ? priorityEl.value.trim() : "";
+
+        params.set("page", "1");
+        params.set("page_size", "100");
+
+        if (search) {
+            params.set("search", search);
+        }
+
+        if (status) {
+            params.set("status", status);
+        }
+
+        if (priority) {
+            params.set("priority", priority);
+        }
+
+        const url = "/api/v1/admin/requests?" + params.toString();
+
+        console.log("REQUEST FILTER URL:", url);
+
+        const response = await fetch(url, {
+            method: "GET",
+            headers: {
+                "Authorization":
+                    "Bearer " + localStorage.getItem("admin_access_token"),
+                "Accept": "application/json"
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error("HTTP " + response.status + " " + errorText);
+        }
+
+        const data = await response.json();
+
+        if (!data.items || data.items.length === 0) {
+            body.innerHTML =
+                '<tr><td colspan="8" style="text-align:center;">No requests found.</td></tr>';
+            return;
+        }
+
+        body.innerHTML = data.items.map(function(item) {
+            return `
+                <tr>
+                    <td>${escapeHtml(item.title || "-")}</td>
+                    <td>${escapeHtml(item.customer_id || "-")}</td>
+                    <td>${escapeHtml(item.service_id || "-")}</td>
+                    <td>${escapeHtml(item.status || "-")}</td>
+                    <td>${escapeHtml(item.priority || "-")}</td>
+                    <td>${escapeHtml(item.deadline || "-")}</td>
+                    <td>${escapeHtml(item.created_at || "-")}</td>
+                    <td>
+                        <button
+                            class="action-btn"
+                            type="button"
+                            onclick="window.openRequestDetails('${item.id}')">
+                            View
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join("");
+
+    } catch (error) {
+        console.error("Requests error:", error);
+
+        body.innerHTML =
+            '<tr><td colspan="8" style="text-align:center;color:#b91c1c;">Failed to load requests.</td></tr>';
+    }
+};
+
+/* Bind request filters reliably */
+(function bindRequestFilters() {
+    function bind() {
+        const search = document.getElementById("requestSearch");
+        const status = document.getElementById("requestStatusFilter");
+        const priority = document.getElementById("requestPriorityFilter");
+
+        if (search && !search.dataset.requestFilterBound) {
+            search.addEventListener("input", function() {
+                clearTimeout(window.requestSearchTimer);
+
+                window.requestSearchTimer = setTimeout(function() {
+                    window.loadRequests();
+                }, 300);
+            });
+
+            search.dataset.requestFilterBound = "true";
+        }
+
+        if (status && !status.dataset.requestFilterBound) {
+            status.addEventListener("change", function() {
+                window.loadRequests();
+            });
+
+            status.dataset.requestFilterBound = "true";
+        }
+
+        if (priority && !priority.dataset.requestFilterBound) {
+            priority.addEventListener("change", function() {
+                window.loadRequests();
+            });
+
+            priority.dataset.requestFilterBound = "true";
+        }
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", bind);
+    } else {
+        bind();
+    }
+
+    setTimeout(bind, 500);
+})();
+
+
+    
+window.openRequestDetails = async function(requestId) {
+    const modal = document.getElementById("requestDetailsModal");
+    const loading = document.getElementById("requestModalLoading");
+    const content = document.getElementById("requestModalContent");
+    const errorBox = document.getElementById("requestModalError");
+    const saveBtn = document.getElementById("saveRequestBtn");
+
+    if (!modal) return;
+
+    modal.style.display = "flex";
+    loading.style.display = "block";
+    content.style.display = "none";
+    errorBox.style.display = "none";
+    saveBtn.disabled = true;
+
+    try {
+        const response = await fetch(
+            "/api/v1/admin/requests/" + encodeURIComponent(requestId),
+            {
+                headers: {
+                    "Authorization": "Bearer " + localStorage.getItem("admin_access_token")
+                }
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error("HTTP " + response.status);
+        }
+
+        const item = await response.json();
+
+        document.getElementById("detailRequestTitle").textContent = item.title || "-";
+        document.getElementById("detailRequestId").textContent = item.id || "-";
+        document.getElementById("detailCustomerId").textContent = item.customer_id || "-";
+        document.getElementById("detailServiceId").textContent = item.service_id || "-";
+        document.getElementById("detailSpecialization").textContent = item.specialization || "-";
+        document.getElementById("detailDeadline").textContent = item.deadline || "-";
+        document.getElementById("detailCreatedAt").textContent = item.created_at || "-";
+        document.getElementById("detailDescription").textContent = item.description || "لا يوجد وصف.";
+
+        document.getElementById("detailStatus").value = item.status || "NEW";
+        document.getElementById("detailPriority").value = item.priority || "NORMAL";
+        document.getElementById("detailNotes").value = item.notes || "";
+
+        modal.dataset.requestId = requestId;
+
+        loading.style.display = "none";
+        content.style.display = "block";
+        saveBtn.disabled = false;
+
+    } catch (error) {
+        console.error("Request details error:", error);
+
+        loading.style.display = "none";
+        errorBox.textContent = "❌ تعذر تحميل تفاصيل الطلب: " + error.message;
+        errorBox.style.display = "block";
+        saveBtn.disabled = true;
+    }
+};
+
+
+window.saveRequestDetails = async function() {
+    const modal = document.getElementById("requestDetailsModal");
+    const requestId = modal ? modal.dataset.requestId : null;
+    const saveBtn = document.getElementById("saveRequestBtn");
+    const errorBox = document.getElementById("requestModalError");
+
+    if (!requestId) return;
+
+    const status = document.getElementById("detailStatus").value;
+    const priority = document.getElementById("detailPriority").value;
+    const notes = document.getElementById("detailNotes").value;
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = "جاري الحفظ...";
+
+    try {
+        const response = await fetch(
+            "/api/v1/admin/requests/" + encodeURIComponent(requestId),
+            {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + localStorage.getItem("admin_access_token")
+                },
+                body: JSON.stringify({
+                    status: status,
+                    priority: priority,
+                    notes: notes
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error("HTTP " + response.status + " " + errorText);
+        }
+
+        window.closeRequestDetails();
+
+        // Reset request filters after update so the modified request remains visible
+        const statusFilter = document.getElementById("requestStatusFilter");
+        const priorityFilter = document.getElementById("requestPriorityFilter");
+        const searchFilter = document.getElementById("requestSearch");
+
+        if (statusFilter) statusFilter.value = "";
+        if (priorityFilter) priorityFilter.value = "";
+        if (searchFilter) searchFilter.value = "";
+
+        await window.loadRequests();
+
+    } catch (error) {
+        console.error("Save request error:", error);
+        errorBox.textContent = "❌ تعذر حفظ التعديلات: " + error.message;
+        errorBox.style.display = "block";
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "💾 حفظ التعديلات";
+    }
+};
+
+
+window.closeRequestDetails = function() {
+    const modal = document.getElementById("requestDetailsModal");
+    if (modal) {
+        modal.style.display = "none";
+        modal.dataset.requestId = "";
+    }
+};
+
+
+window.showPage = function(pageName) {
+            if (pageName === "audit") {
+                setTimeout(loadAuditLogs, 0);
+            }
+
+            if (pageName === "requests") {
+                setTimeout(loadRequests, 0);
+            }
+
+            if (pageName === "telegram-destinations") {
+                setTimeout(loadTelegramDestinations, 0);
+            }
+
+        var pages = document.querySelectorAll(".page");
+
+        pages.forEach(function (page) {
+            page.classList.remove("active");
+        });
+
+        var navButtons = document.querySelectorAll(
+            ".nav-btn[data-page]"
+        );
+
+        navButtons.forEach(function (button) {
+            button.classList.remove("active");
+        });
+
+        var target = $("page-" + pageName);
+
+        if (target) {
+            target.classList.add("active");
+        }
+
+        navButtons.forEach(function (button) {
+            if (button.getAttribute("data-page") === pageName) {
+                button.classList.add("active");
+            }
+        });
+
+        var title = $("topbarTitle");
+
+        if (title) {
+            var titles = {
+                dashboard: "Dashboard",
+                users: "Users",
+                services: "Services",
+                categories: "Categories",
+                staff: "Staff",
+                settings: "Settings",
+                "telegram-destinations": "Destinations"
+            };
+
+            title.textContent = titles[pageName] || "Dashboard";
+        }
+
+        if (pageName === "dashboard") {
+            loadDashboard();
+        }
+
+        if (pageName === "categories") {
+            loadCategories();
+        }
+
+        if (pageName === "users") {
+            loadUsers();
+        }
+
+        if (pageName === "services") {
+            loadServices();
+        }
+
+        if (pageName === "staff") {
+            loadStaff();
+        }
+
+        if (pageName === "access-control") {
+            loadAccessControl();
+        }
+
+        if (pageName === "settings") {
+            loadSettings();
+            loadGeneralSettings();
+        }
+    }
+
+    function closeUserModal() {
+        var modal = $("userModal");
+
+        if (modal) {
+            modal.style.display = "none";
+        }
+    }
+
+    window.closeUserModal = closeUserModal;
+
+    function openUserModal(user) {
+        var modal = $("userModal");
+
+        if (!modal) {
+            alert("User modal was not found.");
+            return;
+        }
+
+        $("userModalTitle").textContent =
+            user ? "Edit User" : "Add User";
+
+        $("userModalSubtitle").textContent =
+            user
+                ? "Update platform user information."
+                : "Create a new platform user.";
+
+        $("userId").value = user && user.id ? user.id : "";
+        $("userUsername").value =
+            user && user.username ? user.username : "";
+
+        $("userPassword").value = "";
+
+        $("userEmail").value =
+            user && user.email ? user.email : "";
+
+        $("userPhone").value =
+            user && user.phone ? user.phone : "";
+
+        $("userFirstName").value =
+            user && user.first_name ? user.first_name : "";
+
+        $("userLastName").value =
+            user && user.last_name ? user.last_name : "";
+
+        $("userLanguage").value =
+            user && user.language ? user.language : "";
+
+        $("userTimezone").value =
+            user && user.timezone ? user.timezone : "";
+
+        var role = "customer";
+
+        if (
+            user &&
+            user.roles &&
+            user.roles.length &&
+            user.roles[0] &&
+            user.roles[0].name
+        ) {
+            role = user.roles[0].name;
+        }
+
+        $("userRole").value = role;
+
+        $("userStatus").value =
+            user && user.status ? user.status : "active";
+
+        $("userPassword").required = !user;
+
+        $("passwordRequired").textContent = user ? "" : "*";
+
+        $("userFormError").style.display = "none";
+        $("userFormError").textContent = "";
+
+        modal.style.display = "flex";
+    }
+
+    window.openUserModal = openUserModal;
+    window.closeUserModal = closeUserModal;
+    window.saveUser = saveUser;
+    window.editUserById = editUserById;
+    window.openServiceModal = openServiceModal;
+    window.closeServiceModal = closeServiceModal;
+    window.editServiceById = editServiceById;
+
+
+    async function saveUser(event) {
+        event.preventDefault();
+
+        var userId = $("userId").value;
+        var button = $("saveUserBtn");
+        var error = $("userFormError");
+
+        var payload = {
+            username: $("userUsername").value.trim(),
+            email: $("userEmail").value.trim() || null,
+            first_name: $("userFirstName").value.trim() || null,
+            last_name: $("userLastName").value.trim() || null,
+            phone: $("userPhone").value.trim() || null,
+            language: $("userLanguage").value.trim() || null,
+            timezone: $("userTimezone").value.trim() || null,
+            status: $("userStatus").value,
+            role: $("userRole").value
+        };
+
+        var password = $("userPassword").value;
+
+        if (!userId) {
+            payload.password = password;
+        } else if (password) {
+            payload.password = password;
+        }
+
+        try {
+            button.disabled = true;
+            button.textContent = userId ? "Updating..." : "Creating...";
+            error.style.display = "none";
+
+            var url = userId
+                ? API + "/admin/users/" + userId
+                : API + "/admin/users";
+
+            var response = await apiFetch(url, {
+                method: userId ? "PATCH" : "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+
+            var data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    "HTTP " + response.status + ": " +
+                    JSON.stringify(data)
+                );
+            }
+
+            closeUserModal();
+            await loadUsers();
+            await loadDashboard();
+
+        } catch (err) {
+            error.textContent = err.message;
+            error.style.display = "block";
+
+        } finally {
+            button.disabled = false;
+            button.textContent = "Save User";
+        }
+    }
+
+    async function editUserById(userId) {
+        try {
+            var response = await apiFetch(
+                API + "/admin/users/" + userId
+            );
+
+            var user = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    user.detail || "Unable to load user."
+                );
+            }
+
+            openUserModal(user);
+
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function loadUsers() {
+        var container = $("usersContent");
+
+        if (!container) {
+            return;
+        }
+
+        container.innerHTML =
+            '<div class="loading">Loading users...</div>';
+
+        try {
+            var response = await apiFetch(
+                API + "/admin/users?page=1&page_size=100"
+            );
+
+            var data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.detail || "Unable to load users."
+                );
+            }
+
+            var users = Array.isArray(data.items)
+                ? data.items
+                : [];
+
+            if (!users.length) {
+                container.innerHTML =
+                    '<div class="empty">No users found.</div>';
+                return;
+            }
+
+            var rows = users.map(function (user) {
+                var roleNames = "—";
+
+                if (user.roles && user.roles.length) {
+                    roleNames = user.roles
+                        .map(function (role) {
+                            return role.name;
+                        })
+                        .join(", ");
+                }
+
+                var fullName = [
+                    user.first_name,
+                    user.last_name
+                ]
+                    .filter(function (x) {
+                        return Boolean(x);
+                    })
+                    .join(" ");
+
+                if (!fullName) {
+                    fullName = "—";
+                }
+
+                return (
+                    "<tr>" +
+                    "<td>" +
+                    "<strong>" +
+                    escapeHtml(user.username || "—") +
+                    "</strong>" +
+                    '<div class="muted">' +
+                    escapeHtml(fullName) +
+                    "</div>" +
+                    "</td>" +
+                    "<td>" +
+                    escapeHtml(user.email || "—") +
+                    "</td>" +
+                    "<td>" +
+                    escapeHtml(roleNames) +
+                    "</td>" +
+                    "<td>" +
+                    '<span class="status-badge">' +
+                    escapeHtml(user.status || "—") +
+                    "</span>" +
+                    "</td>" +
+                    "<td>" +
+                    formatDate(user.created_at) +
+                    "</td>" +
+                    "<td>" +
+                    '<button type="button" ' +
+                    'class="btn btn-small btn-secondary edit-user-button" ' +
+                    'data-user-id="' +
+                    escapeHtml(user.id) +
+                    '">' +
+                    "Edit" +
+                    "</button>" +
+                    ' <button type="button" ' +
+                    'class="btn btn-small btn-danger delete-user-button" ' +
+                    'data-user-id="' +
+                    escapeHtml(user.id) +
+                    '" data-username="' +
+                    escapeHtml(user.username || "") +
+                    '">' +
+                    "Delete" +
+                    "</button>" +
+                    "</td>" +
+                    "</tr>"
+                );
+            }).join("");
+
+            container.innerHTML =
+                '<div class="table-wrap">' +
+                '<table class="data-table">' +
+                "<thead>" +
+                "<tr>" +
+                "<th>User</th>" +
+                "<th>Email</th>" +
+                "<th>Role</th>" +
+                "<th>Status</th>" +
+                "<th>Created</th>" +
+                "<th>Actions</th>" +
+                "</tr>" +
+                "</thead>" +
+                "<tbody>" +
+                rows +
+                "</tbody>" +
+                "</table>" +
+                "</div>";
+
+            var editButtons = document.querySelectorAll(
+                ".edit-user-button"
+            );
+
+            editButtons.forEach(function (button) {
+                button.addEventListener("click", function () {
+                    editUserById(
+                        button.getAttribute("data-user-id")
+                    );
+                });
+            });
+
+            var deleteButtons = document.querySelectorAll(
+                ".delete-user-button"
+            );
+
+            deleteButtons.forEach(function (button) {
+                button.addEventListener("click", function () {
+                    deleteUserById(
+                        button.getAttribute("data-user-id"),
+                        button.getAttribute("data-username")
+                    );
+                });
+            });
+
+        } catch (error) {
+            container.innerHTML =
+                '<div class="empty">' +
+                "Unable to load users: " +
+                escapeHtml(error.message) +
+                "</div>";
+        }
+    }
+
+    async function deleteUserById(userId, username) {
+        if (!userId) {
+            return;
+        }
+
+        var confirmed = window.confirm(
+            'Are you sure you want to delete user "' +
+            (username || userId) +
+            '"? This action cannot be undone.'
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            var response = await apiFetch(
+                API + "/admin/users/" + userId,
+                {
+                    method: "DELETE"
+                }
+            );
+
+            if (!response.ok) {
+                var data = {};
+                try {
+                    data = await response.json();
+                } catch (e) {}
+
+                throw new Error(
+                    data.detail ||
+                    data.message ||
+                    "Unable to delete user."
+                );
+            }
+
+            await loadUsers();
+
+        } catch (error) {
+            console.error("deleteUserById error:", error);
+            alert(
+                "Unable to delete user: " +
+                (error.message || "Unknown error")
+            );
+        }
+    }
+
+    async function loadServices() {
+        var container = $("servicesTable");
+
+        if (!container) {
+            console.error("servicesTable element not found.");
+            return;
+        }
+
+        container.innerHTML =
+            '<tr><td colspan="6" class="loading">Loading services...</td></tr>';
+
+        try {
+            var response = await apiFetch(
+                API + "/admin/services?page=1&page_size=100"
+            );
+
+            var data = await response.json();
+
+            if (!response.ok) {
+                var message =
+                    data.detail ||
+                    data.message ||
+                    (data.error && data.error.message) ||
+                    "Unable to load services.";
+
+                throw new Error(message);
+            }
+
+            var services = Array.isArray(data.items)
+                ? data.items
+                : [];
+
+            var searchEl = $("serviceSearch");
+            var statusEl = $("serviceStatus");
+
+            var search =
+                searchEl ? searchEl.value.trim().toLowerCase() : "";
+
+            var status =
+                statusEl ? statusEl.value : "";
+
+            services = services.filter(function (service) {
+                var matchesSearch = true;
+                var matchesStatus = true;
+
+                if (search) {
+                    var text = [
+                        service.name,
+                        service.description,
+                        service.short_description,
+                        service.category_name
+                    ]
+                        .filter(function (x) {
+                            return Boolean(x);
+                        })
+                        .join(" ")
+                        .toLowerCase();
+
+                    matchesSearch = text.indexOf(search) !== -1;
+                }
+
+                if (status !== "") {
+                    matchesStatus =
+                        String(service.is_active) === status;
+                }
+
+                return matchesSearch && matchesStatus;
+            });
+
+            if (!services.length) {
+                container.innerHTML =
+                    '<tr>' +
+                    '<td colspan="6" class="empty">' +
+                    "No services found." +
+                    "</td>" +
+                    "</tr>";
+
+                return;
+            }
+
+            container.innerHTML = services.map(function (service) {
+
+                var categoryName = "—";
+
+                if (service.category && service.category.name) {
+                    categoryName = service.category.name;
+                } else if (service.category_name) {
+                    categoryName = service.category_name;
+                }
+
+                var statusText =
+                    service.is_active ? "Active" : "Inactive";
+
+                var statusClass =
+                    service.is_active
+                        ? "status-badge"
+                        : "status-badge inactive";
+
+                return (
+                    "<tr>" +
+
+                    "<td>" +
+                    "<strong>" +
+                    escapeHtml(service.name || "—") +
+                    "</strong>" +
+                    "</td>" +
+
+                    "<td>" +
+                    escapeHtml(categoryName) +
+                    "</td>" +
+
+                    "<td>" +
+                    escapeHtml(
+                        service.short_description ||
+                        service.description ||
+                        "—"
+                    ) +
+                    "</td>" +
+
+                    "<td>" +
+                    '<span class="' +
+                    statusClass +
+                    '">' +
+                    escapeHtml(statusText) +
+                    "</span>" +
+                    "</td>" +
+
+                    "<td>" +
+                    escapeHtml(
+                        service.sort_order !== undefined
+                            ? service.sort_order
+                            : "0"
+                    ) +
+                    "</td>" +
+
+                    "<td>" +
+                    '<button type="button" ' +
+                    'class="btn btn-small btn-secondary edit-service-button" ' +
+                    'data-service-id="' +
+                    escapeHtml(service.id) +
+                    '">' +
+                    "Edit" +
+                    "</button>" +
+                    "</td>" +
+
+                    "</tr>"
+                );
+            }).join("");
+
+            var editButtons = document.querySelectorAll(
+                ".edit-service-button"
+            );
+
+            editButtons.forEach(function (button) {
+                button.addEventListener("click", function () {
+                    editServiceById(
+                        button.getAttribute("data-service-id")
+                    );
+                });
+            });
+
+        } catch (error) {
+            console.error("loadServices error:", error);
+
+            container.innerHTML =
+                '<tr>' +
+                '<td colspan="6" class="empty">' +
+                "Unable to load services: " +
+                escapeHtml(error.message) +
+                "</td>" +
+                "</tr>";
+        }
+    }
+
+    async function editServiceById(serviceId) {
+        try {
+            var response = await apiFetch(
+                API + "/admin/services/" + serviceId
+            );
+
+            var service = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    service.detail ||
+                    service.message ||
+                    "Unable to load service."
+                );
+            }
+
+            openServiceModal(service);
+
+        } catch (error) {
+            alert(error.message);
+        }
+    }
+
+    async function loadServiceCategories() {
+        var categorySelect = $("serviceCategory");
+
+        if (!categorySelect) {
+            return;
+        }
+
+        categorySelect.innerHTML =
+            '<option value="">Loading categories...</option>';
+
+        try {
+            var response = await apiFetch(
+                API + "/admin/services/categories"
+            );
+
+            var data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.detail ||
+                    data.message ||
+                    "Unable to load categories."
+                );
+            }
+
+            var categories = Array.isArray(data.items)
+                ? data.items
+                : [];
+
+            if (!categories.length) {
+                categorySelect.innerHTML =
+                    '<option value="">No categories available</option>';
+                return;
+            }
+
+            categorySelect.innerHTML =
+                '<option value="">Select category</option>' +
+                categories.map(function (category) {
+                    return (
+                        '<option value="' +
+                        escapeHtml(category.id) +
+                        '">' +
+                        escapeHtml(category.name) +
+                        "</option>"
+                    );
+                }).join("");
+
+        } catch (error) {
+            console.error("loadServiceCategories error:", error);
+
+            categorySelect.innerHTML =
+                '<option value="">Unable to load categories</option>';
+        }
+    }
+
+    function openServiceModal(service) {
+        var modal = $("serviceModal");
+
+        if (!modal) {
+            return;
+        }
+
+        $("modalTitle").textContent =
+            service ? "Edit Service" : "Add Service";
+
+        $("serviceId").value =
+            service && service.id ? service.id : "";
+
+        $("serviceName").value =
+            service && service.name ? service.name : "";
+
+        $("serviceDescription").value =
+            service && service.description
+                ? service.description
+                : "";
+
+        $("serviceShortDescription").value =
+            service && service.short_description
+                ? service.short_description
+                : "";
+
+        $("serviceSortOrder").value =
+            service && service.sort_order !== undefined
+                ? service.sort_order
+                : 0;
+
+        var categoryId =
+            service && service.category_id
+                ? service.category_id
+                : "";
+
+        loadServiceCategories().then(function () {
+            if ($("serviceCategory")) {
+                $("serviceCategory").value = categoryId;
+            }
+        });
+
+        if ($("serviceError")) {
+            $("serviceError").textContent = "";
+            $("serviceError").style.display = "none";
+        }
+
+        modal.classList.remove("hidden");
+        modal.style.display = "flex";
+    }
+
+    function closeServiceModal() {
+        var modal = $("serviceModal");
+
+        if (modal) {
+            modal.classList.add("hidden");
+            modal.style.display = "none";
+        }
+    }
+
+    async function saveService(event) {
+        event.preventDefault();
+
+        var serviceId = $("serviceId").value;
+        var button = $("serviceForm").querySelector(
+            'button[type="submit"]'
+        );
+        var error = $("serviceError");
+
+        var payload = {
+            category_id: $("serviceCategory").value,
+            name: $("serviceName").value.trim(),
+            description:
+                $("serviceDescription").value.trim() || null,
+            short_description:
+                $("serviceShortDescription").value.trim() || null,
+            sort_order:
+                Number($("serviceSortOrder").value || 0)
+        };
+
+        if (!payload.category_id) {
+            if (error) {
+                error.textContent = "Please select a category.";
+                error.style.display = "block";
+            }
+            return;
+        }
+
+        try {
+            if (button) {
+                button.disabled = true;
+                button.textContent =
+                    serviceId ? "Updating..." : "Creating...";
+            }
+
+            if (error) {
+                error.textContent = "";
+                error.style.display = "none";
+            }
+
+            var url = serviceId
+                ? API + "/admin/services/" + serviceId
+                : API + "/admin/services";
+
+            var response = await apiFetch(url, {
+                method: serviceId ? "PATCH" : "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+
+            var data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.detail ||
+                    data.message ||
+                    "Unable to save service."
+                );
+            }
+
+            closeServiceModal();
+
+            await loadServices();
+            await loadDashboard();
+
+        } catch (errorValue) {
+            console.error("saveService error:", errorValue);
+
+            if (error) {
+                error.textContent = errorValue.message;
+                error.style.display = "block";
+            }
+
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = "Save Service";
+            }
+        }
+    }
+
+    
+    async function loadDashboard() {
+        try {
+            var usersResponse = await apiFetch(
+                API + "/admin/users?page=1&page_size=100"
+            );
+
+            var servicesResponse = await apiFetch(
+                API + "/admin/services?page=1&page_size=100"
+            );
+
+            var usersData = await usersResponse.json();
+            var servicesData = await servicesResponse.json();
+
+            var users = Array.isArray(usersData.items)
+                ? usersData.items
+                : [];
+
+            var services = Array.isArray(servicesData.items)
+                ? servicesData.items
+                : [];
+
+            if ($("statUsers")) {
+                $("statUsers").textContent = users.length;
+            }
+
+            if ($("statServices")) {
+                $("statServices").textContent = services.length;
+            }
+
+            if ($("statActiveServices")) {
+                $("statActiveServices").textContent =
+                    services.filter(function (service) {
+                        return service.is_active === true;
+                    }).length;
+            }
+
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    async function loadSettings() {
+        if ($("settingsApiBase")) {
+            $("settingsApiBase").textContent = API;
+        }
+
+        if ($("settingsAuthStatus")) {
+            $("settingsAuthStatus").textContent =
+                token ? "Authenticated" : "Not authenticated";
+        }
+
+        try {
+            var response = await apiFetch(
+                API + "/health"
+            );
+
+            var data = await response.json();
+
+            if ($("settingsAppName")) {
+                $("settingsAppName").textContent =
+                    data.service ||
+                    "Academic Services Platform";
+            }
+
+            if ($("settingsEnvironment")) {
+                $("settingsEnvironment").textContent =
+                    data.environment || "—";
+            }
+
+            if ($("settingsApiStatus")) {
+                $("settingsApiStatus").textContent =
+                    response.ok
+                        ? "Online"
+                        : "Offline";
+            }
+
+            if ($("settingsHealthStatus")) {
+                $("settingsHealthStatus").textContent =
+                    response.ok
+                        ? "Healthy"
+                        : "Unhealthy";
+            }
+
+        } catch (error) {
+            if ($("settingsApiStatus")) {
+                $("settingsApiStatus").textContent =
+                    "Offline";
+            }
+
+            if ($("settingsHealthStatus")) {
+                $("settingsHealthStatus").textContent =
+                    "Unavailable";
+            }
+        }
+
+        try {
+            var dependencyResponse =
+                await apiFetch(
+                    API + "/dependencies/health"
+                );
+
+            var dependencyData =
+                await dependencyResponse.json();
+
+            if ($("settingsDatabaseStatus")) {
+                $("settingsDatabaseStatus").textContent =
+                    dependencyResponse.ok &&
+                    dependencyData.database === "ready"
+                        ? "Ready"
+                        : "Unavailable";
+            }
+
+        } catch (error) {
+            if ($("settingsDatabaseStatus")) {
+                $("settingsDatabaseStatus").textContent =
+                    "Unavailable";
+            }
+        }
+    }
+
+    // ========================================================
+    // PHASE 3 — ACCESS CONTROL
+    // ========================================================
+
+    var accessRoles = [];
+    var accessPermissions = [];
+    var selectedAccessRoleId = null;
+
+    async function loadAccessControl() {
+        var rolesList = $("rolesList");
+        var permissionsList = $("permissionsList");
+
+        if (!rolesList || !permissionsList) {
+            return;
+        }
+
+        rolesList.innerHTML =
+            '<div class="loading">Loading roles...</div>';
+
+        permissionsList.innerHTML =
+            '<div class="loading">Loading permissions...</div>';
+
+        hideAccessMessages();
+
+        try {
+            var results = await Promise.all([
+                apiFetch(API + "/rbac/roles"),
+                apiFetch(API + "/rbac/permissions")
+            ]);
+
+            var rolesResponse = results[0];
+            var permissionsResponse = results[1];
+
+            var rolesData = await rolesResponse.json();
+            var permissionsData = await permissionsResponse.json();
+
+            if (!rolesResponse.ok) {
+                throw new Error(
+                    rolesData.detail ||
+                    "Unable to load roles."
+                );
+            }
+
+            if (!permissionsResponse.ok) {
+                throw new Error(
+                    permissionsData.detail ||
+                    "Unable to load permissions."
+                );
+            }
+
+            accessRoles = Array.isArray(rolesData)
+                ? rolesData
+                : [];
+
+            accessPermissions = Array.isArray(permissionsData)
+                ? permissionsData
+                : [];
+
+            renderAccessRoles();
+            renderAccessPermissions();
+
+            if (
+                selectedAccessRoleId &&
+                accessRoles.some(function (role) {
+                    return role.id === selectedAccessRoleId;
+                })
+            ) {
+                selectAccessRole(selectedAccessRoleId);
+            } else if (accessRoles.length) {
+                selectAccessRole(accessRoles[0].id);
+            } else {
+                renderRolePermissions(null);
+            }
+
+        } catch (error) {
+            rolesList.innerHTML =
+                '<div class="empty">' +
+                escapeHtml(error.message) +
+                "</div>";
+
+            permissionsList.innerHTML =
+                '<div class="empty">' +
+                escapeHtml(error.message) +
+                "</div>";
+
+            renderRolePermissions(null);
+        }
+    }
+
+
+    function renderAccessRoles() {
+        var container = $("rolesList");
+
+        if (!container) {
+            return;
+        }
+
+        if (!accessRoles.length) {
+            container.innerHTML =
+                '<div class="empty">No roles found.</div>';
+            return;
+        }
+
+        container.innerHTML = accessRoles.map(
+            function (role) {
+                var active =
+                    role.id === selectedAccessRoleId
+                        ? " active"
+                        : "";
+
+                return (
+                    '<button type="button" ' +
+                    'class="access-item' +
+                    active +
+                    '" data-role-id="' +
+                    escapeHtml(role.id) +
+                    '">' +
+                    "<strong>" +
+                    escapeHtml(role.name) +
+                    "</strong>" +
+                    '<span class="muted">' +
+                    escapeHtml(
+                        role.description ||
+                        "No description"
+                    ) +
+                    "</span>" +
+                    "</button>"
+                );
+            }
+        ).join("");
+
+        container
+            .querySelectorAll("[data-role-id]")
+            .forEach(function (button) {
+                button.addEventListener(
+                    "click",
+                    function () {
+                        selectAccessRole(
+                            button.getAttribute(
+                                "data-role-id"
+                            )
+                        );
+                    }
+                );
+            });
+    }
+
+
+    function renderAccessPermissions() {
+        var container = $("permissionsList");
+
+        if (!container) {
+            return;
+        }
+
+        if (!accessPermissions.length) {
+            container.innerHTML =
+                '<div class="empty">No permissions found.</div>';
+            return;
+        }
+
+        container.innerHTML = accessPermissions.map(
+            function (permission) {
+                return (
+                    '<div class="access-item">' +
+                    "<strong>" +
+                    escapeHtml(permission.code) +
+                    "</strong>" +
+                    '<span class="muted">' +
+                    escapeHtml(
+                        permission.description ||
+                        "No description"
+                    ) +
+                    "</span>" +
+                    "</div>"
+                );
+            }
+        ).join("");
+    }
+
+
+    function selectAccessRole(roleId) {
+        selectedAccessRoleId = roleId;
+
+        renderAccessRoles();
+
+        var role = accessRoles.find(
+            function (item) {
+                return item.id === roleId;
+            }
+        );
+
+        renderRolePermissions(role);
+    }
+
+
+    function renderRolePermissions(role) {
+        var title = $("selectedRoleTitle");
+        var description = $("selectedRoleDescription");
+        var container = $("rolePermissionsList");
+        var saveButton = $("saveRolePermissions");
+
+        if (!container) {
+            return;
+        }
+
+        if (!role) {
+            if (title) {
+                title.textContent = "Role Permissions";
+            }
+
+            if (description) {
+                description.textContent =
+                    "Select a role.";
+            }
+
+            container.innerHTML =
+                '<div class="empty">' +
+                "Select a role to manage permissions." +
+                "</div>";
+
+            if (saveButton) {
+                saveButton.disabled = true;
+            }
+
+            return;
+        }
+
+        if (title) {
+            title.textContent =
+                "Permissions — " + role.name;
+        }
+
+        if (description) {
+            description.textContent =
+                role.description || "No description";
+        }
+
+        var assigned = new Set(
+            (role.permissions || []).map(
+                function (permission) {
+                    return permission.code;
+                }
+            )
+        );
+
+        container.innerHTML = accessPermissions.map(
+            function (permission) {
+                var checked =
+                    assigned.has(permission.code)
+                        ? " checked"
+                        : "";
+
+                return (
+                    '<label class="permission-check">' +
+                    '<input type="checkbox" ' +
+                    'class="role-permission-checkbox" ' +
+                    'value="' +
+                    escapeHtml(permission.code) +
+                    '"' +
+                    checked +
+                    ">" +
+                    "<span>" +
+                    '<div class="permission-code">' +
+                    escapeHtml(permission.code) +
+                    "</div>" +
+                    '<div class="permission-description">' +
+                    escapeHtml(
+                        permission.description ||
+                        ""
+                    ) +
+                    "</div>" +
+                    "</span>" +
+                    "</label>"
+                );
+            }
+        ).join("");
+
+        if (saveButton) {
+            saveButton.disabled = false;
+        }
+    }
+
+
+    async function saveAccessRolePermissions() {
+        if (!selectedAccessRoleId) {
+            return;
+        }
+
+        var button = $("saveRolePermissions");
+
+        var checkboxes = document.querySelectorAll(
+            ".role-permission-checkbox"
+        );
+
+        var permissionCodes = [];
+
+        checkboxes.forEach(function (checkbox) {
+            if (checkbox.checked) {
+                permissionCodes.push(
+                    checkbox.value
+                );
+            }
+        });
+
+        hideAccessMessages();
+
+        try {
+            if (button) {
+                button.disabled = true;
+                button.textContent = "Saving...";
+            }
+
+            var response = await apiFetch(
+                API +
+                "/rbac/roles/" +
+                selectedAccessRoleId +
+                "/permissions",
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        permission_codes:
+                            permissionCodes
+                    })
+                }
+            );
+
+            var data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.detail &&
+                    typeof data.detail === "string"
+                        ? data.detail
+                        : "Unable to save role permissions."
+                );
+            }
+
+            var updatedRole =
+                data.role || null;
+
+            if (updatedRole) {
+                accessRoles = accessRoles.map(
+                    function (role) {
+                        return role.id === updatedRole.id
+                            ? updatedRole
+                            : role;
+                    }
+                );
+            }
+
+            renderAccessRoles();
+
+            if (updatedRole) {
+                renderRolePermissions(updatedRole);
+            }
+
+            showAccessSuccess(
+                "Role permissions saved successfully."
+            );
+
+        } catch (error) {
+            showAccessError(error.message);
+
+        } finally {
+            if (button) {
+                button.textContent =
+                    "Save Permissions";
+                button.disabled = false;
+            }
+        }
+    }
+
+
+    function hideAccessMessages() {
+        var error = $("accessControlError");
+        var success = $("accessControlSuccess");
+
+        if (error) {
+            error.classList.add("hidden");
+            error.textContent = "";
+        }
+
+        if (success) {
+            success.classList.add("hidden");
+            success.textContent = "";
+        }
+    }
+
+
+    function showAccessError(message) {
+        var error = $("accessControlError");
+
+        if (error) {
+            error.textContent = message;
+            error.classList.remove("hidden");
+        }
+    }
+
+
+    function showAccessSuccess(message) {
+        var success = $("accessControlSuccess");
+
+        if (success) {
+            success.textContent = message;
+            success.classList.remove("hidden");
+        }
+    }
+
+
+    // ========================================================
+
+    // GENERAL SETTINGS
+    async function loadGeneralSettings() {
+        try {
+            var response = await apiFetch(API + "/admin/settings");
+            if (!response.ok) {
+                throw new Error(await getApiErrorMessage(response));
+            }
+
+            var data = await response.json();
+
+            $("generalAppName").value = data.app_name || "";
+            $("generalAppDescription").value = data.app_description || "";
+            $("generalEnvironment").value = data.environment || "development";
+            $("generalLanguage").value = data.default_language || "en";
+            $("generalTimezone").value = data.default_timezone || "Asia/Aden";
+            $("generalSupportEmail").value = data.support_email || "";
+            $("generalSupportPhone").value = data.support_phone || "";
+        } catch (error) {
+            console.error("loadGeneralSettings error:", error);
+        }
+    }
+
+    async function saveGeneralSettings(event) {
+        event.preventDefault();
+
+        var message = $("generalSettingsMessage");
+
+        var payload = {
+            app_name: $("generalAppName").value.trim(),
+            app_description: $("generalAppDescription").value.trim() || null,
+            environment: $("generalEnvironment").value,
+            default_language: $("generalLanguage").value,
+            default_timezone: $("generalTimezone").value.trim(),
+            support_email: $("generalSupportEmail").value.trim() || null,
+            support_phone: $("generalSupportPhone").value.trim() || null
+        };
+
+        if (!payload.app_name || !payload.default_timezone) {
+            if (message) {
+                message.textContent = "Application Name and Timezone are required.";
+            }
+            return;
+        }
+
+        try {
+            var response = await apiFetch(
+                API + "/admin/settings",
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload)
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(await getApiErrorMessage(response));
+            }
+
+            var data = await response.json();
+
+            $("generalAppName").value = data.app_name || "";
+            $("generalAppDescription").value = data.app_description || "";
+            $("generalEnvironment").value = data.environment || "development";
+            $("generalLanguage").value = data.default_language || "en";
+            $("generalTimezone").value = data.default_timezone || "Asia/Aden";
+            $("generalSupportEmail").value = data.support_email || "";
+            $("generalSupportPhone").value = data.support_phone || "";
+
+            if (message) {
+                message.textContent = "Saved successfully.";
+            }
+        } catch (error) {
+            console.error("saveGeneralSettings error:", error);
+            if (message) {
+                message.textContent =
+                    error.message || "Unable to save settings.";
+            }
+        }
+    }
+
+    // SETTINGS / SYSTEM STATUS
+    // ========================================================
+
+    async function loadSettings() {
+        if ($("settingsApiBase")) {
+            $("settingsApiBase").textContent = API;
+        }
+
+        if ($("settingsAuthStatus")) {
+            $("settingsAuthStatus").textContent =
+                token ? "Authenticated" : "Not authenticated";
+        }
+
+        try {
+            var response = await apiFetch(
+                API + "/health"
+            );
+
+            var data = await response.json();
+
+            if ($("settingsAppName")) {
+                $("settingsAppName").textContent =
+                    data.service ||
+                    "Academic Services Platform";
+            }
+
+            if ($("settingsEnvironment")) {
+                $("settingsEnvironment").textContent =
+                    data.environment || "—";
+            }
+
+            if ($("settingsApiStatus")) {
+                $("settingsApiStatus").textContent =
+                    response.ok
+                        ? "Online"
+                        : "Offline";
+            }
+
+            if ($("settingsHealthStatus")) {
+                $("settingsHealthStatus").textContent =
+                    response.ok
+                        ? "Healthy"
+                        : "Unhealthy";
+            }
+
+        } catch (error) {
+            if ($("settingsApiStatus")) {
+                $("settingsApiStatus").textContent =
+                    "Offline";
+            }
+
+            if ($("settingsHealthStatus")) {
+                $("settingsHealthStatus").textContent =
+                    "Unavailable";
+            }
+        }
+
+        try {
+            var dependencyResponse =
+                await apiFetch(
+                    API + "/dependencies/health"
+                );
+
+            var dependencyData =
+                await dependencyResponse.json();
+
+            if ($("settingsDatabaseStatus")) {
+                $("settingsDatabaseStatus").textContent =
+                    dependencyResponse.ok &&
+                    dependencyData.database === "ready"
+                        ? "Ready"
+                        : "Unavailable";
+            }
+
+        } catch (error) {
+            if ($("settingsDatabaseStatus")) {
+                $("settingsDatabaseStatus").textContent =
+                    "Unavailable";
+            }
+        }
+    }
+
+
+    // ========================================================
+    // CATEGORY MANAGEMENT
+    // ========================================================
+
+    var categoriesCache = [];
+
+    function openCategoryModal(category) {
+        var modal = $("categoryModal");
+        var title = $("categoryModalTitle");
+        var form = $("categoryForm");
+        var error = $("categoryError");
+
+        if (!modal || !form) {
+            return;
+        }
+
+        if (error) {
+            error.textContent = "";
+            error.classList.add("hidden");
+        }
+
+        form.reset();
+
+        if (category) {
+            title.textContent = "Edit Category";
+
+            $("categoryId").value =
+                category.id || "";
+
+            $("categoryName").value =
+                category.name || "";
+
+            $("categoryDescription").value =
+                category.description || "";
+
+            $("categorySortOrder").value =
+                Number.isFinite(Number(category.sort_order))
+                    ? category.sort_order
+                    : 0;
+
+            $("categoryActive").value =
+                category.is_active ? "true" : "false";
+        } else {
+            title.textContent = "Add Category";
+
+            $("categoryId").value = "";
+            $("categoryName").value = "";
+            $("categoryDescription").value = "";
+            $("categorySortOrder").value = "0";
+            $("categoryActive").value = "true";
+        }
+
+        modal.classList.remove("hidden");
+        modal.style.display = "flex";
+
+        setTimeout(function () {
+            if ($("categoryName")) {
+                $("categoryName").focus();
+            }
+        }, 50);
+    }
+
+
+    function closeCategoryModal() {
+        var modal = $("categoryModal");
+
+        if (!modal) {
+            return;
+        }
+
+        modal.classList.add("hidden");
+        modal.style.display = "none";
+
+        if ($("categoryError")) {
+            $("categoryError").textContent = "";
+            $("categoryError").classList.add("hidden");
+        }
+    }
+
+
+    function showCategoryError(message) {
+        var error = $("categoryError");
+
+        if (!error) {
+            return;
+        }
+
+        error.textContent =
+            message || "An unexpected error occurred.";
+
+        error.classList.remove("hidden");
+    }
+
+
+    async function getApiErrorMessage(response) {
+        try {
+            var data = await response.json();
+
+            if (data && data.detail) {
+                if (Array.isArray(data.detail)) {
+                    return data.detail
+                        .map(function (item) {
+                            return item.msg || String(item);
+                        })
+                        .join(", ");
+                }
+
+                return String(data.detail);
+            }
+
+            if (data && data.message) {
+                return String(data.message);
+            }
+        } catch (error) {
+            console.error("API error parsing failed:", error);
+        }
+
+        return "Request failed with HTTP " + response.status;
+    }
+
+
+    async function loadCategories() {
+        var table = $("categoriesTable");
+
+        if (!table) {
+            return;
+        }
+
+        table.innerHTML =
+            '<tr><td colspan="5" class="loading">' +
+            'Loading categories...' +
+            '</td></tr>';
+
+        try {
+            var response =
+                await apiFetch(API + "/admin/categories");
+
+            if (!response.ok) {
+                throw new Error(
+                    await getApiErrorMessage(response)
+                );
+            }
+
+            var data = await response.json();
+
+            categoriesCache =
+                Array.isArray(data)
+                    ? data
+                    : (Array.isArray(data.items) ? data.items : []);
+
+            renderCategories();
+
+        } catch (error) {
+            console.error(
+                "loadCategories error:",
+                error
+            );
+
+            table.innerHTML =
+                '<tr><td colspan="5" class="error">' +
+                escapeHtml(
+                    error.message ||
+                    "Unable to load categories."
+                ) +
+                '</td></tr>';
+        }
+    }
+
+
+    function renderCategories() {
+        var table = $("categoriesTable");
+        var search = $("categorySearch");
+
+        if (!table) {
+            return;
+        }
+
+        var query =
+            search
+                ? search.value.trim().toLowerCase()
+                : "";
+
+        var categories =
+            categoriesCache.filter(function (category) {
+
+                if (!query) {
+                    return true;
+                }
+
+                var name =
+                    String(category.name || "")
+                        .toLowerCase();
+
+                var description =
+                    String(category.description || "")
+                        .toLowerCase();
+
+                return (
+                    name.indexOf(query) !== -1 ||
+                    description.indexOf(query) !== -1
+                );
+            });
+
+        if (!categories.length) {
+            table.innerHTML =
+                '<tr><td colspan="5" class="loading">' +
+                'No categories found.' +
+                '</td></tr>';
+
+            return;
+        }
+
+        table.innerHTML =
+            categories.map(function (category) {
+
+                var statusClass =
+                    category.is_active
+                        ? "status-active"
+                        : "status-inactive";
+
+                var statusText =
+                    category.is_active
+                        ? "Active"
+                        : "Inactive";
+
+                var nextStatus =
+                    category.is_active
+                        ? "Deactivate"
+                        : "Activate";
+
+                return (
+                    "<tr>" +
+
+                    "<td><strong>" +
+                    escapeHtml(category.name || "—") +
+                    "</strong></td>" +
+
+                    "<td>" +
+                    escapeHtml(
+                        category.description || "—"
+                    ) +
+                    "</td>" +
+
+                    '<td><span class="' +
+                    statusClass +
+                    '">' +
+                    statusText +
+                    "</span></td>" +
+
+                    "<td>" +
+                    escapeHtml(
+                        String(
+                            (category.sort_order !== null && category.sort_order !== undefined ? category.sort_order : 0)
+                        )
+                    ) +
+                    "</td>" +
+
+                    '<td class="actions">' +
+
+                    '<button type="button" ' +
+                    'class="action-btn" ' +
+                    'data-category-action="edit" ' +
+                    'data-category-id="' +
+                    escapeHtml(category.id) +
+                    '">' +
+                    "Edit" +
+                    "</button>" +
+
+                    '<button type="button" ' +
+                    'class="secondary-btn" ' +
+                    'data-category-action="toggle" ' +
+                    'data-category-id="' +
+                    escapeHtml(category.id) +
+                    '">' +
+                    nextStatus +
+                    "</button>" +
+
+                    '<button type="button" ' +
+                    'class="danger-btn" ' +
+                    'data-category-action="delete" ' +
+                    'data-category-id="' +
+                    escapeHtml(category.id) +
+                    '">' +
+                    "Delete" +
+                    "</button>" +
+
+                    "</td>" +
+
+                    "</tr>"
+                );
+            }).join("");
+    }
+
+
+    function findCategory(categoryId) {
+        return categoriesCache.find(
+            function (category) {
+                return String(category.id) ===
+                    String(categoryId);
+            }
+        );
+    }
+
+
+    async function saveCategory(event) {
+        event.preventDefault();
+
+        var error = $("categoryError");
+        var saveButton = $("saveCategoryButton");
+
+        if (error) {
+            error.textContent = "";
+            error.classList.add("hidden");
+        }
+
+        var id =
+            $("categoryId").value.trim();
+
+        var name =
+            $("categoryName").value.trim();
+
+        var description =
+            $("categoryDescription").value.trim();
+
+        var sortOrder =
+            Number($("categorySortOrder").value);
+
+        var isActive =
+            $("categoryActive").value === "true";
+
+        if (!name) {
+            showCategoryError(
+                "Category name is required."
+            );
+            return;
+        }
+
+        if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+            showCategoryError(
+                "Sort order must be a non-negative integer."
+            );
+            return;
+        }
+
+        var payload = {
+            name: name,
+            description: description || null,
+            sort_order: sortOrder,
+            is_active: isActive
+        };
+
+        if (saveButton) {
+            saveButton.disabled = true;
+            saveButton.textContent = "Saving...";
+        }
+
+        try {
+            var url =
+                id
+                    ? API + "/admin/categories/" + id
+                    : API + "/admin/categories";
+
+            var method =
+                id ? "PATCH" : "POST";
+
+            var response =
+                await apiFetch(
+                    url,
+                    {
+                        method: method,
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+                        body: JSON.stringify(payload)
+                    }
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    await getApiErrorMessage(response)
+                );
+            }
+
+            closeCategoryModal();
+
+            await loadCategories();
+
+        } catch (error) {
+            console.error(
+                "saveCategory error:",
+                error
+            );
+
+            showCategoryError(
+                error.message ||
+                "Unable to save category."
+            );
+
+        } finally {
+            if (saveButton) {
+                saveButton.disabled = false;
+                saveButton.textContent =
+                    "Save Category";
+            }
+        }
+    }
+
+
+    async function toggleCategory(categoryId) {
+        var category =
+            findCategory(categoryId);
+
+        if (!category) {
+            return;
+        }
+
+        var action =
+            category.is_active
+                ? "deactivate"
+                : "activate";
+
+        var confirmed =
+            window.confirm(
+                "Are you sure you want to " +
+                action +
+                ' category "' +
+                category.name +
+                '"?'
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            var response =
+                await apiFetch(
+                    API +
+                    "/admin/categories/" +
+                    category.id,
+                    {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+                        body: JSON.stringify({
+                            is_active:
+                                !category.is_active
+                        })
+                    }
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    await getApiErrorMessage(response)
+                );
+            }
+
+            await loadCategories();
+
+        } catch (error) {
+            console.error(
+                "toggleCategory error:",
+                error
+            );
+
+            window.alert(
+                error.message ||
+                "Unable to update category status."
+            );
+        }
+    }
+
+
+    async function deleteCategory(categoryId) {
+        var category =
+            findCategory(categoryId);
+
+        if (!category) {
+            return;
+        }
+
+        var confirmed =
+            window.confirm(
+                'Delete category "' +
+                category.name +
+                '"? This action will deactivate/remove it from active category lists.'
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            var response =
+                await apiFetch(
+                    API +
+                    "/admin/categories/" +
+                    category.id,
+                    {
+                        method: "DELETE"
+                    }
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    await getApiErrorMessage(response)
+                );
+            }
+
+            await loadCategories();
+
+        } catch (error) {
+            console.error(
+                "deleteCategory error:",
+                error
+            );
+
+            window.alert(
+                error.message ||
+                "Unable to delete category."
+            );
+        }
+    }
+
+
+    function handleCategoryTableClick(event) {
+        var button =
+            event.target.closest(
+                "[data-category-action]"
+            );
+
+        if (!button) {
+            return;
+        }
+
+        var action =
+            button.getAttribute(
+                "data-category-action"
+            );
+
+        var id =
+            button.getAttribute(
+                "data-category-id"
+            );
+
+        if (!id) {
+            return;
+        }
+
+        if (action === "edit") {
+            var category =
+                findCategory(id);
+
+            if (category) {
+                openCategoryModal(category);
+            }
+
+            return;
+        }
+
+        if (action === "toggle") {
+            toggleCategory(id);
+            return;
+        }
+
+        if (action === "delete") {
+            deleteCategory(id);
+        }
+    }
+
+
+    // ========================================================
+    // PAGE ROUTING EXTENSION
+    // ========================================================
+
+
+    function bindEvents() {
+
+        var loginForm = $("loginForm");
+
+        if (loginForm && !loginForm.dataset.bound) {
+            loginForm.addEventListener("submit", login);
+            loginForm.dataset.bound = "true";
+        }
+
+        var navButtons = document.querySelectorAll(
+            ".nav-btn[data-page]"
+        );
+
+        navButtons.forEach(function (button) {
+            if (button.dataset.bound) {
+                return;
+            }
+
+            button.addEventListener("click", function () {
+                showPage(
+                    button.getAttribute("data-page")
+                );
+            });
+
+            button.dataset.bound = "true";
+        });
+
+
+        // ====================================================
+        // CATEGORY MANAGEMENT
+        // ====================================================
+
+        if (!window.categoryControlsBound) {
+
+            var addCategoryButton =
+                $("addCategoryButton");
+
+            if (addCategoryButton) {
+                addCategoryButton.addEventListener(
+                    "click",
+                    function () {
+                        openCategoryModal(null);
+                    }
+                );
+            }
+
+            var closeCategoryButton =
+                $("closeCategoryModal");
+
+            if (closeCategoryButton) {
+                closeCategoryButton.addEventListener(
+                    "click",
+                    closeCategoryModal
+                );
+            }
+
+            var cancelCategoryButton =
+                $("cancelCategoryButton");
+
+            if (cancelCategoryButton) {
+                cancelCategoryButton.addEventListener(
+                    "click",
+                    closeCategoryModal
+                );
+            }
+
+            var categoryForm =
+                $("categoryForm");
+
+            if (categoryForm) {
+                categoryForm.addEventListener(
+                    "submit",
+                    saveCategory
+                );
+            }
+
+            var categorySearch =
+                $("categorySearch");
+
+            if (categorySearch) {
+                categorySearch.addEventListener(
+                    "input",
+                    renderCategories
+                );
+            }
+
+            var categoriesTable =
+                $("categoriesTable");
+
+            if (categoriesTable) {
+                categoriesTable.addEventListener(
+                    "click",
+                    handleCategoryTableClick
+                );
+            }
+
+            window.categoryControlsBound = true;
+        }
+
+
+
+        // ====================================================
+        // STAFF MANAGEMENT
+        // ====================================================
+
+        /* staffControlsBound */
+
+        var addStaffButton =
+            $("addStaffButton");
+
+        if (
+            addStaffButton &&
+            !addStaffButton.dataset.bound
+        ) {
+            addStaffButton.addEventListener(
+                "click",
+                function () {
+                    openStaffModal(null);
+                }
+            );
+
+            addStaffButton.dataset.bound = "true";
+        }
+
+        var cancelStaff =
+            $("cancelStaff");
+
+        if (
+            cancelStaff &&
+            !cancelStaff.dataset.bound
+        ) {
+            cancelStaff.addEventListener(
+                "click",
+                closeStaffModal
+            );
+
+            cancelStaff.dataset.bound =
+                "true";
+        }
+
+        var cancelStaffButton =
+            $("cancelStaffButton");
+
+        if (
+            cancelStaffButton &&
+            !cancelStaffButton.dataset.bound
+        ) {
+            cancelStaffButton.addEventListener(
+                "click",
+                closeStaffModal
+            );
+
+            cancelStaffButton.dataset.bound =
+                "true";
+        }
+
+        var staffForm =
+            $("staffForm");
+
+        if (
+            staffForm &&
+            !staffForm.dataset.bound
+        ) {
+            staffForm.addEventListener(
+                "submit",
+                saveStaff
+            );
+
+            staffForm.dataset.bound =
+                "true";
+        }
+
+        var staffSearch =
+            $("staffSearch");
+
+        if (
+            staffSearch &&
+            !staffSearch.dataset.bound
+        ) {
+            staffSearch.addEventListener(
+                "input",
+                function () {
+                    loadStaff();
+                }
+            );
+
+            staffSearch.dataset.bound =
+                "true";
+        }
+
+        var staffStatus =
+            $("staffStatus");
+
+        if (
+            staffStatus &&
+            !staffStatus.dataset.bound
+        ) {
+            staffStatus.addEventListener(
+                "change",
+                function () {
+                    loadStaff();
+                }
+            );
+
+            staffStatus.dataset.bound =
+                "true";
+        }
+
+        var refreshAccessControl =
+            $("refreshAccessControl");
+
+        if (
+            refreshAccessControl &&
+            !refreshAccessControl.dataset.bound
+        ) {
+            refreshAccessControl.addEventListener(
+                "click",
+                loadAccessControl
+            );
+
+            refreshAccessControl.dataset.bound =
+                "true";
+        }
+
+        var saveRolePermissions =
+            $("saveRolePermissions");
+
+        if (
+            saveRolePermissions &&
+            !saveRolePermissions.dataset.bound
+        ) {
+            saveRolePermissions.addEventListener(
+                "click",
+                saveAccessRolePermissions
+            );
+
+            saveRolePermissions.dataset.bound =
+                "true";
+        }
+
+        var generalSettingsForm =
+            $("generalSettingsForm");
+        if (
+            generalSettingsForm &&
+            !generalSettingsForm.dataset.bound
+        ) {
+            generalSettingsForm.addEventListener(
+                "submit",
+                saveGeneralSettings
+            );
+            generalSettingsForm.dataset.bound = "1";
+        }
+
+        var refreshSettings =
+            $("refreshSettings");
+
+        if (
+            refreshSettings &&
+            !refreshSettings.dataset.bound
+        ) {
+            refreshSettings.addEventListener(
+                "click",
+                loadSettings
+            );
+
+            refreshSettings.dataset.bound =
+                "true";
+        }
+
+        var logoutButton = $("logoutButton");
+
+        if (logoutButton && !logoutButton.dataset.bound) {
+            logoutButton.addEventListener("click", logout);
+            logoutButton.dataset.bound = "true";
+        }
+
+        var addUserButton = $("addUserBtn");
+
+        if (addUserButton && !addUserButton.dataset.bound) {
+            addUserButton.addEventListener("click", function (event) {
+                event.preventDefault();
+                openUserModal(null);
+            });
+
+            addUserButton.dataset.bound = "true";
+        }
+
+        var userForm = $("userForm");
+
+        if (userForm && !userForm.dataset.bound) {
+            userForm.addEventListener("submit", function (event) {
+                saveUser(event);
+            });
+
+            userForm.dataset.bound = "true";
+        }
+
+        var addServiceButton = $("addServiceButton");
+
+        if (addServiceButton && !addServiceButton.dataset.bound) {
+            addServiceButton.addEventListener(
+                "click",
+                function () {
+                    openServiceModal(null);
+                }
+            );
+
+            addServiceButton.dataset.bound = "true";
+        }
+
+        var serviceForm = $("serviceForm");
+
+        if (serviceForm && !serviceForm.dataset.bound) {
+            serviceForm.addEventListener(
+                "submit",
+                saveService
+            );
+
+            serviceForm.dataset.bound = "true";
+        }
+
+        var cancelService = $("cancelService");
+
+        if (cancelService && !cancelService.dataset.bound) {
+            cancelService.addEventListener(
+                "click",
+                closeServiceModal
+            );
+
+            cancelService.dataset.bound = "true";
+        }
+
+        var serviceSearch = $("serviceSearch");
+
+        if (serviceSearch && !serviceSearch.dataset.bound) {
+            serviceSearch.addEventListener(
+                "input",
+                function () {
+                    loadServices();
+                }
+            );
+
+            serviceSearch.dataset.bound = "true";
+        }
+
+        var serviceStatus = $("serviceStatus");
+
+        if (serviceStatus && !serviceStatus.dataset.bound) {
+            serviceStatus.addEventListener(
+                "change",
+                function () {
+                    loadServices();
+                }
+            );
+
+            serviceStatus.dataset.bound = "true";
+        }
+    }
+
+    
+    function initialize() {
+
+        // Login events must always be bound, even when no token exists.
+        bindEvents();
+
+        if (!token) {
+            console.warn("No admin token found. Login screen remains active.");
+            return;
+        }
+
+        apiFetch(API + "/auth/me")
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error("Authentication failed.");
+                }
+
+                return response.json();
+            })
+            .then(function (user) {
+
+                if ($("currentUser")) {
+                    $("currentUser").textContent =
+                        user.username ||
+                        user.email ||
+                        "Admin";
+                }
+
+                showPage("dashboard");
+            })
+            .catch(function (error) {
+                console.error(error);
+                logout();
+            });
+    }
+
+    /*
+     * The script is placed before the closing body tag,
+     * but initialize after the DOM is ready.
+     */
+    if (document.readyState === "loading") {
+        document.addEventListener(
+            "DOMContentLoaded",
+            function () {
+                bindEvents();
+                initialize();
+            }
+        );
+    } else {
+        bindEvents();
+        initialize();
+    }
+
+
+
+
+
+    // ========================================================
+    // STAFF MANAGEMENT
+    // ========================================================
+
+var staffUsers = [];
+
+
+function staffGet(id) {
+    return document.getElementById(id);
+}
+
+function loadStaff() {
+    var table = staffGet("staffTable");
+
+    if (!table) {
+        return;
+    }
+
+    table.innerHTML =
+        '<tr><td colspan="5"><div class="loading">Loading staff...</div></td></tr>';
+
+    var search = staffGet("staffSearch");
+    var status = staffGet("staffStatus");
+
+    var params = new URLSearchParams();
+
+    params.set("page", "1");
+    params.set("page_size", "100");
+
+    if (search && search.value.trim()) {
+        params.set("search", search.value.trim());
+    }
+
+    if (status && status.value) {
+        params.set("status", status.value);
+    }
+
+    apiFetch(API + "/admin/staff?" + params.toString())
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error("Failed to load staff.");
+            }
+
+            return response.json();
+        })
+        .then(function(data) {
+            staffUsers = data.items || [];
+            renderStaff();
+        })
+        .catch(function(error) {
+            console.error(error);
+
+            table.innerHTML =
+                '<tr><td colspan="5">' +
+                '<div class="error">Failed to load staff.</div>' +
+                '</td></tr>';
+        });
+}
+
+function renderStaff() {
+    var table = staffGet("staffTable");
+
+    if (!table) {
+        return;
+    }
+
+    if (!staffUsers.length) {
+        table.innerHTML =
+            '<tr><td colspan="5">' +
+            '<div class="empty">No staff members found.</div>' +
+            '</td></tr>';
+
+        return;
+    }
+
+    table.innerHTML = staffUsers.map(function(staff) {
+
+        var name = [
+            staff.first_name || "",
+            staff.last_name || ""
+        ].join(" ").trim();
+
+        if (!name) {
+            name = staff.username || "Unnamed";
+        }
+
+        var statusClass =
+            String(staff.status).toLowerCase() === "active"
+                ? "status-active"
+                : "status-inactive";
+
+        return (
+            "<tr>" +
+                "<td>" +
+                    escapeHtml(name) +
+                "</td>" +
+
+                "<td>" +
+                    escapeHtml(staff.username || "-") +
+                "</td>" +
+
+                "<td>" +
+                    escapeHtml(
+                        staff.specialization || "-"
+                    ) +
+                "</td>" +
+
+                "<td>" +
+                    '<span class="status ' +
+                    statusClass +
+                    '">' +
+                        escapeHtml(
+                            staff.status || "-"
+                        ) +
+                    "</span>" +
+                "</td>" +
+
+                "<td>" +
+                    '<button class="action-btn small" ' +
+                    'type="button" ' +
+                    'data-staff-edit="' +
+                    staff.id +
+                    '">' +
+                    "Edit" +
+                    "</button>" +
+                "</td>" +
+
+            "</tr>"
+        );
+
+    }).join("");
+
+    table.querySelectorAll(
+        "[data-staff-edit]"
+    ).forEach(function(button) {
+
+        button.addEventListener(
+            "click",
+            function() {
+                editStaffById(
+                    button.getAttribute(
+                        "data-staff-edit"
+                    )
+                );
+            }
+        );
+
+    });
+}
+
+function openStaffModal(staff) {
+
+    var modal = staffGet("staffModal");
+
+    if (!modal) {
+        return;
+    }
+
+    staffGet("staffId").value =
+        staff && staff.id
+            ? staff.id
+            : "";
+
+    staffGet("staffUsername").value =
+        staff && staff.username
+            ? staff.username
+            : "";
+
+    staffGet("staffPassword").value = "";
+
+    staffGet("staffFirstName").value =
+        staff && staff.first_name
+            ? staff.first_name
+            : "";
+
+    staffGet("staffLastName").value =
+        staff && staff.last_name
+            ? staff.last_name
+            : "";
+
+    staffGet("staffEmail").value =
+        staff && staff.email
+            ? staff.email
+            : "";
+
+    staffGet("staffPhone").value =
+        staff && staff.phone
+            ? staff.phone
+            : "";
+
+    staffGet("staffSpecialization").value =
+        staff && staff.specialization
+            ? staff.specialization
+            : "";
+
+    staffGet("staffAvailability").value =
+        staff && staff.availability
+            ? staff.availability
+            : "";
+
+    staffGet("staffStatusInput").value =
+        staff && staff.status
+            ? String(staff.status).toLowerCase()
+            : "active";
+
+    staffGet("staffActive").value =
+        staff &&
+        typeof staff.is_active === "boolean"
+            ? String(staff.is_active)
+            : "true";
+
+    staffGet("staffUsername").disabled =
+        !!(staff && staff.id);
+
+    staffGet("staffModalTitle").textContent =
+        staff && staff.id
+            ? "Edit Staff"
+            : "Add Staff";
+
+    staffGet("staffPassword").required =
+        !(staff && staff.id);
+
+    staffGet("staffError").classList.add("hidden");
+    staffGet("staffError").textContent = "";
+
+    modal.style.display = "flex";
+}
+
+function closeStaffModal() {
+
+    var modal = staffGet("staffModal");
+
+    if (modal) {
+        modal.style.display = "none";
+    }
+}
+
+function editStaffById(userId) {
+
+    apiFetch(
+        API +
+        "/admin/staff/" +
+        encodeURIComponent(userId)
+    )
+        .then(function(response) {
+
+            if (!response.ok) {
+                throw new Error(
+                    "Failed to load staff member."
+                );
+            }
+
+            return response.json();
+        })
+        .then(function(staff) {
+            openStaffModal(staff);
+        })
+        .catch(function(error) {
+
+            console.error(error);
+
+            alert(
+                "Failed to load staff member."
+            );
+        });
+}
+
+function saveStaff(event) {
+
+    event.preventDefault();
+
+    var id = staffGet("staffId").value;
+
+    var payload = {
+        email:
+            staffGet("staffEmail").value.trim() ||
+            null,
+
+        first_name:
+            staffGet("staffFirstName").value.trim() ||
+            null,
+
+        last_name:
+            staffGet("staffLastName").value.trim() ||
+            null,
+
+        phone:
+            staffGet("staffPhone").value.trim() ||
+            null,
+
+        specialization:
+            staffGet("staffSpecialization").value.trim() ||
+            null,
+
+        availability:
+            staffGet("staffAvailability").value.trim() ||
+            null,
+
+        status:
+            staffGet("staffStatusInput").value,
+
+        is_active:
+            staffGet("staffActive").value === "true"
+    };
+
+    if (!id) {
+
+        payload.username =
+            staffGet("staffUsername").value.trim();
+
+        payload.password =
+            staffGet("staffPassword").value;
+
+    } else if (staffGet("staffPassword").value) {
+
+        payload.password =
+            staffGet("staffPassword").value;
+    }
+
+    var errorBox = staffGet("staffError");
+
+    if (errorBox) {
+        errorBox.classList.add("hidden");
+        errorBox.textContent = "";
+    }
+
+    var method = id
+        ? "PATCH"
+        : "POST";
+
+    apiFetch(
+        API +
+        "/admin/staff" +
+        (
+            id
+                ? "/" + encodeURIComponent(id)
+                : ""
+        ),
+        {
+            method: method,
+
+            headers: {
+                "Content-Type":
+                    "application/json"
+            },
+
+            body:
+                JSON.stringify(payload)
+        }
+    )
+        .then(async function(response) {
+
+            var data = {};
+
+            try {
+                data =
+                    await response.json();
+            } catch (_) {
+                data = {};
+            }
+
+            if (!response.ok) {
+
+                var message =
+                    data.detail ||
+                    data.message ||
+                    "Failed to save staff.";
+
+                if (
+                    typeof message ===
+                    "object"
+                ) {
+                    message =
+                        JSON.stringify(message);
+                }
+
+                throw new Error(message);
+            }
+
+            return data;
+        })
+        .then(function() {
+
+            closeStaffModal();
+
+            loadStaff();
+
+            if (
+                typeof loadDashboard ===
+                "function"
+            ) {
+                loadDashboard();
+            }
+        })
+        .catch(function(error) {
+
+            console.error(error);
+
+            if (errorBox) {
+
+                errorBox.textContent =
+                    error.message;
+
+                errorBox.classList.remove(
+                    "hidden"
+                );
+            }
+        });
+}
+
+})();
+</script>
+
+
+
+<div id="userModal" class="modal" style="display:none;">
+    <div class="modal-backdrop" onclick="closeUserModal()"></div>
+
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <div>
+                <h2 id="userModalTitle">Add User</h2>
+                <p id="userModalSubtitle">Create a new platform user.</p>
+            </div>
+            <button type="button" class="modal-close" onclick="closeUserModal()">×</button>
+        </div>
+
+        <form id="userForm">
+            <input type="hidden" id="userId">
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input id="userUsername" type="text" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Password <span id="passwordRequired">*</span></label>
+                    <input id="userPassword" type="password">
+                </div>
+
+                <div class="form-group">
+                    <label>Email</label>
+                    <input id="userEmail" type="email">
+                </div>
+
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input id="userPhone" type="text">
+                </div>
+
+                <div class="form-group">
+                    <label>First Name</label>
+                    <input id="userFirstName" type="text">
+                </div>
+
+                <div class="form-group">
+                    <label>Last Name</label>
+                    <input id="userLastName" type="text">
+                </div>
+
+                <div class="form-group">
+                    <label>Language</label>
+                    <input id="userLanguage" type="text" placeholder="ar">
+                </div>
+
+                <div class="form-group">
+                    <label>Timezone</label>
+                    <input id="userTimezone" type="text" placeholder="Asia/Aden">
+                </div>
+
+                <div class="form-group">
+                    <label>Role *</label>
+                    <select id="userRole" required>
+                        <option value="customer">Customer</option>
+                        <option value="staff">Staff</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Status *</label>
+                    <select id="userStatus" required>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="suspended">Suspended</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="userFormError" class="form-error" style="display:none;"></div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeUserModal()">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary" id="saveUserBtn">
+                    Save User
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+
+
+
+<!-- PROFESSIONAL REQUEST DETAILS MODAL -->
+<div id="requestDetailsModal" class="request-modal-overlay" style="display:none;">
+    <div class="request-modal">
+
+        <div class="request-modal-header">
+            <div>
+                <h2>تفاصيل الطلب</h2>
+                <p id="requestModalSubtitle">إدارة ومراجعة طلب العميل</p>
+            </div>
+
+            <button type="button"
+                    class="request-modal-close"
+                    onclick="window.closeRequestDetails()">
+                ✕
+            </button>
+        </div>
+
+        <div id="requestModalLoading" class="request-modal-loading">
+            جاري تحميل بيانات الطلب...
+        </div>
+
+        <div id="requestModalContent" style="display:none;">
+
+            <div class="request-info-grid">
+
+                <div class="request-info-card">
+                    <span>عنوان الطلب</span>
+                    <strong id="detailRequestTitle">-</strong>
+                </div>
+
+                <div class="request-info-card">
+                    <span>معرف الطلب</span>
+                    <strong id="detailRequestId">-</strong>
+                </div>
+
+                <div class="request-info-card">
+                    <span>العميل</span>
+                    <strong id="detailCustomerId">-</strong>
+                </div>
+
+                <div class="request-info-card">
+                    <span>الخدمة</span>
+                    <strong id="detailServiceId">-</strong>
+                </div>
+
+                <div class="request-info-card">
+                    <span>التخصص</span>
+                    <strong id="detailSpecialization">-</strong>
+                </div>
+
+                <div class="request-info-card">
+                    <span>الموعد النهائي</span>
+                    <strong id="detailDeadline">-</strong>
+                </div>
+
+                <div class="request-info-card">
+                    <span>تاريخ الإنشاء</span>
+                    <strong id="detailCreatedAt">-</strong>
+                </div>
+
+            </div>
+
+            <div class="request-detail-section">
+                <label>وصف الطلب</label>
+                <div id="detailDescription" class="request-detail-box">-</div>
+            </div>
+
+            <div class="request-edit-grid">
+
+                <div class="request-field">
+                    <label for="detailStatus">حالة الطلب</label>
+                    <select id="detailStatus">
+                        <option value="NEW">NEW</option>
+                        <option value="UNDER_REVIEW">UNDER_REVIEW</option>
+                        <option value="WAITING_FOR_CUSTOMER">WAITING_FOR_CUSTOMER</option>
+                        <option value="QUOTATION_SENT">QUOTATION_SENT</option>
+                        <option value="APPROVED">APPROVED</option>
+                        <option value="IN_PROGRESS">IN_PROGRESS</option>
+                        <option value="COMPLETED">COMPLETED</option>
+                        <option value="CANCELLED">CANCELLED</option>
+                        <option value="REJECTED">REJECTED</option>
+                    </select>
+                </div>
+
+                <div class="request-field">
+                    <label for="detailPriority">الأولوية</label>
+                    <select id="detailPriority">
+                        <option value="LOW">LOW</option>
+                        <option value="NORMAL">NORMAL</option>
+                        <option value="HIGH">HIGH</option>
+                        <option value="URGENT">URGENT</option>
+                    </select>
+                </div>
+
+            </div>
+
+            <div class="request-detail-section">
+                <label for="detailNotes">ملاحظات الإدارة</label>
+                <textarea id="detailNotes"
+                          rows="5"
+                          placeholder="اكتب ملاحظات الإدارة هنا..."></textarea>
+            </div>
+
+        </div>
+
+        <div id="requestModalError"
+             class="request-modal-error"
+             style="display:none;"></div>
+
+        <div class="request-modal-footer">
+            <button type="button"
+                    class="request-btn request-btn-secondary"
+                    onclick="window.closeRequestDetails()">
+                إغلاق
+            </button>
+
+            <button type="button"
+                    id="saveRequestBtn"
+                    class="request-btn request-btn-primary"
+                    onclick="window.saveRequestDetails()">
+                💾 حفظ التعديلات
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<style>
+.request-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(15, 23, 42, 0.68);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.request-modal {
+    width: min(920px, 96vw);
+    max-height: 92vh;
+    overflow-y: auto;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.25);
+}
+
+.request-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 24px 28px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.request-modal-header h2 {
+    margin: 0;
+    font-size: 23px;
+    color: #0f172a;
+}
+
+.request-modal-header p {
+    margin: 6px 0 0;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.request-modal-close {
+    border: 0;
+    background: #f1f5f9;
+    color: #475569;
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.request-modal-close:hover {
+    background: #e2e8f0;
+}
+
+.request-modal-loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: #64748b;
+}
+
+.request-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    padding: 24px 28px 10px;
+}
+
+.request-info-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px;
+    min-width: 0;
+}
+
+.request-info-card span {
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+    margin-bottom: 7px;
+}
+
+.request-info-card strong {
+    display: block;
+    color: #0f172a;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+
+.request-detail-section {
+    padding: 14px 28px;
+}
+
+.request-detail-section label,
+.request-field label {
+    display: block;
+    margin-bottom: 8px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.request-detail-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 15px;
+    min-height: 70px;
+    color: #334155;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.request-edit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 10px 28px;
+}
+
+.request-field select,
+#detailNotes {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    padding: 11px 12px;
+    background: #fff;
+    color: #0f172a;
+    font-size: 14px;
+    outline: none;
+}
+
+.request-field select:focus,
+#detailNotes:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,.10);
+}
+
+#detailNotes {
+    resize: vertical;
+    min-height: 110px;
+}
+
+.request-modal-error {
+    margin: 8px 28px;
+    padding: 12px 14px;
+    border-radius: 9px;
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.request-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 20px 28px 24px;
+    border-top: 1px solid #e5e7eb;
+    margin-top: 12px;
+}
+
+.request-btn {
+    border: 0;
+    border-radius: 9px;
+    padding: 11px 18px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.request-btn-secondary {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.request-btn-primary {
+    background: #2563eb;
+    color: #fff;
+}
+
+.request-btn-primary:hover {
+    background: #1d4ed8;
+}
+
+@media (max-width: 700px) {
+    .request-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .request-edit-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .request-modal-overlay {
+        padding: 10px;
+    }
+
+    .request-modal-header,
+    .request-info-grid,
+    .request-detail-section,
+    .request-edit-grid,
+    .request-modal-footer {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+}
+</style>
+
+
+<script>
+async function importTelegramDestinationsFile() {
+    const fileInput = document.getElementById("telegramDestinationsFile");
+    const message = document.getElementById("telegramImportMessage");
+
+    if (!fileInput || !fileInput.files.length) {
+        message.textContent = "Please select a TXT or CSV file.";
+        return;
+    }
+
+    const file = fileInput.files[0];
+
+    if (file.size > 5 * 1024 * 1024) {
+        message.textContent = "File is too large. Maximum size is 5 MB.";
+        return;
+    }
+
+    message.textContent = "Importing...";
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+        const response = await fetch(
+            "/api/v1/admin/telegram-destinations/import",
+            {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + localStorage.getItem("admin_access_token")
+                },
+                body: formData
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || "Failed to import Telegram links.");
+        }
+
+        message.textContent =
+            "Import completed: " +
+            data.imported +
+            " imported, " +
+            data.skipped_existing +
+            " already existed.";
+
+        fileInput.value = "";
+
+        if (typeof loadTelegramDestinations === "function") {
+            await loadTelegramDestinations();
+        }
+
+    } catch (error) {
+        console.error("Telegram destination import failed:", error);
+        message.textContent = error.message;
+    }
+}
+</script>
+
+</body>
+</html>
+
+
+
+
+<div id="telegramDestinationModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;align-items:center;justify-content:center;">
+    <div class="panel" style="width:min(520px,92vw);">
+        <div class="panel-header">
+            <h3>📡 Add Telegram Destination</h3>
+            <button type="button" onclick="closeTelegramDestinationModal()">✕</button>
+        </div>
+
+        <div style="padding:20px;">
+            <label style="display:block;margin-bottom:8px;">Telegram Group / Channel URL</label>
+            <input id="telegramDestinationUrl"
+                   type="text"
+                   placeholder="https://t.me/example"
+                   style="width:100%;margin-bottom:16px;">
+
+            <label style="display:block;margin-bottom:8px;">Title (optional)</label>
+            <input id="telegramDestinationTitle"
+                   type="text"
+                   placeholder="Destination name"
+                   style="width:100%;margin-bottom:16px;">
+
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+                <input id="telegramDestinationActive" type="checkbox" checked>
+                Active
+            </label>
+
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+                <button type="button" onclick="closeTelegramDestinationModal()">Cancel</button>
+                <button type="button" class="action-btn" onclick="createTelegramDestination()">Save Destination</button>
+            </div>
+
+            <div id="telegramDestinationFormMessage" style="margin-top:14px;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openTelegramDestinationModal() {
+    const modal = document.getElementById("telegramDestinationModal");
+    if (modal) {
+        modal.style.display = "flex";
+    }
+}
+
+function closeTelegramDestinationModal() {
+    const modal = document.getElementById("telegramDestinationModal");
+    if (modal) {
+        modal.style.display = "none";
+    }
+}
+
+async function createTelegramDestination() {
+    const url = document.getElementById("telegramDestinationUrl").value.trim();
+    const title = document.getElementById("telegramDestinationTitle").value.trim();
+    const active = document.getElementById("telegramDestinationActive").checked;
+    const message = document.getElementById("telegramDestinationFormMessage");
+
+    if (!url) {
+        message.textContent = "Telegram destination URL is required.";
+        return;
+    }
+
+    message.textContent = "Saving...";
+
+    try {
+        const response = await fetch("/api/v1/admin/telegram-destinations", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("admin_access_token")
+            },
+            body: JSON.stringify({
+                original_url: url,
+                title: title || null,
+                is_active: active
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || "Failed to create destination.");
+        }
+
+        closeTelegramDestinationModal();
+        document.getElementById("telegramDestinationUrl").value = "";
+        document.getElementById("telegramDestinationTitle").value = "";
+        document.getElementById("telegramDestinationActive").checked = true;
+
+        await loadTelegramDestinations();
+
+    } catch (error) {
+        message.textContent = error.message;
+    }
+}
+</script>
+
+<script>
+async function verifyTelegramDestination(destinationId) {
+    try {
+        const response = await fetch(
+            "/api/v1/admin/telegram-destinations/" + destinationId + "/verify",
+            {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + localStorage.getItem("admin_access_token")
+                }
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || "Verification failed.");
+        }
+
+        alert(
+            data.success
+                ? "Verification complete: " + data.status
+                : "Verification failed: " + data.message
+        );
+
+        await loadTelegramDestinations();
+
+    } catch (error) {
+        alert("Verification error: " + error.message);
+    }
+}
+
+async function loadTelegramDestinations() {
+    const container = document.getElementById("telegramDestinationsTable");
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-icon">⏳</div>
+            <h3>Loading destinations...</h3>
+            <p>Please wait.</p>
+        </div>
+    `;
+
+    try {
+        const response = await fetch("/api/v1/admin/telegram-destinations?page=1&page_size=100", {
+            headers: {
+                "Authorization": "Bearer " + localStorage.getItem("admin_access_token")
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error("HTTP " + response.status);
+        }
+
+        const data = await response.json();
+
+        if (!data.items || data.items.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📡</div>
+                    <h3>No Telegram destinations</h3>
+                    <p>Add Telegram groups or channels to use them for publishing.</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = data.items.map(function(item) {
+            return `
+                <div class="panel" style="margin-bottom:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;">
+                        <div>
+                            <strong>${item.title || item.username || item.original_url}</strong>
+                            <div style="color:var(--muted);margin-top:6px;">
+                                ${item.chat_type} · ${item.validation_status}
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span>${item.is_active ? "Active" : "Inactive"}</span>
+                            <button type="button"
+                                    class="action-btn"
+                                    onclick="verifyTelegramDestination('${item.id}')">
+                                Verify
+                            </button>
+                        </div>
+                    </div>
+                    <div style="color:var(--muted);margin-top:8px;">
+                        ${item.original_url}
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+    } catch (error) {
+        console.error("Failed to load Telegram destinations:", error);
+
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">⚠️</div>
+                <h3>Failed to load destinations</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+</script>

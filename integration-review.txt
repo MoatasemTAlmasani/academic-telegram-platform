@@ -1,0 +1,1881 @@
+تقرير مراجعة دمج Telegram Mini App
+
+======================================================================
+FILE: alembic.ini
+======================================================================
+[alembic]
+script_location = database/migrations
+prepend_sys_path = .
+
+sqlalchemy.url =
+
+[loggers]
+keys = root,sqlalchemy,alembic
+
+[handlers]
+keys = console
+
+[formatters]
+keys = generic
+
+[logger_root]
+level = WARN
+handlers = console
+
+[logger_sqlalchemy]
+level = WARN
+handlers =
+qualname = sqlalchemy.engine
+
+[logger_alembic]
+level = INFO
+handlers =
+qualname = alembic
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+
+======================================================================
+FILE: package.json
+======================================================================
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+  },
+  "private": true,
+  "dependencies": {
+    "@replit/connectors-sdk": "^0.4.3"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3"
+  }
+}
+
+======================================================================
+FILE: pyproject.toml
+======================================================================
+[project]
+name = "academic-services-platform"
+version = "0.1.0"
+description = "Phase 0 foundation for a Telegram-based academic and student services platform"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "psycopg[binary]>=3.3.6",
+    "pwdlib[argon2]>=0.3.0",
+    "pydantic-settings>=2.15.0",
+    "pyjwt>=2.10.0",
+    "sqlalchemy[asyncio]>=2.1.1",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]
+
+infra = [
+    "aiogram>=3.0.0",
+    "alembic>=1.13.0",
+    "asyncpg>=0.29.0",
+    "redis>=5.0.0",
+    "sqlalchemy>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra"
+
+======================================================================
+FILE: requirements.txt
+======================================================================
+-e .[dev]
+======================================================================
+FILE: tsconfig.json
+======================================================================
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./lib/db"
+    },
+    {
+      "path": "./lib/api-client-react"
+    },
+    {
+      "path": "./lib/api-zod"
+    }
+  ]
+}
+
+======================================================================
+FILE: artifacts/mockup-sandbox/package.json
+======================================================================
+{
+  "name": "@workspace/mockup-sandbox",
+  "version": "2.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@hookform/resolvers": "^3.10.0",
+    "@radix-ui/react-accordion": "^1.2.20",
+    "@radix-ui/react-alert-dialog": "^1.1.23",
+    "@radix-ui/react-aspect-ratio": "^1.1.15",
+    "@radix-ui/react-avatar": "^1.2.6",
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-collapsible": "^1.1.20",
+    "@radix-ui/react-context-menu": "^2.3.7",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-hover-card": "^1.1.23",
+    "@radix-ui/react-label": "^2.1.15",
+    "@radix-ui/react-menubar": "^1.1.24",
+    "@radix-ui/react-navigation-menu": "^1.2.22",
+    "@radix-ui/react-popover": "^1.1.23",
+    "@radix-ui/react-progress": "^1.1.16",
+    "@radix-ui/react-radio-group": "^1.4.7",
+    "@radix-ui/react-scroll-area": "^1.2.18",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-separator": "^1.1.15",
+    "@radix-ui/react-slider": "^1.4.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@radix-ui/react-switch": "^1.3.7",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@radix-ui/react-toast": "^1.2.23",
+    "@radix-ui/react-toggle": "^1.1.18",
+    "@radix-ui/react-toggle-group": "^1.1.19",
+    "@radix-ui/react-tooltip": "^1.2.16",
+    "@replit/vite-plugin-cartographer": "catalog:",
+    "@replit/vite-plugin-runtime-error-modal": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "chokidar": "^4.0.3",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "cmdk": "^1.1.1",
+    "date-fns": "^3.6.0",
+    "embla-carousel-react": "^8.6.0",
+    "fast-glob": "^3.3.3",
+    "framer-motion": "catalog:",
+    "input-otp": "^1.5.0",
+    "lucide-react": "catalog:",
+    "next-themes": "^0.4.6",
+    "react": "catalog:",
+    "react-day-picker": "^9.14.0",
+    "react-dom": "catalog:",
+    "react-hook-form": "^7.87.0",
+    "react-resizable-panels": "^2.1.9",
+    "recharts": "^2.15.4",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "catalog:",
+    "tailwindcss": "catalog:",
+    "tailwindcss-animate": "^1.0.7",
+    "tw-animate-css": "^1.4.0",
+    "vaul": "^1.1.2",
+    "vite": "catalog:",
+    "zod": "catalog:"
+  }
+}
+
+======================================================================
+FILE: artifacts/mockup-sandbox/tsconfig.json
+======================================================================
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["src/**/*", "mockupPreviewPlugin.ts", "vite.config.ts"],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
+    "noEmit": true,
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "jsx": "preserve",
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+
+======================================================================
+FILE: artifacts/mockup-sandbox/vite.config.ts
+======================================================================
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import path from "path";
+import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { mockupPreviewPlugin } from "./mockupPreviewPlugin";
+
+const rawPort = process.env.PORT;
+
+if (!rawPort) {
+  throw new Error(
+    "PORT environment variable is required but was not provided.",
+  );
+}
+
+const port = Number(rawPort);
+
+if (Number.isNaN(port) || port <= 0) {
+  throw new Error(`Invalid PORT value: "${rawPort}"`);
+}
+
+const basePath = process.env.BASE_PATH;
+
+if (!basePath) {
+  throw new Error(
+    "BASE_PATH environment variable is required but was not provided.",
+  );
+}
+
+export default defineConfig({
+  base: basePath,
+  plugins: [
+    mockupPreviewPlugin(),
+    react(),
+    tailwindcss(),
+    runtimeErrorOverlay(),
+    ...(process.env.NODE_ENV !== "production" &&
+    process.env.REPL_ID !== undefined
+      ? [
+          await import("@replit/vite-plugin-cartographer").then((m) =>
+            m.cartographer({
+              root: path.resolve(import.meta.dirname, ".."),
+            }),
+          ),
+        ]
+      : []),
+  ],
+  resolve: {
+    alias: {
+      "@": path.resolve(import.meta.dirname, "src"),
+    },
+  },
+  root: path.resolve(import.meta.dirname),
+  build: {
+    outDir: path.resolve(import.meta.dirname, "dist"),
+    emptyOutDir: true,
+  },
+  server: {
+    port,
+    host: "0.0.0.0",
+    allowedHosts: true,
+    fs: {
+      strict: true,
+    },
+  },
+  preview: {
+    port,
+    host: "0.0.0.0",
+    allowedHosts: true,
+  },
+});
+
+======================================================================
+FILE: artifacts/api-server/package.json
+======================================================================
+{
+  "name": "@workspace/api-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
+    "build": "node ./build.mjs",
+    "start": "node --enable-source-maps ./dist/index.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@workspace/api-zod": "workspace:*",
+    "@workspace/db": "workspace:*",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "drizzle-orm": "catalog:",
+    "express": "^5.2.1",
+    "pino": "^9.14.0",
+    "pino-http": "^10.5.0"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "catalog:",
+    "esbuild": "0.28.2",
+    "esbuild-plugin-pino": "^2.3.3",
+    "pino-pretty": "^13.1.3",
+    "thread-stream": "3.1.0"
+  }
+}
+
+======================================================================
+FILE: artifacts/api-server/tsconfig.json
+======================================================================
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../../lib/db"
+    },
+    {
+      "path": "../../lib/api-zod"
+    }
+  ]
+}
+
+======================================================================
+FILE: scripts/package.json
+======================================================================
+{
+  "name": "@workspace/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "hello": "tsx ./src/hello.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:"
+  }
+}
+
+======================================================================
+FILE: scripts/tsconfig.json
+======================================================================
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
+
+======================================================================
+FILE: lib/api-spec/package.json
+======================================================================
+{
+  "name": "@workspace/api-spec",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "codegen": "orval --config ./orval.config.ts && pnpm -w run typecheck:libs"
+  },
+  "devDependencies": {
+    "orval": "^8.30.0"
+  }
+}
+
+======================================================================
+FILE: lib/api-client-react/package.json
+======================================================================
+{
+  "name": "@workspace/api-client-react",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "catalog:"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  }
+}
+
+======================================================================
+FILE: lib/api-client-react/tsconfig.json
+======================================================================
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "lib": ["dom", "es2022"]
+  },
+  "include": ["src"]
+}
+
+======================================================================
+FILE: lib/api-zod/package.json
+======================================================================
+{
+  "name": "@workspace/api-zod",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  }
+}
+
+======================================================================
+FILE: lib/api-zod/tsconfig.json
+======================================================================
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}
+
+======================================================================
+FILE: lib/db/package.json
+======================================================================
+{
+  "name": "@workspace/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "push": "drizzle-kit push --config ./drizzle.config.ts",
+    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "catalog:",
+    "drizzle-zod": "^0.8.3",
+    "pg": "^8.23.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.10"
+  }
+}
+
+======================================================================
+FILE: lib/db/tsconfig.json
+======================================================================
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
+
+======================================================================
+FILE: backend/app/main.py
+======================================================================
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from backend.app.api.router import api_router
+from backend.app.core.config import get_settings
+from backend.app.core.errors import register_exception_handlers
+from backend.app.core.logging import configure_logging
+from backend.app.infrastructure.telegram.bot_runner import TelegramBotRunner
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    configure_logging()
+
+    telegram_runner = None
+
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+        telegram_runner = TelegramBotRunner(
+            settings.telegram_bot_token
+        )
+        await telegram_runner.start()
+
+    try:
+        yield
+    finally:
+        if telegram_runner:
+            await telegram_runner.stop()
+
+
+settings = get_settings()
+
+app = FastAPI(
+    title="Academic Services Platform API",
+    description="Foundation API for the Telegram-based academic and student services platform.",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+
+app.mount(
+    "/admin/static",
+    StaticFiles(directory="backend/app/static/admin"),
+    name="admin-static",
+)
+
+
+@app.get("/admin", include_in_schema=False)
+async def admin_dashboard():
+    return FileResponse("backend/app/static/admin/index.html")
+
+
+register_exception_handlers(app)
+
+app.include_router(api_router)
+
+======================================================================
+FILE: backend/app/api/router.py
+======================================================================
+"""Main API router."""
+
+from fastapi import APIRouter
+
+from backend.app.api.routes.health import router as health_router
+from backend.app.api.routes.admin_users import router as admin_users_router
+from backend.app.api.routes.admin_staff import router as admin_staff_router
+from backend.app.api.routes.admin_services import router as admin_services_router
+from backend.app.api.routes.admin_telegram_destinations import telegram_destinations_router
+from backend.app.api.routes.admin_telegram_destinations_verify import router as telegram_destinations_verify_router
+from backend.app.api.routes.admin_requests import router as admin_requests_router
+from backend.app.api.routes.admin_categories import router as admin_categories_router
+from backend.app.api.routes.admin_settings import router as admin_settings_router
+from backend.app.api.routes.admin_audit import router as admin_audit_router
+from backend.app.api.routes.dependencies import router as dependencies_router
+from backend.app.api.routes.auth import router as auth_router
+from backend.app.api.routes.rbac import router as rbac_router
+from backend.app.api.routes.rbac_admin import router as rbac_admin_router
+from backend.app.api.routes.telegram_webhook import router as telegram_webhook_router
+
+
+api_router = APIRouter(prefix="/api/v1")
+
+api_router.include_router(health_router)
+api_router.include_router(admin_users_router)
+api_router.include_router(admin_staff_router)
+api_router.include_router(admin_services_router)
+api_router.include_router(admin_requests_router)
+api_router.include_router(admin_categories_router)
+api_router.include_router(admin_settings_router)
+api_router.include_router(admin_audit_router)
+api_router.include_router(dependencies_router)
+api_router.include_router(auth_router)
+api_router.include_router(rbac_router)
+api_router.include_router(rbac_admin_router)
+api_router.include_router(telegram_webhook_router)
+api_router.include_router(telegram_destinations_router)
+api_router.include_router(telegram_destinations_verify_router)
+
+
+======================================================================
+FILE: backend/app/api/routes/admin_requests.py
+======================================================================
+from __future__ import annotations
+import urllib.request
+import urllib.parse
+import json
+import asyncio
+import os
+"""Admin service requests management API."""
+
+
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from backend.app.api.auth_dependencies import get_current_user
+from backend.app.api.rbac_dependencies import require_permission
+from backend.app.infrastructure.persistence.database import get_session
+from backend.app.modules.authentication.permissions import Permission
+from database.models.enums import RequestPriority, ServiceRequestStatus
+from database.models.requests import ServiceRequest
+
+
+router = APIRouter(
+    prefix="/admin/requests",
+    tags=["admin-requests"],
+)
+
+
+class RequestListItem(BaseModel):
+    id: UUID
+    title: str
+    description: str | None = None
+    specialization: str | None = None
+    deadline: str | None = None
+    status: ServiceRequestStatus
+    priority: RequestPriority
+    customer_id: UUID
+    service_id: UUID
+    created_at: str
+
+
+class RequestListResponse(BaseModel):
+    items: list[RequestListItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+@router.get(
+    "",
+    response_model=RequestListResponse,
+    dependencies=[
+        Depends(require_permission(Permission.SERVICES_READ)),
+    ],
+)
+async def list_admin_requests(
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, max_length=255),
+    status: ServiceRequestStatus | None = None,
+    priority: RequestPriority | None = None,
+):
+    query = (
+        select(ServiceRequest)
+        .where(ServiceRequest.deleted_at.is_(None))
+        .order_by(ServiceRequest.created_at.desc())
+    )
+
+    count_query = (
+        select(func.count(ServiceRequest.id))
+        .where(ServiceRequest.deleted_at.is_(None))
+    )
+
+    if search:
+        pattern = f"%{search.strip()}%"
+        condition = or_(
+            ServiceRequest.title.ilike(pattern),
+            ServiceRequest.description.ilike(pattern),
+            ServiceRequest.specialization.ilike(pattern),
+        )
+        query = query.where(condition)
+        count_query = count_query.where(condition)
+
+    if status is not None:
+        query = query.where(ServiceRequest.status == status)
+        count_query = count_query.where(ServiceRequest.status == status)
+
+    if priority is not None:
+        query = query.where(ServiceRequest.priority == priority)
+        count_query = count_query.where(ServiceRequest.priority == priority)
+
+    total = (await session.execute(count_query)).scalar_one()
+
+    result = await session.execute(
+        query.offset((page - 1) * page_size).limit(page_size)
+    )
+
+    requests = result.scalars().all()
+
+    return RequestListResponse(
+        items=[
+            RequestListItem(
+                id=item.id,
+                title=item.title,
+                description=item.description,
+                specialization=item.specialization,
+                deadline=item.deadline.isoformat() if item.deadline else None,
+                status=item.status,
+                priority=item.priority,
+                customer_id=item.customer_id,
+                service_id=item.service_id,
+                created_at=item.created_at.isoformat(),
+            )
+            for item in requests
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=(total + page_size - 1) // page_size,
+    )
+
+
+@router.get(
+    "/{request_id}",
+    dependencies=[Depends(require_permission(Permission.SERVICES_READ))],
+)
+async def get_admin_request_details(
+    request_id: UUID,
+    session=Depends(get_session),
+):
+    from fastapi import HTTPException
+    from database.models.requests import ServiceRequest
+
+    request = await session.get(ServiceRequest, request_id)
+
+    if request is None or getattr(request, "deleted_at", None) is not None:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    return {
+        "id": str(request.id),
+        "title": request.title,
+        "description": request.description,
+        "specialization": request.specialization,
+        "deadline": request.deadline.isoformat() if request.deadline else None,
+        "status": request.status.value if hasattr(request.status, "value") else str(request.status),
+        "priority": request.priority.value if hasattr(request.priority, "value") else str(request.priority),
+        "notes": request.notes,
+        "customer_id": str(request.customer_id),
+        "service_id": str(request.service_id),
+        "created_at": request.created_at.isoformat() if request.created_at else None,
+    }
+
+
+@router.patch(
+    "/{request_id}",
+    dependencies=[Depends(require_permission(Permission.SERVICES_READ))],
+)
+async def update_admin_request(
+    request_id: UUID,
+    payload: dict,
+    session=Depends(get_session),
+):
+    from fastapi import HTTPException
+    from database.models.requests import ServiceRequest, ServiceRequestStatus, RequestPriority
+
+    request = await session.get(ServiceRequest, request_id)
+
+    if request is None or getattr(request, "deleted_at", None) is not None:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    original_status = (
+        request.status.value
+        if hasattr(request.status, "value")
+        else str(request.status)
+    )
+
+    if "status" in payload and payload["status"]:
+        try:
+            request.status = ServiceRequestStatus(payload["status"])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid status")
+
+    if "priority" in payload and payload["priority"]:
+        try:
+            request.priority = RequestPriority(payload["priority"])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid priority")
+
+    if "notes" in payload:
+        request.notes = payload["notes"] or None
+
+    new_status = (
+        request.status.value
+        if hasattr(request.status, "value")
+        else str(request.status)
+    )
+    status_changed = original_status != new_status
+
+
+    # Detect status change and notify customer after successful update
+    # The original status is captured from the request object before mutation.
+    # This variable is populated below when the endpoint is patched.
+    await session.commit()
+    await session.refresh(request)
+
+    # Telegram customer notification
+    if status_changed:
+        try:
+            from database.models.identity import User
+
+            customer = await session.get(User, request.customer_id)
+
+            if customer:
+                chat_id = None
+
+                # Support common Telegram chat-id field names
+                for field_name in (
+                    "telegram_chat_id",
+                    "telegram_id",
+                    "chat_id",
+                    "telegram_user_id",
+                ):
+                    if hasattr(customer, field_name):
+                        value = getattr(customer, field_name, None)
+                        if value:
+                            chat_id = str(value)
+                            break
+
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+                    os.getenv("TELEGRAM_BOT_TOKEN")
+                    or os.getenv("BOT_TOKEN")
+                )
+
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+                    status_names = {
+                        "NEW": "🆕 طلب جديد",
+                        "UNDER_REVIEW": "🔎 قيد المراجعة",
+                        "WAITING_FOR_CUSTOMER": "⏳ بانتظار العميل",
+                        "QUOTATION_SENT": "💰 تم إرسال عرض السعر",
+                        "APPROVED": "✅ تمت الموافقة",
+                        "IN_PROGRESS": "⚙️ قيد التنفيذ",
+                        "COMPLETED": "🎉 مكتمل",
+                        "CANCELLED": "❌ ملغي",
+                        "REJECTED": "🚫 مرفوض",
+                    }
+
+                    status_value = (
+                        request.status.value
+                        if hasattr(request.status, "value")
+                        else str(request.status)
+                    )
+
+                    status_text = status_names.get(
+                        status_value,
+                        status_value
+                    )
+
+                    message = (
+                        "🔔 <b>تحديث طلبك</b>\n\n"
+                        f"📌 <b>الطلب:</b> {request.title}\n"
+                        f"📊 <b>الحالة الجديدة:</b> {status_text}\n\n"
+                        "يمكنك التواصل معنا إذا كان لديك أي استفسار."
+                    )
+
+                    data = urllib.parse.urlencode({
+                        "chat_id": chat_id,
+                        "text": message,
+                        "parse_mode": "HTML",
+                    }).encode()
+
+                    url = (
+                        "https://api.telegram.org/bot"
+                        + bot_token
+                        + "/sendMessage"
+                    )
+
+                    def send_telegram():
+                        req = urllib.request.Request(
+                            url,
+                            data=data,
+                            method="POST",
+                            headers={
+                                "Content-Type":
+                                "application/x-www-form-urlencoded"
+                            },
+                        )
+                        with urllib.request.urlopen(req, timeout=10) as response:
+                            return response.read()
+
+                    await asyncio.to_thread(send_telegram)
+
+                    print(
+                        f"TELEGRAM STATUS NOTIFICATION SENT: "
+                        f"request={request.id} chat_id={chat_id}"
+                    )
+
+        except Exception as telegram_error:
+            # Telegram failure must NOT rollback the successfully saved request.
+            print(
+                f"TELEGRAM STATUS NOTIFICATION FAILED: "
+                f"request={request.id} error={telegram_error}"
+            )
+
+    return {
+        "success": True,
+        "message": "Request updated successfully",
+        "id": str(request.id),
+        "status": request.status.value if hasattr(request.status, "value") else str(request.status),
+        "priority": request.priority.value if hasattr(request.priority, "value") else str(request.priority),
+        "notes": request.notes,
+    }
+
+======================================================================
+FILE: backend/app/api/routes/admin_services.py
+======================================================================
+"""Admin services management API."""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from backend.app.api.auth_dependencies import get_current_user
+from backend.app.api.rbac_dependencies import require_permission
+from backend.app.infrastructure.persistence.database import get_session
+from backend.app.modules.authentication.permissions import Permission
+from database.models.catalog import Category, Service
+
+
+router = APIRouter(
+    prefix="/admin/services",
+    tags=["admin-services"],
+)
+
+
+class CategoryResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str | None = None
+    is_active: bool
+    sort_order: int
+
+
+class ServiceResponse(BaseModel):
+    id: UUID
+    category_id: UUID
+    name: str
+    description: str | None = None
+    short_description: str | None = None
+    is_active: bool
+    sort_order: int
+    category: CategoryResponse | None = None
+
+
+class ServiceListResponse(BaseModel):
+    items: list[ServiceResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class ServiceCreateRequest(BaseModel):
+    category_id: UUID
+    name: str
+    description: str | None = None
+    short_description: str | None = None
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class ServiceUpdateRequest(BaseModel):
+    category_id: UUID | None = None
+    name: str | None = None
+    description: str | None = None
+    short_description: str | None = None
+    is_active: bool | None = None
+    sort_order: int | None = None
+
+
+def service_response(service: Service) -> ServiceResponse:
+    return ServiceResponse(
+        id=service.id,
+        category_id=service.category_id,
+        name=service.name,
+        description=service.description,
+        short_description=service.short_description,
+        is_active=service.is_active,
+        sort_order=service.sort_order,
+        category=(
+            CategoryResponse(
+                id=service.category.id,
+                name=service.category.name,
+                description=service.category.description,
+                is_active=service.category.is_active,
+                sort_order=service.category.sort_order,
+            )
+            if service.category
+            else None
+        ),
+    )
+
+
+@router.get(
+    "",
+    response_model=ServiceListResponse,
+    dependencies=[
+        Depends(require_permission(Permission.SERVICES_READ)),
+    ],
+)
+async def list_admin_services(
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, max_length=255),
+    category_id: UUID | None = None,
+    is_active: bool | None = None,
+):
+    query = (
+        select(Service)
+        .options(selectinload(Service.category))
+        .order_by(Service.created_at.desc())
+    )
+
+    count_query = select(func.count(Service.id))
+
+    if search:
+        pattern = f"%{search.strip()}%"
+
+        condition = or_(
+            Service.name.ilike(pattern),
+            Service.description.ilike(pattern),
+            Service.short_description.ilike(pattern),
+        )
+
+        query = query.where(condition)
+        count_query = count_query.where(condition)
+
+    if category_id:
+        query = query.where(Service.category_id == category_id)
+        count_query = count_query.where(Service.category_id == category_id)
+
+    if is_active is not None:
+        query = query.where(Service.is_active == is_active)
+        count_query = count_query.where(Service.is_active == is_active)
+
+    total = (await session.execute(count_query)).scalar_one()
+
+    result = await session.execute(
+        query.offset((page - 1) * page_size).limit(page_size)
+    )
+
+    services = result.scalars().unique().all()
+
+    return ServiceListResponse(
+        items=[service_response(item) for item in services],
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=(total + page_size - 1) // page_size,
+    )
+
+
+
+class CategoryListResponse(BaseModel):
+    items: list[CategoryResponse]
+
+
+@router.get(
+    "/categories",
+    response_model=CategoryListResponse,
+    dependencies=[Depends(require_permission(Permission.SERVICES_READ))],
+)
+async def list_service_categories(
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CategoryListResponse:
+    """Return active categories for the admin service form."""
+
+    result = await session.execute(
+        select(Category)
+        .where(
+            Category.is_active.is_(True),
+            Category.deleted_at.is_(None),
+        )
+        .order_by(Category.sort_order.asc(), Category.name.asc())
+    )
+
+    categories = result.scalars().all()
+
+    return CategoryListResponse(
+        items=[
+            CategoryResponse(
+                id=item.id,
+                name=item.name,
+                description=item.description,
+                is_active=item.is_active,
+                sort_order=item.sort_order,
+            )
+            for item in categories
+        ]
+    )
+
+
+@router.get(
+    "/{service_id}",
+    response_model=ServiceResponse,
+    dependencies=[
+        Depends(require_permission(Permission.SERVICES_READ)),
+    ],
+)
+async def get_admin_service(
+    service_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(Service)
+        .options(selectinload(Service.category))
+        .where(Service.id == service_id)
+    )
+
+    service = result.scalar_one_or_none()
+
+    if service is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Service not found.",
+        )
+
+    return service_response(service)
+
+
+@router.post(
+    "",
+    response_model=ServiceResponse,
+    status_code=201,
+    dependencies=[
+        Depends(require_permission(Permission.SERVICES_CREATE)),
+    ],
+)
+async def create_admin_service(
+    payload: ServiceCreateRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    category = await session.get(Category, payload.category_id)
+
+    if category is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Category not found.",
+        )
+
+    existing = await session.execute(
+        select(Service).where(
+            Service.category_id == payload.category_id,
+            Service.name == payload.name,
+        )
+    )
+
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Service with this name already exists in the category.",
+        )
+
+    service = Service(
+        category_id=payload.category_id,
+        name=payload.name,
+        description=payload.description,
+        short_description=payload.short_description,
+        is_active=payload.is_active,
+        sort_order=payload.sort_order,
+    )
+
+    session.add(service)
+    await session.commit()
+
+    result = await session.execute(
+        select(Service)
+        .options(selectinload(Service.category))
+        .where(Service.id == service.id)
+    )
+
+    return service_response(result.scalar_one())
+
+
+@router.patch(
+    "/{service_id}",
+    response_model=ServiceResponse,
+    dependencies=[
+        Depends(require_permission(Permission.SERVICES_UPDATE)),
+    ],
+)
+async def update_admin_service(
+    service_id: UUID,
+    payload: ServiceUpdateRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(Service)
+        .options(selectinload(Service.category))
+        .where(Service.id == service_id)
+    )
+
+    service = result.scalar_one_or_none()
+
+    if service is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Service not found.",
+        )
+
+    if payload.category_id is not None:
+        category = await session.get(Category, payload.category_id)
+
+        if category is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Category not found.",
+            )
+
+        service.category_id = payload.category_id
+
+    if payload.name is not None:
+        service.name = payload.name
+
+    if payload.description is not None:
+        service.description = payload.description
+
+    if payload.short_description is not None:
+        service.short_description = payload.short_description
+
+    if payload.is_active is not None:
+        service.is_active = payload.is_active
+
+    if payload.sort_order is not None:
+        service.sort_order = payload.sort_order
+
+    await session.commit()
+
+    result = await session.execute(
+        select(Service)
+        .options(selectinload(Service.category))
+        .where(Service.id == service.id)
+    )
+
+    return service_response(result.scalar_one())
+
+======================================================================
+FILE: backend/app/api/routes/auth.py
+======================================================================
+"""Authentication API routes."""
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from backend.app.api.auth_dependencies import get_current_user
+from backend.app.api.dependencies import get_unit_of_work
+from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
+from backend.app.modules.authentication.authentication import (
+    AuthenticationError,
+    AuthenticationService,
+)
+from backend.app.modules.authentication.jwt import create_access_token
+
+
+router = APIRouter(
+    prefix="/auth",
+    tags=["authentication"],
+)
+
+
+class LoginRequest(BaseModel):
+    """Login request payload."""
+
+    username: str = Field(min_length=1, max_length=150)
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+
+
+class TokenResponse(BaseModel):
+    """JWT token response."""
+
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+    token_type: str = "bearer"
+
+
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+)
+async def login(
+    payload: LoginRequest,
+    uow: UnitOfWork = Depends(get_unit_of_work),
+) -> TokenResponse:
+    """Authenticate a user and return an access token."""
+    service = AuthenticationService(uow)
+
+    try:
+        token = await service.authenticate(
+            payload.username,
+            payload.password,
+        )
+    except AuthenticationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    return TokenResponse(
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+    )
+
+
+@router.get("/me")
+async def me(
+    current_user=Depends(get_current_user),
+):
+    """Return the currently authenticated user."""
+    return {
+        "id": str(current_user.id),
+        "username": current_user.username,
+        "email": current_user.email,
+    }
+
+======================================================================
+FILE: backend/app/api/routes/telegram_webhook.py
+======================================================================
+"""Secure Telegram webhook and first-touch bot interaction."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Header, HTTPException, Request, status
+
+from backend.app.core.config import get_settings
+from backend.app.infrastructure.telegram.client import TelegramClient
+
+router = APIRouter(
+    prefix="/telegram",
+    tags=["telegram"],
+)
+
+
+def _main_menu() -> dict[str, Any]:
+    return {
+        "inline_keyboard": [
+            [{"text": "📚 الخدمات الأكاديمية", "callback_data": "services"}],
+            [
+                {"text": "📝 تقديم طلب", "callback_data": "new_request"},
+                {"text": "📂 طلباتي", "callback_data": "my_requests"},
+            ],
+            [
+                {"text": "🔔 إشعاراتي", "callback_data": "notifications"},
+                {"text": "👤 حسابي", "callback_data": "profile"},
+            ],
+            [{"text": "💬 الدعم والمساعدة", "callback_data": "support"}],
+        ]
+    }
+
+
+def _welcome_text(first_name: str | None) -> str:
+    name = first_name.strip() if first_name and first_name.strip() else ""
+    greeting = f"مرحبًا {name} 👋" if name else "مرحبًا بك 👋"
+
+    return (
+        f"{greeting}\n\n"
+        "🎓 <b>مرحبًا بك في منصة إحتراف للخدمات الأكاديمية</b>\n\n"
+        "يسعدنا وجودك معنا 🌟\n\n"
+        "من خلال المنصة يمكنك الوصول بسهولة إلى مجموعة من "
+        "<b>الخدمات الأكاديمية</b>، وتقديم طلبك، متابعة حالته، "
+        "والتواصل مع فريقنا — كل ذلك من مكان واحد.\n\n"
+        "📚 <b>خدمات أكاديمية متنوعة</b>\n"
+        "📝 <b>تقديم الطلبات بسهولة</b>\n"
+        "📂 <b>رفع الملفات ومتابعة الطلب</b>\n"
+        "🔔 <b>استقبال التحديثات والإشعارات</b>\n"
+        "💬 <b>دعم ومساعدة عند الحاجة</b>\n\n"
+        "اختر من القائمة أدناه للبدء 👇"
+    )
+
+
+
+@router.post(
+    "/webhook",
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
+async def telegram_webhook(
+    request: Request,
+    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+) -> dict[str, bool]:
+    settings = get_settings()
+
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+        settings.telegram_webhook_secret.get_secret_value().strip()
+        if settings.telegram_webhook_secret
+        else ""
+    )
+
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telegram webhook secret is not configured.",
+        )
+
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid Telegram webhook secret.",
+        )
+
+    body = await request.json()
+    message = body.get("message") or {}
+    chat = message.get("chat") or {}
+
+    if chat.get("type") != "private":
+        return {"ok": True}
+
+    chat_id = chat.get("id")
+
+    if not isinstance(chat_id, int):
+        return {"ok": True}
+
+    text = str(message.get("text") or "").strip()
+
+    if text == "/start" or text.startswith("/start "):
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Telegram bot token is not configured.",
+            )
+
+        telegram = TelegramClient(settings.telegram_bot_token)
+
+        await telegram.send_message(
+            chat_id=chat_id,
+            text=_welcome_text(chat.get("first_name")),
+            reply_markup=_main_menu(),
+        )
+
+    return {"ok": True}
+
+======================================================================
+FILE: backend/app/application/README.md
+======================================================================
+# Application layer
+
+Use cases belong here. They orchestrate domain objects and depend on
+interfaces from `ports.py`; they should not depend directly on FastAPI,
+aiogram, SQLAlchemy sessions, or Redis clients.
+======================================================================
+FILE: backend/app/application/services/request.py
+======================================================================
+"""Service request application service."""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from database.models.requests import ServiceRequest
+
+from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
+
+
+class ServiceRequestService:
+    """Application use cases for customer service requests."""
+
+    def __init__(self, uow: UnitOfWork) -> None:
+        self.uow = uow
+
+    async def get_by_id(
+        self,
+        request_id: UUID,
+    ) -> ServiceRequest | None:
+        return await self.uow.requests.get_by_id(request_id)
+
+    async def get_by_customer_id(
+        self,
+        customer_id: UUID,
+    ) -> list[ServiceRequest]:
+        return await self.uow.requests.get_by_customer_id(
+            customer_id
+        )
+
+    async def get_by_service_id(
+        self,
+        service_id: UUID,
+    ) -> list[ServiceRequest]:
+        return await self.uow.requests.get_by_service_id(
+            service_id
+        )
+
+    async def create(
+        self,
+        request: ServiceRequest,
+    ) -> ServiceRequest:
+        created = await self.uow.requests.add(request)
+        await self.uow.commit()
+        return created
+
+======================================================================
+FILE: backend/app/application/services/service.py
+======================================================================
+"""Academic service application service."""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from database.models.catalog import Service
+
+from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
+
+
+class AcademicService:
+    """Application use cases for the academic service catalog."""
+
+    def __init__(self, uow: UnitOfWork) -> None:
+        self.uow = uow
+
+    async def get_by_id(self, service_id: UUID) -> Service | None:
+        return await self.uow.services.get_by_id(service_id)
+
+    async def create(self, service: Service) -> Service:
+        created = await self.uow.services.add(service)
+        await self.uow.commit()
+        return created
+
+    async def delete(self, service: Service) -> None:
+        await self.uow.services.delete(service)
+        await self.uow.commit()
+
+======================================================================
+FILE: backend/app/domain/README.md
+======================================================================
+# Domain layer
+
+Domain modules hold business concepts and rules. They should remain independent
+of HTTP, Telegram transport, persistence libraries, and worker runtimes.
+======================================================================
+FILE: backend/app/infrastructure/README.md
+======================================================================
+# Infrastructure layer
+
+Infrastructure adapters connect application ports to PostgreSQL, Redis,
+Telegram, storage, and notification providers. Implementations are intentionally
+deferred until later phases.
+======================================================================
+FILE: backend/app/infrastructure/adapters/README.md
+======================================================================
+# Infrastructure adapters
+
+Adapters will implement the interfaces in `backend/app/application/ports.py`.
+FastAPI routes, Telegram handlers, and domain modules should depend on those
+interfaces rather than importing database, Redis, storage, or Telegram clients
+directly.
+
+Phase 1 intentionally provides contracts only. No external service is
+connected.
+======================================================================
+FILE: backend/app/infrastructure/persistence/repositories/request.py
+======================================================================
+"""Service request repository."""
+
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database.models.requests import ServiceRequest
+
+from .base import BaseRepository
+
+
+class ServiceRequestRepository(BaseRepository[ServiceRequest]):
+    """Persistence operations for service requests."""
+
+    model = ServiceRequest
+
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session)
+
+    async def get_by_customer_id(
+        self,
+        customer_id: UUID,
+    ) -> list[ServiceRequest]:
+        result = await self.session.execute(
+            select(ServiceRequest).where(
+                ServiceRequest.customer_id == customer_id
+            )
+        )
+        return list(result.scalars().all())
+
+    async def get_by_service_id(
+        self,
+        service_id: UUID,
+    ) -> list[ServiceRequest]:
+        result = await self.session.execute(
+            select(ServiceRequest).where(
+                ServiceRequest.service_id == service_id
+            )
+        )
+        return list(result.scalars().all())
+
+======================================================================
+FILE: backend/app/infrastructure/persistence/repositories/service.py
+======================================================================
+"""Service catalog repository."""
+
+from database.models.catalog import Service
+
+from .base import BaseRepository
+
+
+class ServiceRepository(BaseRepository[Service]):
+    """Persistence operations for academic services."""
+
+    model = Service
+
+======================================================================
+FILE: backend/app/modules/README.md
+======================================================================
+# Domain modules
+
+Each directory is a bounded capability. A module may later contain its domain
+models, application use cases, API adapters, and tests without coupling the
+whole platform together.
+
+The directories are boundaries only in Phase 1; they intentionally contain no
+complete business workflows.
+======================================================================
+FILE: backend/app/modules/authentication/authentication.py
+======================================================================
+"""Authentication use cases."""
+
+from __future__ import annotations
+
+from database.models.identity import User
+
+from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
+
+from .jwt import create_access_token
+from .passwords import verify_password
+
+
+class AuthenticationError(Exception):
+    """Raised when authentication fails."""
+
+
+class AuthenticationService:
+    """Authenticate users and issue access tokens."""
+
+    def __init__(self, uow: UnitOfWork) -> None:
+        self.uow = uow
+
+    async def authenticate(
+        self,
+        username: str,
+[تم إخفاء سطر قد يحتوي على بيانات سرية]
+    ) -> str:
+        """Authenticate by username and return an access token."""
+        user = await self.uow.users.get_by_username(username)
+
+        if user is None:
+            raise AuthenticationError(
+                "Invalid username or password."
+            )
+
+        password_hash = getattr(user, "password_hash", None)
+
+        if not password_hash or not verify_password(
+            password,
+            password_hash,
+        ):
+            raise AuthenticationError(
+                "Invalid username or password."
+            )
+
+        return create_access_token(user.id)
+
+======================================================================
+FILE: backend/app/modules/authentication/authorization.py
+======================================================================
+"""Authorization helpers."""
+
+from __future__ import annotations
+
+from database.models.identity import User
+
+from .permissions import Permission
+from .roles import ROLE_PERMISSIONS, RoleName
+
+
+def user_has_permission(
+    user: User,
+    permission: Permission,
+) -> bool:
+    """Return whether a user has a requested permission."""
+    roles = getattr(user, "roles", None) or []
+
+    for role in roles:
+        role_name = getattr(role, "name", None)
+
+        try:
+            role_name = RoleName(role_name)
+        except (ValueError, TypeError):
+            continue
+
+        if permission in ROLE_PERMISSIONS.get(role_name, set()):
+            return True
+
+    return False
+
+
+def user_has_role(
+    user: User,
+    role_name: RoleName,
+) -> bool:
+    """Return whether a user has a requested role."""
+    roles = getattr(user, "roles", None) or []
+
+    for role in roles:
+        if getattr(role, "name", None) == role_name:
+            return True
+
+    return False
+
+
+def require_permission(
+    user: User,
+    permission: Permission,
+) -> None:
+    """Raise PermissionError when access is not authorized."""
+    if not user_has_permission(user, permission):
+        raise PermissionError(
+            f"Missing required permission: {permission.value}"
+        )
+
+======================================================================
+FILE: bot/README.md
+======================================================================
+# Telegram bot
+
+This package is reserved for the future `aiogram` bot entry point and handlers.
+Phase 0 intentionally contains no bot token usage, handlers, polling, webhooks,
+or Telegram API calls.
+======================================================================
+FILE: database/README.md
+======================================================================
+# Database
+
+This boundary is reserved for PostgreSQL, SQLAlchemy 2.x models, and Alembic
+migrations. No database connection or complete schema is required for Phase 1.
+
+Future migrations should be kept in `database/migrations/` and applied through
+an explicit deployment workflow. Application services should access the
+database through infrastructure adapters instead of importing a session into
+route handlers.
+======================================================================
+FILE: services/README.md
+======================================================================
+# Services
+
+Application services will live here as domain-focused units. They should
+contain business workflows independent of HTTP, Telegram transport, or worker
+runtime concerns.
+======================================================================
+FILE: workers/README.md
+======================================================================
+# Workers
+
+This boundary is reserved for background jobs and queue consumers. Redis,
+publishing, and scheduling behavior are intentionally out of scope for Phase 0.
+======================================================================
+FILE: configuration/README.md
+======================================================================
+# Configuration
+
+Runtime configuration is defined in `backend/app/core/config.py` and loaded
+from environment variables. It currently covers `APP_ENV`, `DEBUG`,
+`SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `TELEGRAM_BOT_TOKEN`, and
+`TELEGRAM_WEBHOOK_SECRET`.
+
+Keep local values in `.env`, which is ignored by Git; commit only
+`.env.example`.
+======================================================================
+FILE: tests/unit/README.md
+======================================================================
+# Unit tests
+
+Place isolated domain and application service tests here.
+======================================================================
+FILE: tests/integration/README.md
+======================================================================
+# Integration tests
+
+Place tests that exercise multiple application layers or configured adapters
+here.
+======================================================================
+FILE: tests/api/README.md
+======================================================================
+# API tests
+
+Place HTTP contract and route tests here.
+======================================================================
+FILE: tests/telegram/README.md
+======================================================================
+# Telegram tests
+
+Place Telegram adapter and handler tests here. Tests must use explicit fakes or
+fixtures and must not contact real Telegram destinations by default.
+======================================================================
+FILE: tests/database/README.md
+======================================================================
+# Database tests
+
+Place PostgreSQL and SQLAlchemy integration tests here once the database layer
+is introduced.
+======================================================================
+FILE: tests/workers/README.md
+======================================================================
+# Worker tests
+
+Place background job and queue consumer tests here once workers are introduced.
+======================================================================
+FILE: frontend/README.md
+======================================================================
+# Future admin dashboard
+
+The future administrative dashboard will use React, TypeScript, and Tailwind
+CSS. Phase 1 defines the backend and module boundaries only; no dashboard
+application is implemented yet.

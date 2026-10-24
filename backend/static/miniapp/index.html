@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#102b55" />
+    <meta name="description" content="منصة إحتراف للخدمات الأكاديمية" />
+    <title>منصة إحتراف للخدمات الأكاديمية</title>
+    <link rel="stylesheet" href="/miniapp/static/style.css" />
+  </head>
+  <body>
+    <header class="topbar" id="top">
+      <a class="brand" href="#home" aria-label="الرئيسية">
+        <span class="brand-mark">إ</span>
+        <span class="brand-copy">
+          <strong data-i18n="brand">منصة إحتراف</strong>
+          <small data-i18n="brandSubtitle">للخدمات الأكاديمية</small>
+        </span>
+      </a>
+      <button id="languageBtn" class="language-btn" type="button">
+        English
+      </button>
+    </header>
+
+    <main id="mainContent">
+      <section id="home" class="welcome">
+        <span class="eyebrow" data-i18n="welcomeLabel"
+          >منصتك الأكاديمية المتكاملة</span
+        >
+        <h1 data-i18n="welcome">مرحباً بك 👋</h1>
+        <p data-i18n="welcomeText">كيف يمكننا مساعدتك اليوم؟</p>
+
+        <label class="search-box" for="serviceSearch">
+          <span aria-hidden="true">⌕</span>
+          <input
+            id="serviceSearch"
+            type="search"
+            data-i18n-placeholder="searchPlaceholder"
+            placeholder="ابحث عن خدمة أكاديمية..."
+          />
+        </label>
+
+        <div class="welcome-art" aria-hidden="true">
+          <div class="art-circle"></div>
+          <div class="book">✦</div>
+          <div class="art-caption">LEARN · GROW · ACHIEVE</div>
+        </div>
+      </section>
+
+      <section class="section" id="services">
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="categoriesTitle">تصفح حسب الصنف</h2>
+            <p data-i18n="categoriesSubtitle">اختر المجال الذي تحتاج إليه</p>
+          </div>
+          <span class="section-icon" aria-hidden="true">▦</span>
+        </div>
+
+        <div id="categoryGrid" class="category-grid" aria-live="polite">
+          <p class="form-message" data-i18n="loadingCategories">
+            جارٍ تحميل الأصناف...
+          </p>
+        </div>
+
+        <button
+          id="showAllCategories"
+          class="text-btn"
+          type="button"
+          aria-expanded="false"
+          hidden
+        >
+          <span data-i18n="showAllCategories">عرض جميع الأصناف</span>
+          <span aria-hidden="true">⌄</span>
+        </button>
+      </section>
+
+      <section class="section" id="serviceSection">
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="servicesTitle">الخدمات</h2>
+            <p id="selectedCategoryLabel" data-i18n="servicesSubtitle">
+              اختر الخدمة المناسبة لك
+            </p>
+          </div>
+          <button id="clearCategory" class="text-btn" type="button" hidden>
+            <span data-i18n="allServices">كل الخدمات</span>
+          </button>
+        </div>
+
+        <div class="service-grid" id="serviceGrid" aria-live="polite">
+          <p class="form-message" data-i18n="loadingServices">
+            جارٍ تحميل الخدمات...
+          </p>
+        </div>
+      </section>
+
+      <section class="section request-panel" id="createRequest">
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="requestTitle">إنشاء طلب جديد</h2>
+            <p data-i18n="requestSubtitle">أخبرنا بما تحتاج إليه</p>
+          </div>
+          <span class="request-symbol" aria-hidden="true">＋</span>
+        </div>
+
+        <form id="requestForm">
+          <label for="service" data-i18n="serviceLabel">نوع الخدمة</label>
+          <select id="service" required>
+            <option value="" data-i18n="chooseService">اختر الخدمة</option>
+          </select>
+
+          <label for="details" data-i18n="detailsLabel">تفاصيل الطلب</label>
+          <textarea
+            id="details"
+            rows="4"
+            required
+            data-i18n-placeholder="detailsPlaceholder"
+            placeholder="اكتب تفاصيل ما تحتاج إليه..."
+          ></textarea>
+
+          <button class="primary-btn" type="submit">
+            <span data-i18n="submitRequest">متابعة الطلب</span>
+            <span aria-hidden="true">←</span>
+          </button>
+          <p id="formMessage" class="form-message" role="status"></p>
+        </form>
+      </section>
+
+      <section class="section" id="myRequests">
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="myRequestsTitle">طلباتي</h2>
+            <p data-i18n="myRequestsSubtitle">تابع حالة طلباتك وتحديثاتها</p>
+          </div>
+          <span class="section-icon" aria-hidden="true">▤</span>
+        </div>
+        <div id="requestsList" class="empty-state">
+          <div class="empty-icon" aria-hidden="true">▤</div>
+          <strong data-i18n="emptyTitle">لا توجد طلبات حتى الآن</strong>
+          <p data-i18n="emptyText">ستظهر طلباتك هنا بعد إرسالها.</p>
+        </div>
+      </section>
+
+      <section class="section" id="notifications">
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="notificationsTitle">الإشعارات</h2>
+            <p data-i18n="notificationsSubtitle">آخر التحديثات والتنبيهات</p>
+          </div>
+          <span class="section-icon" aria-hidden="true">♧</span>
+        </div>
+        <div id="notificationsList" class="empty-state">
+          <div class="empty-icon" aria-hidden="true">♧</div>
+          <strong data-i18n="notificationsEmpty">لا توجد إشعارات حالياً</strong>
+          <p data-i18n="notificationsEmptyText">ستظهر إشعارات طلباتك هنا.</p>
+        </div>
+      </section>
+
+      <section class="section" id="account">
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="accountTitle">حسابي</h2>
+            <p data-i18n="accountSubtitle">إدارة حسابك وتفضيلاتك</p>
+          </div>
+          <span class="section-icon" aria-hidden="true">♙</span>
+        </div>
+
+        <div class="account-menu">
+          <button
+            type="button"
+            class="account-item"
+            data-account-action="profile"
+          >
+            <span class="account-icon">♙</span>
+            <span data-i18n="profileSettings">الملف الشخصي</span>
+            <span class="card-arrow">‹</span>
+          </button>
+          <button
+            type="button"
+            class="account-item"
+            data-account-action="language"
+          >
+            <span class="account-icon">文</span>
+            <span data-i18n="languageSettings">اللغة</span>
+            <span class="card-arrow">‹</span>
+          </button>
+          <button
+            type="button"
+            class="account-item"
+            data-account-action="notifications"
+          >
+            <span class="account-icon">♧</span>
+            <span data-i18n="notificationSettings">إعدادات الإشعارات</span>
+            <span class="card-arrow">‹</span>
+          </button>
+          <button
+            type="button"
+            class="account-item"
+            data-account-action="appearance"
+          >
+            <span class="account-icon">◐</span>
+            <span data-i18n="appearanceSettings">المظهر</span>
+            <span class="card-arrow">‹</span>
+          </button>
+          <a class="account-item" href="#support">
+            <span class="account-icon">?</span>
+            <span data-i18n="helpSettings">المساعدة والدعم</span>
+            <span class="card-arrow">‹</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="section" id="support">
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="supportTitle">الدعم والمساعدة</h2>
+            <p data-i18n="supportSubtitle">نحن هنا لمساعدتك</p>
+          </div>
+        </div>
+        <div class="empty-state">
+          <strong data-i18n="supportText">تحتاج إلى مساعدة؟</strong>
+          <p data-i18n="supportDescription">
+            يمكنك التواصل مع فريق الدعم من خلال القنوات المتاحة في المنصة.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Main navigation">
+      <a class="nav-item active" href="#home">
+        <span aria-hidden="true">⌂</span>
+        <small data-i18n="home">الرئيسية</small>
+      </a>
+      <a class="nav-item" href="#services">
+        <span aria-hidden="true">▦</span>
+        <small data-i18n="services">الخدمات</small>
+      </a>
+      <a class="nav-item" href="#myRequests">
+        <span aria-hidden="true">▤</span>
+        <small data-i18n="myRequests">طلباتي</small>
+      </a>
+      <a class="nav-item" href="#notifications">
+        <span aria-hidden="true">♧</span>
+        <small data-i18n="notifications">الإشعارات</small>
+      </a>
+      <a class="nav-item" href="#account">
+        <span aria-hidden="true">♙</span>
+        <small data-i18n="account">حسابي</small>
+      </a>
+    </nav>
+
+    <script src="/miniapp/static/app.js"></script>
+  </body>
+</html>

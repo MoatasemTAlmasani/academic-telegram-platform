@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#102b55">
+  <title>احتراف الأكاديمية | Professional Academy</title>
+  <link rel="stylesheet" href="/miniapp/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">PA</div>
+      <div>
+        <strong data-i18n="brand">احتراف الأكاديمية</strong>
+        <small>Professional Academy</small>
+      </div>
+    </div>
+    <button id="languageBtn" class="language-btn" type="button">English</button>
+  </header>
+
+  <main>
+    <section class="welcome">
+      <span class="eyebrow" data-i18n="welcomeLabel">مساحتك الأكاديمية</span>
+      <h1 data-i18n="welcome">مرحباً بك 👋</h1>
+      <p data-i18n="welcomeText">كيف يمكننا مساعدتك اليوم؟</p>
+      <div class="welcome-art" aria-hidden="true">
+        <div class="art-circle"></div>
+        <div class="book">✦</div>
+        <div class="art-caption">LEARN · GROW · ACHIEVE</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <div>
+          <h2 data-i18n="servicesTitle">خدماتنا الأكاديمية</h2>
+          <p data-i18n="servicesSubtitle">اختر الخدمة التي تناسب احتياجك</p>
+        </div>
+        <span class="section-icon">✳</span>
+      </div>
+      <div class="service-grid" id="serviceGrid" aria-live="polite">
+        <p class="form-message" data-i18n="loadingServices">جارٍ تحميل الخدمات...</p>
+      </div>
+    </section>
+
+    <section class="section request-panel">
+      <div class="section-heading">
+        <div>
+          <h2 data-i18n="requestTitle">ابدأ طلبك</h2>
+          <p data-i18n="requestSubtitle">أخبرنا بما تحتاج إليه</p>
+        </div>
+        <span class="request-symbol">＋</span>
+      </div>
+      <form id="requestForm">
+        <label for="service" data-i18n="serviceLabel">نوع الخدمة</label>
+        <select id="service" required>
+          <option value="" data-i18n="chooseService">اختر الخدمة</option>
+        </select>
+        <label for="details" data-i18n="detailsLabel">تفاصيل الطلب</label>
+        <textarea id="details" rows="3" required data-i18n-placeholder="detailsPlaceholder" placeholder="اكتب تفاصيل ما تحتاج إليه..."></textarea>
+        <button class="primary-btn" type="submit">
+          <span data-i18n="submitRequest">متابعة الطلب</span><span>←</span>
+        </button>
+        <p id="formMessage" class="form-message" role="status"></p>
+      </form>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <div>
+          <h2 data-i18n="trackingTitle">تابع طلباتك</h2>
+          <p data-i18n="trackingSubtitle">ستجد تحديثات طلباتك هنا</p>
+        </div>
+        <span class="tracking-icon">◎</span>
+      </div>
+      <div class="empty-state">
+        <div class="empty-icon">▤</div>
+        <strong data-i18n="emptyTitle">لا توجد طلبات حتى الآن</strong>
+        <p data-i18n="emptyText">عندما ترسل طلباً، ستتمكن من متابعة حالته هنا.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="Main navigation">
+    <a class="nav-item active" href="#top"><span>⌂</span><small data-i18n="home">الرئيسية</small></a>
+    <a class="nav-item" href="#services"><span>▦</span><small data-i18n="services">الخدمات</small></a>
+    <a class="nav-item" href="#requestForm"><span>＋</span><small data-i18n="myRequests">طلباتي</small></a>
+    <a class="nav-item" href="#profile"><span>♙</span><small data-i18n="account">حسابي</small></a>
+  </nav>
+
+  <script src="/miniapp/static/app.js"></script>
+</body>
+</html>

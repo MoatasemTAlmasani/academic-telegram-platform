@@ -72,6 +72,11 @@ class TelegramBotStatus(StrEnum):
 
 
 class TelegramValidationStatus(StrEnum):
+    IMPORTED = "IMPORTED"
+    JOINING = "JOINING"
+    JOINED = "JOINED"
+    JOIN_REQUEST_PENDING = "JOIN_REQUEST_PENDING"
+    JOIN_FAILED = "JOIN_FAILED"
     READY = "READY"
     BOT_NOT_ADDED = "BOT_NOT_ADDED"
     NO_POST_PERMISSION = "NO_POST_PERMISSION"

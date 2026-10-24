@@ -1,0 +1,1118 @@
+"""Telegram long-polling runner for development/free hosting."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Any
+from uuid import UUID
+
+import httpx
+from pydantic import SecretStr
+from sqlalchemy import select
+
+from database.models.catalog import Category, Service
+from database.models.enums import RequestPriority, ServiceRequestStatus, UserStatus
+from database.models.identity import User
+from database.models.requests import ServiceRequest
+
+CATEGORY_PAGE_SIZE = 6
+SERVICE_PAGE_SIZE = 8
+from database.session import SessionLocal
+
+from backend.app.api.routes.telegram_webhook import (
+    _main_menu,
+    _welcome_text,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class TelegramBotRunner:
+    """Run the Telegram Bot API through long polling."""
+
+    def __init__(self, token: SecretStr) -> None:
+        value = token.get_secret_value().strip()
+        if not value:
+            raise ValueError("Telegram bot token is empty.")
+
+        self.base_url = f"https://api.telegram.org/bot{value}"
+        self._stop_event = asyncio.Event()
+        self._task: asyncio.Task[None] | None = None
+        self._offset = 0
+        self._conversation_state: dict[int, dict[str, Any]] = {}
+
+    async def start(self) -> None:
+        if self._task and not self._task.done():
+            return
+
+        self._stop_event.clear()
+        self._task = asyncio.create_task(
+            self._run(),
+            name="telegram-bot-polling",
+        )
+        logger.info("POLLING DEBUG ACTIVE - Telegram long polling started.")
+
+    async def stop(self) -> None:
+        self._stop_event.set()
+
+        if self._task:
+            try:
+                await asyncio.wait_for(self._task, timeout=10)
+            except asyncio.TimeoutError:
+                self._task.cancel()
+                try:
+                    await self._task
+                except asyncio.CancelledError:
+                    pass
+            finally:
+                self._task = None
+
+        logger.info("Telegram long polling stopped.")
+
+    async def _run(self) -> None:
+        backoff = 2.0
+
+        timeout = httpx.Timeout(
+            connect=10.0,
+            read=35.0,
+            write=10.0,
+            pool=10.0,
+        )
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            try:
+                await self._api_call(
+                    client,
+                    "deleteWebhook",
+                    {"drop_pending_updates": False},
+                )
+            except Exception:
+                logger.exception(
+                    "Unable to prepare Telegram polling mode."
+                )
+
+            while not self._stop_event.is_set():
+                try:
+                    result = await self._api_call(
+                        client,
+                        "getUpdates",
+                        {
+                            "offset": self._offset,
+                            "timeout": 25,
+                            "allowed_updates": [
+                                "message",
+                                "callback_query",
+                                "my_chat_member",
+                                "chat_member",
+                                "chat_join_request",
+                                "channel_post",
+                                "edited_channel_post",
+                            ],
+                        },
+                    )
+
+                    backoff = 2.0
+
+                    updates = result.get("result", [])
+                    if updates:
+                        logger.warning(
+                            "POLLING UPDATE RECEIVED: count=%s updates=%s",
+                            len(updates),
+                            [u.get("update_id") for u in updates],
+                        )
+
+                    for update in updates:
+                        update_id = update.get("update_id")
+
+                        if isinstance(update_id, int):
+                            self._offset = update_id + 1
+
+                        try:
+                            await self._handle_update(
+                                client,
+                                update,
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Failed to process Telegram update %s",
+                                update_id,
+                            )
+
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception(
+                        "Telegram polling failed; retrying."
+                    )
+
+                    try:
+                        await asyncio.wait_for(
+                            self._stop_event.wait(),
+                            timeout=backoff,
+                        )
+                    except asyncio.TimeoutError:
+                        backoff = min(backoff * 2, 30.0)
+
+    async def _api_call(
+        self,
+        client: httpx.AsyncClient,
+        method: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        response = await client.post(
+            f"{self.base_url}/{method}",
+            json=payload or {},
+        )
+        response.raise_for_status()
+
+        data = response.json()
+
+        if not data.get("ok"):
+            raise RuntimeError(
+                data.get("description")
+                or f"Telegram API error: {method}"
+            )
+
+        return data
+
+    async def _handle_update(
+        self,
+        client: httpx.AsyncClient,
+        update: dict[str, Any],
+    ) -> None:
+        message = update.get("message")
+
+        if isinstance(message, dict):
+            await self._handle_message(client, message)
+            return
+
+        callback_query = update.get("callback_query")
+
+        if isinstance(callback_query, dict):
+            await self._handle_callback_query(client, callback_query)
+
+    async def _handle_callback_query(
+        self,
+        client: httpx.AsyncClient,
+        callback_query: dict[str, Any],
+    ) -> None:
+        callback_id = callback_query.get("id")
+        data = str(callback_query.get("data") or "").strip()
+        message = callback_query.get("message") or {}
+        chat = message.get("chat") or {}
+        chat_id = chat.get("id")
+
+        if isinstance(callback_id, str):
+            await self._api_call(
+                client,
+                "answerCallbackQuery",
+                {"callback_query_id": callback_id},
+            )
+
+        if not isinstance(chat_id, int):
+            return
+
+        if data == "services":
+            await self._send_categories(client, chat_id, 0)
+            return
+
+        if data.startswith("categories_page:"):
+            page = int(data.split(":", 1)[1])
+            await self._send_categories(client, chat_id, page)
+            return
+
+        if data.startswith("services_page:"):
+            parts = data.split(":")
+            category_id = parts[1]
+            page = int(parts[2])
+            await self._send_services(client, chat_id, category_id, page)
+            return
+
+        if data.startswith("category:"):
+            await self._send_services(client, chat_id, data.split(":", 1)[1])
+            return
+
+        if data.startswith("service:"):
+            await self._send_service_details(client, chat_id, data.split(":", 1)[1])
+            return
+
+        if data.startswith("request:"):
+            service_id = data.split(":", 1)[1]
+            state = {
+                "stage": "title",
+                "service_id": service_id,
+                "chat_id": chat_id,
+            }
+            self._conversation_state[chat_id] = state
+
+            await self._api_call(
+                client,
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": "📝 <b>تقديم طلب جديد</b>\\n\\n<b>الخطوة 1 من 4 — عنوان الطلب</b>\\n\\nاضغط الزر لإضافة عنوان الطلب.",
+                    "parse_mode": "HTML",
+                    "reply_markup": {
+                        "inline_keyboard": [
+                            [{"text": "✏️ إضافة عنوان الطلب", "callback_data": "request_add_title"}],
+                            [{"text": "❌ إلغاء الطلب", "callback_data": "request_cancel"}],
+                        ]
+                    }
+                }
+            )
+            return
+
+        if data == "request_add_title":
+            state = self._conversation_state.get(chat_id)
+            if not state or state.get("stage") != "title":
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {"chat_id": chat_id, "text": "⚠️ انتهت جلسة الطلب. يرجى بدء طلب جديد."}
+                )
+                return
+
+            state["stage"] = "title_input"
+
+            await self._api_call(
+                client,
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": "✏️ <b>إضافة عنوان الطلب</b>\\n\\nاكتب عنوان طلبك الآن.",
+                    "parse_mode": "HTML",
+                    "reply_markup": {
+                        "force_reply": True,
+                        "input_field_placeholder": "اكتب عنوان الطلب هنا..."
+                    }
+                }
+            )
+            return
+
+        if data == "request_add_description":
+            state = self._conversation_state.get(chat_id)
+            if not state or state.get("stage") != "description":
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {"chat_id": chat_id, "text": "⚠️ انتهت جلسة الطلب. يرجى بدء طلب جديد."}
+                )
+                return
+
+            state["stage"] = "description_input"
+
+            await self._api_call(
+                client,
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": "📝 <b>إضافة وصف الطلب</b>\\n\\nاكتب تفاصيل الطلب الآن.",
+                    "parse_mode": "HTML",
+                    "reply_markup": {
+                        "force_reply": True,
+                        "input_field_placeholder": "اكتب وصف الطلب هنا..."
+                    }
+                }
+            )
+            return
+
+        if data == "request_add_specialization":
+            state = self._conversation_state.get(chat_id)
+            if not state or state.get("stage") != "specialization":
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {"chat_id": chat_id, "text": "⚠️ انتهت جلسة الطلب. يرجى بدء طلب جديد."}
+                )
+                return
+
+            state["stage"] = "specialization_input"
+
+            await self._api_call(
+                client,
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": "🎓 <b>إضافة التخصص</b>\\n\\nاكتب تخصصك الآن، أو اكتب: لا يوجد",
+                    "parse_mode": "HTML",
+                    "reply_markup": {
+                        "force_reply": True,
+                        "input_field_placeholder": "مثال: تقنية معلومات"
+                    }
+                }
+            )
+            return
+
+        if data == "request_add_deadline":
+            state = self._conversation_state.get(chat_id)
+            if not state or state.get("stage") != "deadline":
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {"chat_id": chat_id, "text": "⚠️ انتهت جلسة الطلب. يرجى بدء طلب جديد."}
+                )
+                return
+
+            state["stage"] = "deadline_input"
+
+            await self._api_call(
+                client,
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": "⏰ <b>إضافة الموعد النهائي</b>\\n\\nاكتب التاريخ بصيغة YYYY-MM-DD، أو اكتب: لا يوجد",
+                    "parse_mode": "HTML",
+                    "reply_markup": {
+                        "force_reply": True,
+                        "input_field_placeholder": "YYYY-MM-DD"
+                    }
+                }
+            )
+            return
+
+        if data == "request_cancel":
+            self._conversation_state.pop(chat_id, None)
+            await self._api_call(client, "sendMessage", {"chat_id": chat_id, "text": "❌ تم إلغاء الطلب."})
+            return
+
+        if data == "request_confirm":
+            state = self._conversation_state.get(chat_id)
+            if not state or not state.get("service_id"):
+                await self._api_call(client, "sendMessage", {"chat_id": chat_id, "text": "⚠️ انتهت جلسة الطلب. يرجى بدء طلب جديد."})
+                return
+            user = await self._get_or_create_user({"from": callback_query.get("from") or {}})
+            if user is None:
+                await self._api_call(client, "sendMessage", {"chat_id": chat_id, "text": "⚠️ تعذر تحديد حسابك."})
+                return
+            from uuid import UUID
+            async with SessionLocal() as session:
+                request = ServiceRequest(customer_id=user.id, service_id=UUID(str(state["service_id"])), title=state["title"], description=state.get("description"), specialization=state.get("specialization"), deadline=state.get("deadline"), status=ServiceRequestStatus.NEW, priority=RequestPriority.NORMAL)
+                session.add(request)
+                await session.commit()
+            self._conversation_state.pop(chat_id, None)
+            await self._api_call(client, "sendMessage", {"chat_id": chat_id, "text": "🎉 <b>تم إرسال طلبك بنجاح</b>\n\nسيتم مراجعة الطلب من فريقنا والتواصل معك عند تحديث حالته.", "parse_mode": "HTML", "reply_markup": {"inline_keyboard": [[{"text": "📂 طلباتي", "callback_data": "my_requests"}], [{"text": "🏠 القائمة الرئيسية", "callback_data": "main_menu"}]]}})
+            return
+
+        if data == "main_menu":
+            await self._api_call(
+                client,
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": _welcome_text(chat.get("first_name")),
+                    "parse_mode": "HTML",
+                    "reply_markup": _main_menu(),
+                },
+            )
+            return
+
+        if data == "my_requests":
+            from sqlalchemy import select
+
+            user = await self._get_or_create_user({"from": callback_query.get("from") or {}})
+
+            if user is None:
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": "⚠️ تعذر تحديد حسابك.",
+                    },
+                )
+                return
+
+            async with SessionLocal() as session:
+                result = await session.execute(
+                    select(ServiceRequest)
+                    .where(
+                        ServiceRequest.customer_id == user.id,
+                        ServiceRequest.deleted_at.is_(None),
+                    )
+                    .order_by(ServiceRequest.created_at.desc())
+                )
+                requests = result.scalars().all()
+
+            if not requests:
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": "📂 <b>طلباتي</b>\n\nليس لديك أي طلبات حتى الآن.",
+                        "parse_mode": "HTML",
+                        "reply_markup": {
+                            "inline_keyboard": [
+                                [{"text": "📝 تقديم طلب", "callback_data": "new_request"}],
+                                [{"text": "🏠 القائمة الرئيسية", "callback_data": "main_menu"}],
+                            ]
+                        },
+                    },
+                )
+                return
+
+            status_names = {
+                "NEW": "🆕 جديد",
+                "UNDER_REVIEW": "🔎 قيد المراجعة",
+                "WAITING_FOR_CUSTOMER": "⏳ بانتظارك",
+                "QUOTATION_SENT": "💰 عرض سعر مرسل",
+                "APPROVED": "✅ تمت الموافقة",
+                "IN_PROGRESS": "⚙️ قيد التنفيذ",
+                "COMPLETED": "🎉 مكتمل",
+                "CANCELLED": "❌ ملغي",
+                "REJECTED": "🚫 مرفوض",
+            }
+
+            lines = ["📂 <b>طلباتي</b>", ""]
+
+            for index, item in enumerate(requests, 1):
+                status_value = (
+                    item.status.value
+                    if hasattr(item.status, "value")
+                    else str(item.status)
+                )
+                status_text = status_names.get(status_value, status_value)
+
+                created = (
+                    item.created_at.strftime("%Y-%m-%d")
+                    if item.created_at
+                    else "-"
+                )
+
+                lines.extend([
+                    f"<b>{index}. {item.title}</b>",
+                    f"📊 الحالة: {status_text}",
+                    f"📅 تاريخ الطلب: {created}",
+                    "",
+                ])
+
+            lines.append("اختر من القائمة الرئيسية لمتابعة خدماتك.")
+
+            await self._api_call(
+                client,
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": "\n".join(lines),
+                    "parse_mode": "HTML",
+                    "reply_markup": {
+                        "inline_keyboard": [
+                            [{"text": "🔄 تحديث الطلبات", "callback_data": "my_requests"}],
+                            [{"text": "🏠 القائمة الرئيسية", "callback_data": "main_menu"}],
+                        ]
+                    },
+                },
+            )
+            return
+
+        if data == "profile":
+            from sqlalchemy import select
+
+            user = await self._get_or_create_user({"from": callback_query.get("from") or {}})
+
+            if user is None:
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": "⚠️ تعذر تحديد حسابك.",
+                    },
+                )
+                return
+
+            async with SessionLocal() as session:
+                result = await session.execute(
+                    select(ServiceRequest).where(
+                        ServiceRequest.customer_id == user.id,
+                        ServiceRequest.deleted_at.is_(None),
+                    )
+                )
+                user_requests = result.scalars().all()
+
+            telegram_user = callback_query.get("from") or {}
+
+            first_name = telegram_user.get("first_name") or "-"
+            last_name = telegram_user.get("last_name") or ""
+            username = telegram_user.get("username")
+            full_name = f"{first_name} {last_name}".strip()
+
+            username_text = f"@{username}" if username else "غير محدد"
+
+            text = (
+                "👤 <b>حسابي</b>\n\n"
+                f"👨‍💼 <b>الاسم:</b> {full_name}\n"
+                f"📱 <b>اسم المستخدم:</b> {username_text}\n"
+                f"🆔 <b>Telegram ID:</b> {chat_id}\n"
+                f"📋 <b>عدد الطلبات:</b> {len(user_requests)}\n"
+            )
+
+            await self._api_call(
+                client,
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "HTML",
+                    "reply_markup": {
+                        "inline_keyboard": [
+                            [{"text": "📂 طلباتي", "callback_data": "my_requests"}],
+                            [{"text": "🏠 القائمة الرئيسية", "callback_data": "main_menu"}],
+                        ]
+                    },
+                },
+            )
+            return
+
+        if data == "notifications":
+            from sqlalchemy import select
+            from database.models.notifications import Notification
+
+            user = await self._get_or_create_user({"from": callback_query.get("from") or {}})
+
+            if user is None:
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": "⚠️ تعذر تحديد حسابك.",
+                    },
+                )
+                return
+
+            async with SessionLocal() as session:
+                result = await session.execute(
+                    select(Notification)
+                    .where(
+                        Notification.user_id == user.id,
+                        Notification.deleted_at.is_(None),
+                    )
+                    .order_by(Notification.created_at.desc())
+                    .limit(20)
+                )
+                notifications = result.scalars().all()
+
+            if not notifications:
+                text = (
+                    "🔔 <b>إشعاراتي</b>\n\n"
+                    "لا توجد إشعارات جديدة حاليًا."
+                )
+            else:
+                lines = ["🔔 <b>إشعاراتي</b>", ""]
+
+                for item in notifications:
+                    title = getattr(item, "title", None) or "إشعار"
+                    message = getattr(item, "message", None) or ""
+                    lines.append(f"🔹 <b>{title}</b>")
+                    if message:
+                        lines.append(message)
+                    lines.append("")
+
+                text = "\n".join(lines)
+
+            await self._api_call(
+                client,
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "HTML",
+                    "reply_markup": {
+                        "inline_keyboard": [
+                            [{"text": "🔄 تحديث الإشعارات", "callback_data": "notifications"}],
+                            [{"text": "🏠 القائمة الرئيسية", "callback_data": "main_menu"}],
+                        ]
+                    },
+                },
+            )
+            return
+
+        responses = {
+            "new_request": "📝 تقديم طلب\n\nاختر الخدمة أولًا من الخدمات الأكاديمية، ثم يمكنك تقديم طلبك.",
+            "support": "💬 الدعم والمساعدة\n\nللتواصل مع فريق الدعم، سيتم تجهيز هذه الخدمة هنا.",
+        }
+
+        response = responses.get(data)
+        if response:
+            await self._api_call(
+                client,
+                "sendMessage",
+                {"chat_id": chat_id, "text": response},
+            )
+
+    async def _send_categories(
+        self,
+        client,
+        chat_id: int,
+        page: int = 0,
+    ):
+        async with SessionLocal() as session:
+            result = await session.execute(
+                select(Category)
+                .where(
+                    Category.is_active.is_(True),
+                    Category.deleted_at.is_(None),
+                )
+                .order_by(Category.sort_order, Category.name)
+            )
+            categories = result.scalars().all()
+
+        total = len(categories)
+        total_pages = max(1, (total + CATEGORY_PAGE_SIZE - 1) // CATEGORY_PAGE_SIZE)
+
+        page = max(0, min(page, total_pages - 1))
+
+        start_index = page * CATEGORY_PAGE_SIZE
+        page_categories = categories[
+            start_index:start_index + CATEGORY_PAGE_SIZE
+        ]
+
+        keyboard = [
+            [
+                {
+                    "text": f"📚 {category.name}",
+                    "callback_data": f"category:{category.id}",
+                }
+            ]
+            for category in page_categories
+        ]
+
+        navigation = []
+
+        if page > 0:
+            navigation.append(
+                {
+                    "text": "⬅️ السابق",
+                    "callback_data": f"categories_page:{page - 1}",
+                }
+            )
+
+        navigation.append(
+            {
+                "text": f"📄 {page + 1}/{total_pages}",
+                "callback_data": "noop",
+            }
+        )
+
+        if page < total_pages - 1:
+            navigation.append(
+                {
+                    "text": "التالي ➡️",
+                    "callback_data": f"categories_page:{page + 1}",
+                }
+            )
+
+        if navigation:
+            keyboard.append(navigation)
+
+        keyboard.append(
+            [
+                {
+                    "text": "🏠 القائمة الرئيسية",
+                    "callback_data": "main_menu",
+                }
+            ]
+        )
+
+        text = (
+            "📚 <b>الخدمات الأكاديمية</b>\n\n"
+            "اختر المجال الذي تحتاج إليه:\n\n"
+            f"📊 <b>{total}</b> تخصصًا متاحًا\n"
+            f"📄 الصفحة <b>{page + 1}</b> من <b>{total_pages}</b>"
+        )
+
+        await self._api_call(
+            client,
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "reply_markup": {"inline_keyboard": keyboard},
+            },
+        )
+
+    async def _send_services(
+        self,
+        client,
+        chat_id: int,
+        category_id: str,
+        page: int = 0,
+    ):
+        try:
+            category_uuid = UUID(category_id)
+        except ValueError:
+            return
+
+        async with SessionLocal() as session:
+            category_result = await session.execute(
+                select(Category).where(
+                    Category.id == category_uuid,
+                    Category.is_active.is_(True),
+                    Category.deleted_at.is_(None),
+                )
+            )
+            category = category_result.scalar_one_or_none()
+
+            if category is None:
+                return
+
+            result = await session.execute(
+                select(Service)
+                .where(
+                    Service.category_id == category_uuid,
+                    Service.is_active.is_(True),
+                    Service.deleted_at.is_(None),
+                )
+                .order_by(Service.sort_order, Service.name)
+            )
+            services = result.scalars().all()
+
+        total = len(services)
+        total_pages = max(1, (total + SERVICE_PAGE_SIZE - 1) // SERVICE_PAGE_SIZE)
+
+        page = max(0, min(page, total_pages - 1))
+
+        start_index = page * SERVICE_PAGE_SIZE
+        page_services = services[
+            start_index:start_index + SERVICE_PAGE_SIZE
+        ]
+
+        keyboard = [
+            [
+                {
+                    "text": f"📌 {service.name}",
+                    "callback_data": f"service:{service.id}",
+                }
+            ]
+            for service in page_services
+        ]
+
+        navigation = []
+
+        if page > 0:
+            navigation.append(
+                {
+                    "text": "⬅️ السابق",
+                    "callback_data": f"services_page:{category.id}:{page - 1}",
+                }
+            )
+
+        navigation.append(
+            {
+                "text": f"📄 {page + 1}/{total_pages}",
+                "callback_data": "noop",
+            }
+        )
+
+        if page < total_pages - 1:
+            navigation.append(
+                {
+                    "text": "التالي ➡️",
+                    "callback_data": f"services_page:{category.id}:{page + 1}",
+                }
+            )
+
+        if navigation:
+            keyboard.append(navigation)
+
+        keyboard.append(
+            [
+                {
+                    "text": "⬅️ التصنيفات",
+                    "callback_data": "services",
+                },
+                {
+                    "text": "🏠 الرئيسية",
+                    "callback_data": "main_menu",
+                },
+            ]
+        )
+
+        text = (
+            f"📂 <b>{category.name}</b>\n\n"
+            "اختر الخدمة التي تحتاج إليها:\n\n"
+            f"📊 <b>{total}</b> خدمة متاحة\n"
+            f"📄 الصفحة <b>{page + 1}</b> من <b>{total_pages}</b>"
+        )
+
+        await self._api_call(
+            client,
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "reply_markup": {"inline_keyboard": keyboard},
+            },
+        )
+
+    async def _send_service_details(
+        self,
+        client: httpx.AsyncClient,
+        chat_id: int,
+        service_id: str,
+    ) -> None:
+        try:
+            service_uuid = UUID(service_id)
+        except ValueError:
+            return
+
+        async with SessionLocal() as session:
+            result = await session.execute(
+                select(Service, Category)
+                .join(Category, Service.category_id == Category.id)
+                .where(
+                    Service.id == service_uuid,
+                    Service.is_active.is_(True),
+                    Service.deleted_at.is_(None),
+                    Category.is_active.is_(True),
+                    Category.deleted_at.is_(None),
+                )
+            )
+            row = result.first()
+
+        if row is None:
+            return
+
+        service, category = row
+        description = service.description or service.short_description or "لا يوجد وصف متاح لهذه الخدمة حاليًا."
+        text = (
+            f"📌 <b>{service.name}</b>\n\n"
+            f"📂 القسم: <b>{category.name}</b>\n\n"
+            f"{description}"
+        )
+
+        keyboard = {
+            "inline_keyboard": [
+                [{"text": "📝 تقديم طلب لهذه الخدمة", "callback_data": f"request:{service.id}"}],
+                [{"text": "⬅️ الخدمات", "callback_data": "services"}],
+                [{"text": "🏠 القائمة الرئيسية", "callback_data": "main_menu"}],
+            ]
+        }
+
+        await self._api_call(
+            client,
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "reply_markup": keyboard,
+            },
+        )
+
+    async def _get_or_create_user(
+        self,
+        message: dict[str, Any],
+    ) -> User | None:
+        from_user = message.get("from") or {}
+        telegram_user_id = from_user.get("id")
+
+        if not isinstance(telegram_user_id, int):
+            return None
+
+        username = from_user.get("username")
+        first_name = from_user.get("first_name")
+        last_name = from_user.get("last_name")
+
+        async with SessionLocal() as session:
+            result = await session.execute(
+                select(User).where(
+                    User.telegram_user_id == telegram_user_id,
+                    User.deleted_at.is_(None),
+                )
+            )
+            user = result.scalar_one_or_none()
+
+            if user is None:
+                user = User(
+                    telegram_user_id=telegram_user_id,
+                    username=username,
+                    first_name=first_name,
+                    last_name=last_name,
+                    language="ar",
+                    status=UserStatus.ACTIVE,
+                )
+                session.add(user)
+            else:
+                user.username = username
+                user.first_name = first_name
+                user.last_name = last_name
+                user.status = UserStatus.ACTIVE
+
+            await session.commit()
+            await session.refresh(user)
+            return user
+
+    async def _handle_message(
+        self,
+        client: httpx.AsyncClient,
+        message: dict[str, Any],
+    ) -> None:
+        chat = message.get("chat") or {}
+
+        if chat.get("type") != "private":
+            return
+
+        chat_id = chat.get("id")
+
+        if not isinstance(chat_id, int):
+            return
+
+        text = str(message.get("text") or "").strip()
+        from_user = message.get("from") or {}
+        telegram_user_id = from_user.get("id")
+        logger.info(
+            "Telegram message received: user_id=%s chat_id=%s text=%r state_keys=%s",
+            telegram_user_id,
+            chat_id,
+            text,
+            list(self._conversation_state.keys()),
+        )
+        state = self._conversation_state.get(chat_id)
+
+        if state is not None and text != "/start":
+            if text == "/cancel":
+                self._conversation_state.pop(chat_id, None)
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {"chat_id": chat_id, "text": "❌ تم إلغاء الطلب."}
+                )
+                return
+
+            stage = state.get("stage")
+
+            if stage == "title_input" and text:
+                state["title"] = text
+                state["stage"] = "description"
+
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": "📋 <b>الخطوة 2 من 4 — وصف الطلب</b>\\n\\nاضغط الزر لإضافة وصف الطلب.",
+                        "parse_mode": "HTML",
+                        "reply_markup": {
+                            "inline_keyboard": [
+                                [{"text": "📝 إضافة وصف الطلب", "callback_data": "request_add_description"}],
+                                [{"text": "❌ إلغاء الطلب", "callback_data": "request_cancel"}],
+                            ]
+                        }
+                    }
+                )
+                return
+
+            if stage == "description_input" and text:
+                state["description"] = text
+                state["stage"] = "specialization"
+
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": "🎓 <b>الخطوة 3 من 4 — التخصص</b>\\n\\nاضغط الزر لإضافة التخصص.",
+                        "parse_mode": "HTML",
+                        "reply_markup": {
+                            "inline_keyboard": [
+                                [{"text": "🎓 إضافة التخصص", "callback_data": "request_add_specialization"}],
+                                [{"text": "❌ إلغاء الطلب", "callback_data": "request_cancel"}],
+                            ]
+                        }
+                    }
+                )
+                return
+
+            if stage == "specialization_input" and text:
+                state["specialization"] = None if text == "لا يوجد" else text
+                state["stage"] = "deadline"
+
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": "⏰ <b>الخطوة 4 من 4 — الموعد النهائي</b>\\n\\nاضغط الزر لإضافة الموعد النهائي.",
+                        "parse_mode": "HTML",
+                        "reply_markup": {
+                            "inline_keyboard": [
+                                [{"text": "⏰ إضافة الموعد النهائي", "callback_data": "request_add_deadline"}],
+                                [{"text": "❌ إلغاء الطلب", "callback_data": "request_cancel"}],
+                            ]
+                        }
+                    }
+                )
+                return
+
+            if stage == "deadline_input" and text:
+                from datetime import datetime, timezone
+
+                if text == "لا يوجد":
+                    state["deadline"] = None
+                else:
+                    try:
+                        state["deadline"] = datetime.strptime(
+                            text, "%Y-%m-%d"
+                        ).replace(tzinfo=timezone.utc)
+                    except ValueError:
+                        await self._api_call(
+                            client,
+                            "sendMessage",
+                            {
+                                "chat_id": chat_id,
+                                "text": "⚠️ التاريخ غير صحيح. استخدم الصيغة: YYYY-MM-DD"
+                            }
+                        )
+                        return
+
+                state["stage"] = "confirm"
+
+                specialization = state.get("specialization") or "لا يوجد"
+                deadline = state.get("deadline")
+                deadline_text = deadline.strftime("%Y-%m-%d") if deadline else "لا يوجد"
+
+                summary = (
+                    "📋 <b>مراجعة الطلب</b>\\n\\n"
+                    f"<b>العنوان:</b> {state.get('title', '-')}\\n\\n"
+                    f"<b>الوصف:</b> {state.get('description', '-')}\\n\\n"
+                    f"<b>التخصص:</b> {specialization}\\n\\n"
+                    f"<b>الموعد النهائي:</b> {deadline_text}\\n\\n"
+                    "هل تريد إرسال الطلب؟"
+                )
+
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": summary,
+                        "parse_mode": "HTML",
+                        "reply_markup": {
+                            "inline_keyboard": [
+                                [{"text": "✅ تأكيد وإرسال", "callback_data": "request_confirm"}],
+                                [{"text": "❌ إلغاء الطلب", "callback_data": "request_cancel"}],
+                            ]
+                        }
+                    }
+                )
+                return
+
+        if text == "/start" or text.startswith("/start "):
+            await self._get_or_create_user(message)
+            await self._api_call(
+                client,
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": _welcome_text(
+                        chat.get("first_name"),
+                    ),
+                    "parse_mode": "HTML",
+                    "reply_markup": _main_menu(),
+                },
+            )

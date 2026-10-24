@@ -48,7 +48,7 @@ role_permissions = Table(
 
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
-    """Platform identity without password storage."""
+    """Platform identity with optional password authentication."""
 
     __tablename__ = "users"
 
@@ -62,6 +62,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     language: Mapped[str | None] = mapped_column(String(16), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[UserStatus] = mapped_column(

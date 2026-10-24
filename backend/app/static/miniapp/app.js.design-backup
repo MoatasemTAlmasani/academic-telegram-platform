@@ -1,0 +1,172 @@
+const translations = {
+  ar: {
+    brand:"احتراف الأكاديمية",welcomeLabel:"مساحتك الأكاديمية",welcome:"مرحباً بك 👋",welcomeText:"كيف يمكننا مساعدتك اليوم؟",
+    servicesTitle:"خدماتنا الأكاديمية",servicesSubtitle:"اختر الخدمة التي تناسب احتياجك",research:"البحوث العلمية",researchDesc:"دعم وإرشاد بحثي",
+    graduation:"مشاريع التخرج",graduationDesc:"إرشاد وتنظيم المشروع",editing:"التدقيق الأكاديمي",editingDesc:"لغة وتنسيق ومراجعة",
+    consulting:"الاستشارات التعليمية",consultingDesc:"وجّه مسارك الدراسي",requestTitle:"ابدأ طلبك",requestSubtitle:"أخبرنا بما تحتاج إليه",
+    serviceLabel:"نوع الخدمة",chooseService:"اختر الخدمة",detailsLabel:"تفاصيل الطلب",detailsPlaceholder:"اكتب تفاصيل ما تحتاج إليه...",
+    submitRequest:"متابعة الطلب",trackingTitle:"تابع طلباتك",trackingSubtitle:"ستجد تحديثات طلباتك هنا",emptyTitle:"لا توجد طلبات حتى الآن",
+    emptyText:"عندما ترسل طلباً، ستتمكن من متابعة حالته هنا.",home:"الرئيسية",services:"الخدمات",myRequests:"طلباتي",account:"حسابي",
+    loadingServices:"جارٍ تحميل الخدمات...",servicesLoadFailed:"تعذّر تحميل الخدمات. حاول تحديث الصفحة.",noServices:"لا توجد خدمات متاحة حالياً.",other:"خدمة أخرى",selectServiceFirst:"يرجى اختيار نوع الخدمة.",enterDetails:"يرجى كتابة تفاصيل الطلب.",requestPrepared:"تم تجهيز بيانات الطلب محلياً. لم يُرسل إلى الخادم بعد."
+  },
+  en: {
+    brand:"Professional Academy",welcomeLabel:"YOUR ACADEMIC SPACE",welcome:"Welcome 👋",welcomeText:"How can we help you today?",
+    servicesTitle:"Academic Services",servicesSubtitle:"Choose a service that fits your needs",research:"Research Support",researchDesc:"Research guidance and support",
+    graduation:"Graduation Projects",graduationDesc:"Project planning and guidance",editing:"Academic Editing",editingDesc:"Language, formatting and review",
+    consulting:"Education Consulting",consultingDesc:"Navigate your academic path",requestTitle:"Start a Request",requestSubtitle:"Tell us what you need",
+    serviceLabel:"Service Type",chooseService:"Choose a service",detailsLabel:"Request Details",detailsPlaceholder:"Describe what you need...",
+    submitRequest:"Continue Request",trackingTitle:"Track Your Requests",trackingSubtitle:"Your request updates will appear here",emptyTitle:"No requests yet",
+    emptyText:"Once you submit a request, you can track its status here.",home:"Home",services:"Services",myRequests:"My Requests",account:"Account",
+    loadingServices:"Loading services...",servicesLoadFailed:"Could not load services. Please refresh the page.",noServices:"No services are currently available.",other:"Other service",selectServiceFirst:"Please choose a service type.",enterDetails:"Please enter request details.",requestPrepared:"Your request details are prepared locally. They have not been sent to the server."
+  }
+};
+let language = "ar";
+const t = key => translations[language][key] || key;
+
+function setLanguage(next) {
+  language = next;
+  document.documentElement.lang = next;
+  document.documentElement.dir = next === "ar" ? "rtl" : "ltr";
+  document.body.dir = document.documentElement.dir;
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const value = t(el.dataset.i18n);
+    if (value) el.textContent = value;
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.getElementById("languageBtn").textContent = next === "ar" ? "English" : "العربية";
+}
+
+document.getElementById("languageBtn").addEventListener("click", () => {
+  setLanguage(language === "ar" ? "en" : "ar");
+});
+
+let services = [];
+
+function renderServices() {
+  const grid = document.getElementById("serviceGrid");
+  const select = document.getElementById("service");
+  if (!grid || !select) return;
+
+  grid.replaceChildren();
+  select.replaceChildren();
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.dataset.i18n = "chooseService";
+  placeholder.textContent = t("chooseService");
+  select.appendChild(placeholder);
+
+  if (!services.length) {
+    const message = document.createElement("p");
+    message.className = "form-message";
+    message.textContent = t("noServices");
+    grid.appendChild(message);
+    return;
+  }
+
+  const styles = [
+    { color: "blue", icon: "⌘" },
+    { color: "purple", icon: "▤" },
+    { color: "cyan", icon: "✎" },
+    { color: "gold", icon: "◇" }
+  ];
+
+  services.forEach((service, index) => {
+    const style = styles[index % styles.length];
+    const name = String(service.name || "Service");
+    const description = String(
+      service.short_description || service.description ||
+      (service.category && service.category.name) || ""
+    );
+
+    const option = document.createElement("option");
+    option.value = String(service.id);
+    option.textContent = name;
+    select.appendChild(option);
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "service-card";
+    button.dataset.service = String(service.id);
+
+    const icon = document.createElement("span");
+    icon.className = `service-icon ${style.color}`;
+    icon.textContent = style.icon;
+
+    const title = document.createElement("strong");
+    title.textContent = name;
+
+    const summary = document.createElement("small");
+    summary.textContent = description;
+
+    const arrow = document.createElement("span");
+    arrow.className = "card-arrow";
+    arrow.textContent = "↗";
+
+    button.append(icon, title, summary, arrow);
+    button.addEventListener("click", () => {
+      select.value = String(service.id);
+      document.getElementById("requestForm").scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    });
+
+    grid.appendChild(button);
+  });
+}
+
+async function loadServices() {
+  const grid = document.getElementById("serviceGrid");
+  if (grid) {
+    grid.replaceChildren();
+    const loading = document.createElement("p");
+    loading.className = "form-message";
+    loading.textContent = t("loadingServices");
+    grid.appendChild(loading);
+  }
+
+  try {
+    const response = await fetch("/api/v1/public/services", {
+      headers: { "Accept": "application/json" }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Services request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data.items)) {
+      throw new Error("Unexpected services response format");
+    }
+
+    services = data.items.filter(
+      item => item && item.id && item.name
+    );
+    renderServices();
+  } catch (error) {
+    console.error("Failed to load public services:", error);
+    if (grid) {
+      grid.replaceChildren();
+      const message = document.createElement("p");
+      message.className = "form-message";
+      message.textContent = t("servicesLoadFailed");
+      grid.appendChild(message);
+    }
+  }
+}
+
+document.getElementById("requestForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const service = document.getElementById("service").value;
+  const details = document.getElementById("details").value.trim();
+  const message = document.getElementById("formMessage");
+  if (!service) { message.textContent = t("selectServiceFirst"); return; }
+  if (!details) { message.textContent = t("enterDetails"); return; }
+  message.textContent = t("requestPrepared");
+});
+
+setLanguage("ar");
+loadServices();
