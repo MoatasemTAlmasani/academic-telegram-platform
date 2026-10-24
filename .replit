@@ -40,3 +40,7 @@ waitForPort = 8080
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[deployment]
+deploymentTarget = "cloudrun"
+run = "uv run python -m backend"

@@ -873,39 +873,58 @@ class TelegramBotRunner:
 
             from uuid import UUID
 
-            async with SessionLocal() as session:
-                result = await session.execute(
-                    select(Service).where(
-                        Service.id == UUID(str(state["service_id"])),
-                        Service.deleted_at.is_(None),
+            try:
+                async with SessionLocal() as session:
+                    result = await session.execute(
+                        select(Service).where(
+                            Service.id == UUID(str(state["service_id"])),
+                            Service.deleted_at.is_(None),
+                        )
                     )
-                )
-                service = result.scalar_one_or_none()
+                    service = result.scalar_one_or_none()
 
-                if service is None:
-                    await self._api_call(
-                        client,
-                        "sendMessage",
-                        {
-                            "chat_id": chat_id,
-                            "text": "⚠️ تعذر العثور على الخدمة."
-                        }
+                    if service is None:
+                        await self._api_call(
+                            client,
+                            "sendMessage",
+                            {
+                                "chat_id": chat_id,
+                                "text": "⚠️ تعذر العثور على الخدمة."
+                            }
+                        )
+                        return
+
+                    request = ServiceRequest(
+                        customer_id=user.id,
+                        service_id=service.id,
+                        title=service.name,
+                        description=state.get("description"),
+                        specialization=state.get("specialization"),
+                        deadline=state.get("deadline"),
+                        status=ServiceRequestStatus.NEW,
+                        priority=RequestPriority.NORMAL,
                     )
-                    return
 
-                request = ServiceRequest(
-                    customer_id=user.id,
-                    service_id=service.id,
-                    title=service.name,
-                    description=state.get("description"),
-                    specialization=state.get("specialization"),
-                    deadline=state.get("deadline"),
-                    status=ServiceRequestStatus.NEW,
-                    priority=RequestPriority.NORMAL,
+                    session.add(request)
+                    await session.commit()
+
+            except Exception:
+                logger.exception(
+                    "REQUEST_CONFIRM_SAVE_FAILED: chat_id=%s",
+                    chat_id,
                 )
-
-                session.add(request)
-                await session.commit()
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": (
+                            "⚠️ تعذر حفظ طلبك بسبب خطأ أثناء الإرسال. "
+                            "احتفظنا ببيانات الطلب؛ يرجى المحاولة لاحقًا."
+                        )
+                    }
+                )
+                return
 
             self._conversation_state.pop(chat_id, None)
 
