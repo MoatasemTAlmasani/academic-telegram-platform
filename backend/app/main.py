@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.router import api_router
+from backend.app.api.routes.health import router as health_router
 from backend.app.core.config import get_settings
 from backend.app.core.errors import register_exception_handlers
 from backend.app.core.logging import configure_logging
@@ -67,4 +68,6 @@ async def admin_dashboard():
 
 register_exception_handlers(app)
 
+# Keep simple root health paths for operational probes and existing clients.
+app.include_router(health_router)
 app.include_router(api_router)

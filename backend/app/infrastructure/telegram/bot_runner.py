@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import calendar
 import logging
+from collections import deque
 from typing import Any
 from uuid import UUID
 
@@ -42,6 +43,8 @@ class TelegramBotRunner:
         self._task: asyncio.Task[None] | None = None
         self._offset = 0
         self._conversation_state: dict[int, dict[str, Any]] = {}
+        self._processed_update_ids: set[int] = set()
+        self._processed_update_order: deque[int] = deque()
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -52,7 +55,7 @@ class TelegramBotRunner:
             self._run(),
             name="telegram-bot-polling",
         )
-        logger.info("POLLING DEBUG ACTIVE - Telegram long polling started.")
+        logger.info("Telegram long polling started.")
 
     async def stop(self) -> None:
         self._stop_event.set()
@@ -182,16 +185,36 @@ class TelegramBotRunner:
         client: httpx.AsyncClient,
         update: dict[str, Any],
     ) -> None:
+        update_id = update.get("update_id")
+        if (
+            isinstance(update_id, int)
+            and update_id in self._processed_update_ids
+        ):
+            logger.debug("Ignoring duplicate Telegram update %s", update_id)
+            return
+
         message = update.get("message")
 
         if isinstance(message, dict):
             await self._handle_message(client, message)
+            if isinstance(update_id, int):
+                self._remember_processed_update(update_id)
             return
 
         callback_query = update.get("callback_query")
 
         if isinstance(callback_query, dict):
             await self._handle_callback_query(client, callback_query)
+            if isinstance(update_id, int):
+                self._remember_processed_update(update_id)
+
+    def _remember_processed_update(self, update_id: int) -> None:
+        """Remember recent update IDs so a repeated Telegram delivery is inert."""
+        self._processed_update_ids.add(update_id)
+        self._processed_update_order.append(update_id)
+        while len(self._processed_update_order) > 1024:
+            expired_update_id = self._processed_update_order.popleft()
+            self._processed_update_ids.discard(expired_update_id)
 
     async def _send_deadline_calendar(
         self,
@@ -346,6 +369,31 @@ class TelegramBotRunner:
 
         if data.startswith("request:"):
             service_id = data.split(":", 1)[1]
+            active_state = self._conversation_state.get(chat_id)
+            if active_state is not None:
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": (
+                            "لديك طلب قيد الإنشاء بالفعل. أكمل الطلب الحالي "
+                            "أو ألغِه قبل بدء طلب آخر."
+                        ),
+                        "reply_markup": {
+                            "inline_keyboard": [
+                                [
+                                    {
+                                        "text": "❌ إلغاء الطلب الحالي",
+                                        "callback_data": "request_cancel",
+                                    }
+                                ]
+                            ]
+                        },
+                    },
+                )
+                return
+
             state = {
                 "stage": "description",
                 "service_id": service_id,
@@ -417,7 +465,11 @@ class TelegramBotRunner:
                 )
                 return
 
-            if state.get("stage") not in ("description", "title", "description_input"):
+            if state.get("stage") == "description_input":
+                # A repeated tap must not replace the active reply prompt.
+                return
+
+            if state.get("stage") != "description":
                 logger.warning(
                     "REQUEST DESCRIPTION: unexpected stage=%r for chat_id=%s",
                     state.get("stage"), chat_id
@@ -431,7 +483,7 @@ class TelegramBotRunner:
 
             state["stage"] = "description_input"
 
-            await self._api_call(
+            response = await self._api_call(
                 client,
                 "sendMessage",
                 {
@@ -448,6 +500,8 @@ class TelegramBotRunner:
                     }
                 }
             )
+            prompt = response.get("result") or {}
+            state["expected_prompt_message_id"] = prompt.get("message_id")
             return
 
         if data.startswith("specialization:"):
@@ -490,7 +544,7 @@ class TelegramBotRunner:
 
         if data == "specialization_search":
             state = self._conversation_state.get(chat_id)
-            if not state or state.get("stage") != "specialization":
+            if not state:
                 await self._api_call(
                     client,
                     "sendMessage",
@@ -498,9 +552,24 @@ class TelegramBotRunner:
                 )
                 return
 
+            if state.get("stage") == "specialization_search_input":
+                # Avoid replacing the prompt when Telegram repeats a callback.
+                return
+
+            if state.get("stage") != "specialization":
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": "⚠️ تغيّرت خطوة الطلب. استخدم أزرار الخطوة الحالية.",
+                    },
+                )
+                return
+
             state["stage"] = "specialization_search_input"
 
-            await self._api_call(
+            response = await self._api_call(
                 client,
                 "sendMessage",
                 {
@@ -516,19 +585,13 @@ class TelegramBotRunner:
                     }
                 }
             )
+            prompt = response.get("result") or {}
+            state["expected_prompt_message_id"] = prompt.get("message_id")
             return
 
         if data == "request_add_specialization":
             state = self._conversation_state.get(chat_id)
-            logger.warning(
-                "SPECIALIZATION BUTTON: chat_id=%s state=%r active_chat_ids=%s",
-                chat_id, state, list(self._conversation_state.keys())
-            )
             if not state or state.get("stage") != "specialization":
-                logger.error(
-                    "SPECIALIZATION SESSION INVALID: chat_id=%s state=%r",
-                    chat_id, state
-                )
                 await self._api_call(
                     client,
                     "sendMessage",
@@ -1432,15 +1495,7 @@ class TelegramBotRunner:
             return
 
         text = str(message.get("text") or "").strip()
-        from_user = message.get("from") or {}
-        telegram_user_id = from_user.get("id")
-        logger.info(
-            "Telegram message received: user_id=%s chat_id=%s text=%r state_keys=%s",
-            telegram_user_id,
-            chat_id,
-            text,
-            list(self._conversation_state.keys()),
-        )
+        logger.debug("Telegram private message received (text_present=%s)", bool(text))
         state = self._conversation_state.get(chat_id)
 
         if state is not None and text != "/start":
@@ -1455,11 +1510,46 @@ class TelegramBotRunner:
 
             stage = state.get("stage")
 
-            logger.info("DESCRIPTION DEBUG: stage=%r text=%r", state.get("stage"), text)
-            logger.info("DESCRIPTION CHECK: chat_id=%s stage=%r text_present=%s", chat_id, stage, bool(text))
-            if stage in ("description_input", "description") and text:
+            if stage in (
+                "description_input",
+                "specialization_search_input",
+            ):
+                expected_prompt_id = state.get("expected_prompt_message_id")
+                reply = message.get("reply_to_message") or {}
+                reply_message_id = reply.get("message_id")
+                if (
+                    not isinstance(expected_prompt_id, int)
+                    or reply_message_id != expected_prompt_id
+                ):
+                    await self._api_call(
+                        client,
+                        "sendMessage",
+                        {
+                            "chat_id": chat_id,
+                            "text": "يرجى الرد مباشرة على رسالة السؤال لإكمال هذه الخطوة.",
+                        },
+                    )
+                    return
+
+                message_id = message.get("message_id")
+                last_message_id = state.get("last_processed_message_id")
+                if (
+                    isinstance(message_id, int)
+                    and isinstance(last_message_id, int)
+                    and message_id <= last_message_id
+                ):
+                    logger.debug(
+                        "Ignoring duplicate request input message %s",
+                        message_id,
+                    )
+                    return
+
+            if stage == "description_input" and text:
                 state["description"] = text
                 state["stage"] = "specialization"
+                state.pop("expected_prompt_message_id", None)
+                if isinstance(message.get("message_id"), int):
+                    state["last_processed_message_id"] = message["message_id"]
 
                 await self._api_call(
                     client,
@@ -1486,6 +1576,9 @@ class TelegramBotRunner:
                 return
 
             if stage == "specialization_search_input" and text:
+                if isinstance(message.get("message_id"), int):
+                    state["last_processed_message_id"] = message["message_id"]
+                state.pop("expected_prompt_message_id", None)
                 specializations = [
                     "تقنية المعلومات",
                     "علوم الحاسوب",
@@ -1516,6 +1609,7 @@ class TelegramBotRunner:
                 ]
 
                 if not matches:
+                    state["stage"] = "specialization"
                     await self._api_call(
                         client,
                         "sendMessage",

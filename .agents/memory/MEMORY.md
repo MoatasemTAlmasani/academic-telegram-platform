@@ -1,0 +1,1 @@
+- [Telegram token log redaction](telegram-token-log-redaction.md) — redact token-bearing API URLs in both log messages and exception traces.
