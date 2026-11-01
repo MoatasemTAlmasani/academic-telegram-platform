@@ -36,3 +36,7 @@ dev = [
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-ra"
+
+
+[tool.vercel]
+entrypoint = "backend.app.main:app"
