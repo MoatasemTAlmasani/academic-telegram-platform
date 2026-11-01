@@ -3,3 +3,26 @@
 
 # No need to store the pnpm store twice.
 .local
+.cache
+.env
+.env.*
+!.env.example
+.venv
+.pythonlibs
+node_modules
+__pycache__
+*.py[cod]
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+logs
+uploads
+.tmp

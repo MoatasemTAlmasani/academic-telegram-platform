@@ -5,7 +5,16 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Enum as SAEnum,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.models.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -41,6 +50,11 @@ class ServiceRequest(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base)
         SAEnum(ServiceRequestStatus, name="service_request_status"),
         nullable=False,
         default=ServiceRequestStatus.NEW,
+    )
+    telegram_update_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        unique=True,
+        nullable=True,
     )
     priority: Mapped[RequestPriority] = mapped_column(
         SAEnum(RequestPriority, name="request_priority"),

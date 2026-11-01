@@ -20,6 +20,10 @@ from database.models.quotes import Quote
 from database.models.requests import ServiceRequest
 from database.models.settings import AppSettings
 from database.models.telegram import TelegramDestination, TelegramValidationLog
+from database.models.telegram_runtime import (
+    TelegramConversationState,
+    TelegramProcessedUpdate,
+)
 
 __all__ = [
     "AppSettings",
@@ -40,6 +44,8 @@ __all__ = [
     "ServiceRequest",
     "StaffProfile",
     "TelegramDestination",
+    "TelegramConversationState",
+    "TelegramProcessedUpdate",
     "TelegramValidationLog",
     "User",
     "campaign_destinations",

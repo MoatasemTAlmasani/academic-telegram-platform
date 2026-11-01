@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from backend.app.core.config import get_settings
+from database.url import normalize_async_database_url
 
 
 def _get_database_url() -> str:
@@ -24,7 +25,7 @@ def _get_database_url() -> str:
             "Set database_url in the environment before using the database."
         )
 
-    return database_url
+    return normalize_async_database_url(database_url)
 
 
 DATABASE_URL = _get_database_url()
@@ -32,6 +33,15 @@ DATABASE_URL = _get_database_url()
 engine = create_async_engine(
     DATABASE_URL,
     pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=5,
+    pool_timeout=10,
+    pool_recycle=1800,
+    connect_args=(
+        {"connect_timeout": 5}
+        if DATABASE_URL.startswith("postgresql+psycopg://")
+        else {"timeout": 5, "command_timeout": 30}
+    ),
     future=True,
 )
 

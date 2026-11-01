@@ -21,6 +21,22 @@ __pycache__/
 .coverage
 htmlcov/
 .env
+.env.*
+!.env.example
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+logs/
+uploads/
+.tmp/
 
 # IDEs and editors
 /.idea

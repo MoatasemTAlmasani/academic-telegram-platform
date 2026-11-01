@@ -5,7 +5,7 @@ import asyncio
 import httpx
 
 from backend.app.main import app
-from backend.app.core.config import get_settings
+from backend.app.api.routes import health
 
 
 async def get(path: str) -> httpx.Response:
@@ -36,22 +36,58 @@ def test_versioned_health_check() -> None:
     assert response.json()["success"] is True
 
 
-def test_readiness_check_reports_unconfigured_dependencies(monkeypatch) -> None:
-    monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.delenv("REDIS_URL", raising=False)
-    get_settings.cache_clear()
+class FakeConnection:
+    async def __aenter__(self):
+        return self
 
-    try:
-        response = asyncio.run(get("/health/ready"))
-    finally:
-        get_settings.cache_clear()
+    async def __aexit__(self, *_args):
+        return None
+
+    async def execute(self, _statement):
+        return 1
+
+
+class FakeEngine:
+    def connect(self):
+        return FakeConnection()
+
+
+class FailingEngine:
+    def connect(self):
+        raise OSError("database unavailable")
+
+
+class FakeSettings:
+    database_url = "postgresql://redacted"
+    redis_url = None
+
+
+def test_readiness_check_requires_a_database_probe() -> None:
+    from starlette.responses import Response
+
+    response = Response()
+    result = asyncio.run(
+        health._readiness_response(FakeSettings(), FakeEngine(), response)
+    )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "success": True,
-        "status": "ready",
-        "dependencies": {
-            "database": "not_configured",
-            "redis": "not_configured",
-        },
+    assert result.success is True
+    assert result.status == "ready"
+    assert result.dependencies == {
+        "database": "available",
+        "redis": "not_configured",
     }
+
+
+def test_readiness_check_returns_503_when_database_probe_fails() -> None:
+    from starlette.responses import Response
+
+    response = Response()
+    result = asyncio.run(
+        health._readiness_response(FakeSettings(), FailingEngine(), response)
+    )
+
+    assert response.status_code == 503
+    assert result.success is False
+    assert result.status == "degraded"
+    assert result.dependencies["database"] == "unavailable"

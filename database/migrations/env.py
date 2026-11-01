@@ -6,6 +6,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from backend.app.core.config import get_settings
+from database.url import normalize_async_database_url
 from database.models import Base
 
 
@@ -26,7 +27,7 @@ def get_database_url() -> str:
             "DATABASE_URL is not configured."
         )
 
-    return database_url
+    return normalize_async_database_url(database_url)
 
 
 def run_migrations_offline() -> None:

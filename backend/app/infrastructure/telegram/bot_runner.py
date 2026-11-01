@@ -11,12 +11,17 @@ from uuid import UUID
 
 import httpx
 from pydantic import SecretStr
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from database.models.catalog import Category, Service
 from database.models.enums import RequestPriority, ServiceRequestStatus, UserStatus
-from database.models.identity import User
+from database.models.identity import Role, User
 from database.models.requests import ServiceRequest
+from database.models.telegram_runtime import (
+    TelegramConversationState,
+    TelegramProcessedUpdate,
+)
 
 CATEGORY_PAGE_SIZE = 6
 SERVICE_PAGE_SIZE = 8
@@ -45,11 +50,13 @@ class TelegramBotRunner:
         self._conversation_state: dict[int, dict[str, Any]] = {}
         self._processed_update_ids: set[int] = set()
         self._processed_update_order: deque[int] = deque()
+        self._active_update_id: int | None = None
 
     async def start(self) -> None:
         if self._task and not self._task.done():
             return
 
+        await self._load_durable_state()
         self._stop_event.clear()
         self._task = asyncio.create_task(
             self._run(),
@@ -74,6 +81,11 @@ class TelegramBotRunner:
 
         logger.info("Telegram long polling stopped.")
 
+    async def wait(self) -> None:
+        """Wait until the polling task ends, propagating an unexpected failure."""
+        if self._task:
+            await self._task
+
     async def _run(self) -> None:
         backoff = 2.0
 
@@ -95,6 +107,7 @@ class TelegramBotRunner:
                 logger.exception(
                     "Unable to prepare Telegram polling mode."
                 )
+                raise
 
             while not self._stop_event.is_set():
                 try:
@@ -129,19 +142,43 @@ class TelegramBotRunner:
                     for update in updates:
                         update_id = update.get("update_id")
 
-                        if isinstance(update_id, int):
-                            self._offset = update_id + 1
+                        if (
+                            isinstance(update_id, int)
+                            and await self._is_update_processed(update_id)
+                        ):
+                            self._offset = max(self._offset, update_id + 1)
+                            continue
 
                         try:
+                            self._active_update_id = (
+                                update_id if isinstance(update_id, int) else None
+                            )
                             await self._handle_update(
                                 client,
                                 update,
                             )
+                            chat_id = self._chat_id_for_update(update)
+                            if chat_id is not None:
+                                await self._persist_conversation_state(chat_id)
+                            if isinstance(update_id, int):
+                                await self._mark_update_processed(
+                                    update_id,
+                                    self._update_type(update),
+                                )
+                                self._offset = max(
+                                    self._offset,
+                                    update_id + 1,
+                                )
                         except Exception:
                             logger.exception(
                                 "Failed to process Telegram update %s",
                                 update_id,
                             )
+                            # Keep the offset unchanged so Telegram redelivers
+                            # this update after a transient processing failure.
+                            break
+                        finally:
+                            self._active_update_id = None
 
                 except asyncio.CancelledError:
                     raise
@@ -197,16 +234,105 @@ class TelegramBotRunner:
 
         if isinstance(message, dict):
             await self._handle_message(client, message)
-            if isinstance(update_id, int):
-                self._remember_processed_update(update_id)
             return
 
         callback_query = update.get("callback_query")
 
         if isinstance(callback_query, dict):
             await self._handle_callback_query(client, callback_query)
-            if isinstance(update_id, int):
-                self._remember_processed_update(update_id)
+
+    @staticmethod
+    def _update_type(update: dict[str, Any]) -> str:
+        return next(
+            (
+                key
+                for key in update
+                if key != "update_id" and isinstance(update.get(key), dict)
+            ),
+            "unknown",
+        )[:80]
+
+    @staticmethod
+    def _chat_id_for_update(update: dict[str, Any]) -> int | None:
+        message = update.get("message")
+        if isinstance(message, dict):
+            chat_id = (message.get("chat") or {}).get("id")
+            return chat_id if isinstance(chat_id, int) else None
+
+        callback_query = update.get("callback_query")
+        if isinstance(callback_query, dict):
+            message = callback_query.get("message") or {}
+            chat_id = (message.get("chat") or {}).get("id")
+            return chat_id if isinstance(chat_id, int) else None
+        return None
+
+    async def _load_durable_state(self) -> None:
+        async with SessionLocal() as session:
+            states = await session.execute(
+                select(TelegramConversationState)
+            )
+            self._conversation_state = {
+                int(row.chat_id): dict(row.state)
+                for row in states.scalars()
+            }
+            processed = await session.execute(
+                select(TelegramProcessedUpdate.update_id)
+                .order_by(TelegramProcessedUpdate.update_id.desc())
+                .limit(1024)
+            )
+            update_ids = list(reversed(processed.scalars().all()))
+            self._processed_update_order = deque(update_ids)
+            self._processed_update_ids = set(update_ids)
+            latest = await session.execute(
+                select(func.max(TelegramProcessedUpdate.update_id))
+            )
+            last_update_id = latest.scalar_one_or_none()
+            self._offset = int(last_update_id or -1) + 1
+
+    async def _is_update_processed(self, update_id: int) -> bool:
+        if update_id in self._processed_update_ids:
+            return True
+        async with SessionLocal() as session:
+            return (
+                await session.get(TelegramProcessedUpdate, update_id)
+            ) is not None
+
+    async def _mark_update_processed(self, update_id: int, update_type: str) -> None:
+        async with SessionLocal() as session:
+            statement = (
+                pg_insert(TelegramProcessedUpdate)
+                .values(update_id=update_id, update_type=update_type)
+                .on_conflict_do_nothing(
+                    index_elements=[TelegramProcessedUpdate.update_id]
+                )
+            )
+            await session.execute(statement)
+            if update_id % 100 == 0:
+                await session.execute(
+                    delete(TelegramProcessedUpdate).where(
+                        TelegramProcessedUpdate.update_id < update_id - 10_000
+                    )
+                )
+            await session.commit()
+        self._remember_processed_update(update_id)
+
+    async def _persist_conversation_state(self, chat_id: int) -> None:
+        state = self._conversation_state.get(chat_id)
+        async with SessionLocal() as session:
+            record = await session.get(TelegramConversationState, chat_id)
+            if state is None:
+                if record is not None:
+                    await session.delete(record)
+            elif record is None:
+                session.add(
+                    TelegramConversationState(
+                        chat_id=chat_id,
+                        state=dict(state),
+                    )
+                )
+            else:
+                record.state = dict(state)
+            await session.commit()
 
     def _remember_processed_update(self, update_id: int) -> None:
         """Remember recent update IDs so a repeated Telegram delivery is inert."""
@@ -894,19 +1020,31 @@ class TelegramBotRunner:
                         )
                         return
 
-                    request = ServiceRequest(
-                        customer_id=user.id,
-                        service_id=service.id,
-                        title=service.name,
-                        description=state.get("description"),
-                        specialization=state.get("specialization"),
-                        deadline=state.get("deadline"),
-                        status=ServiceRequestStatus.NEW,
-                        priority=RequestPriority.NORMAL,
-                    )
+                    existing_request = None
+                    if self._active_update_id is not None:
+                        existing_result = await session.execute(
+                            select(ServiceRequest).where(
+                                ServiceRequest.telegram_update_id
+                                == self._active_update_id
+                            )
+                        )
+                        existing_request = existing_result.scalar_one_or_none()
 
-                    session.add(request)
-                    await session.commit()
+                    if existing_request is None:
+                        request = ServiceRequest(
+                            customer_id=user.id,
+                            service_id=service.id,
+                            title=service.name,
+                            description=state.get("description"),
+                            specialization=state.get("specialization"),
+                            deadline=state.get("deadline"),
+                            status=ServiceRequestStatus.NEW,
+                            priority=RequestPriority.NORMAL,
+                            telegram_update_id=self._active_update_id,
+                        )
+
+                        session.add(request)
+                        await session.commit()
 
             except Exception:
                 logger.exception(
@@ -1489,10 +1627,24 @@ class TelegramBotRunner:
                 )
                 session.add(user)
             else:
+                if str(user.status).upper() != UserStatus.ACTIVE.value:
+                    return None
                 user.username = username
                 user.first_name = first_name
                 user.last_name = last_name
-                user.status = UserStatus.ACTIVE
+
+            role_result = await session.execute(
+                select(Role).where(Role.name == "customer")
+            )
+            customer_role = role_result.scalar_one_or_none()
+            if customer_role is None:
+                customer_role = Role(
+                    name="customer",
+                    description="Customer account",
+                )
+                session.add(customer_role)
+            if not any(role.name == "customer" for role in user.roles):
+                user.roles.append(customer_role)
 
             await session.commit()
             await session.refresh(user)

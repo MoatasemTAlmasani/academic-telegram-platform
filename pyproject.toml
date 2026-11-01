@@ -5,6 +5,7 @@ description = "Phase 0 foundation for a Telegram-based academic and student serv
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
+    "httpx>=0.28.1",
     "psycopg[binary]>=3.3.6",
     "pwdlib[argon2]>=0.3.0",
     "pydantic-settings>=2.15.0",
@@ -15,7 +16,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "pytest>=9.1.1",
 ]
 
@@ -29,7 +29,6 @@ infra = [
 
 [project.optional-dependencies]
 dev = [
-    "httpx>=0.28.1",
     "pytest>=9.1.1",
 ]
 
