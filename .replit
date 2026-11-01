@@ -15,7 +15,7 @@ localPort = 8081
 externalPort = 8081
 
 [nix]
-packages = ["iproute_mptcp", "nano", "nodejs-12_x", "psmisc"]
+packages = ["iproute_mptcp", "nano", "nodejs-12_x", "psmisc", "tecoc"]
 
 [workflows]
 runButton = "Project"
