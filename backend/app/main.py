@@ -115,6 +115,8 @@ async def public_website_page(page_name: str):
         "portfolio",
         "team",
         "faq",
+        "why-ehteraf",
+        "testimonials",
         "contact",
     }
     if page_name not in public_pages:
