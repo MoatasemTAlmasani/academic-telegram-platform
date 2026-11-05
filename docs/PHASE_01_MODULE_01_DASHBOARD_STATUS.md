@@ -56,6 +56,16 @@ This file records implementation evidence and remaining work. It does not mark t
 11. Measure aggregate query performance and add indexes only when justified by query plans and measured access patterns.
 12. Record acceptance evidence and update this status to `VERIFIED` only after all required checks pass.
 
+## Additional security hardening in this delivery slice
+
+- Dashboard overview now derives the authenticated user's effective permission codes from the persisted RBAC relationships.
+- Recent request rows and overdue request details are returned only to users with `requests:read`.
+- Pending quotation details are returned only to users with `quotes:read`.
+- Recent audit activity is returned only to users with `audit:read`.
+- Service selector options and service-name analytics are returned only to users with `services:read`.
+- Aggregate dashboard metrics remain under the dashboard's existing `admin:access` gate; the detail collections above are separately permission-scoped.
+- Status: `IMPLEMENTED`; automated behavior tests and browser verification are still required before this can be marked `VERIFIED`.
+
 ## Validation status
 
 - The latest commit has no GitHub Actions workflow run attached, so no automated test result is available yet.
