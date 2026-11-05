@@ -19,7 +19,7 @@ This file records implementation evidence and remaining work. It does not mark t
 | Item | Status | Evidence |
 |---|---|---|
 | Selectable analytics period (7, 30, 90, 365 days) | IMPLEMENTED | `dashboard-period-analytics.js` |
-| Service filter across request-focused dashboard analytics and operations | IMPLEMENTED | `service_id` API filter and `dashboardServiceFilter` control |
+| Service filter across request-focused dashboard analytics and operations | IMPLEMENTED | `service_id` API filter and `dashboardServiceFilter` control; user/customer totals remain platform-wide |
 | Backend period parameter with bounded validation | IMPLEMENTED | `GET /api/v1/admin/dashboard/overview?period_days=` |
 | Period-scoped new-customer count | IMPLEMENTED | `metrics.new_customers` |
 | Total users, active users, and period new users KPI | IMPLEMENTED | `metrics.total_users`, `metrics.active_users`, `metrics.new_users` |
@@ -53,6 +53,12 @@ This file records implementation evidence and remaining work. It does not mark t
 10. Run browser-level checks for desktop/tablet/mobile, Arabic/English, RTL/LTR, light/dark, keyboard access, and chart text alternatives.
 11. Measure aggregate query performance and add indexes only when justified by query plans and measured access patterns.
 12. Record acceptance evidence and update this status to `VERIFIED` only after all required checks pass.
+
+## Validation status
+
+- The latest commit has no GitHub Actions workflow run attached, so no automated test result is available yet.
+- The Vercel check reports a build-rate-limit failure (`upgradeToPro/build-rate-limit`); this is not a passing build and does not establish a code test result.
+- No test suite or browser session was executed from this remote GitHub editing session.
 
 ## Safety
 
