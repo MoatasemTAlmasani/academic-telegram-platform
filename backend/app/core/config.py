@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     redis_url: str | None = None
     telegram_bot_token: SecretStr | None = None
     telegram_webhook_secret: SecretStr | None = None
+    telegram_mode: Literal["webhook", "polling"] = "webhook"
     telegram_auth_max_age_seconds: int = 300
     file_storage_dir: str = ".local/private_uploads"
     file_upload_max_bytes: int = 10 * 1024 * 1024
