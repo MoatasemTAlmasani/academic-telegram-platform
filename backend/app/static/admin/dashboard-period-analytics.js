@@ -11,7 +11,7 @@ function t(k){return text[lang()][k]||text.en[k]||k}
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function fmt(v){return new Intl.NumberFormat(lang()==="ar"?"ar":"en-US").format(Number(v||0))}
 function fmtDate(v){if(!v)return "—";var date=new Date(v);return Number.isNaN(date.getTime())?String(v):date.toLocaleString(lang()==="ar"?"ar":"en-US",{dateStyle:"medium",timeStyle:"short"})}
-function statusLabel(v){return String(v||"unknown").replace(/_/g," ").toLowerCase().replace(/\\b\\w/g,function(c){return c.toUpperCase()})}
+function statusLabel(v){return String(v||"unknown").replace(/_/g," ").toLowerCase().replace(/(^| )([a-z])/g,function(_,space,c){return space+c.toUpperCase()})}
 function refreshLabels(){
  var wrap=document.querySelector(".dashboard-period-control");if(wrap){wrap.querySelector("span").textContent=t("period");var select=wrap.querySelector("select");if(select){select.options[0].text=t("d7");select.options[1].text=t("d30");select.options[2].text=t("d90");select.options[3].text=t("d365");}}
  var serviceWrap=document.querySelector(".dashboard-service-control");if(serviceWrap){serviceWrap.querySelector("span").textContent=t("service");var serviceSelect=serviceWrap.querySelector("select");if(serviceSelect&&serviceSelect.options.length)serviceSelect.options[0].text=t("allServices");}
