@@ -30,6 +30,12 @@ async def telegram_webhook(
 ) -> dict[str, bool]:
     settings = get_settings()
 
+    if settings.telegram_mode != "webhook":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telegram webhook delivery is disabled in polling mode.",
+        )
+
     expected_secret = (
         settings.telegram_webhook_secret.get_secret_value().strip()
         if settings.telegram_webhook_secret
