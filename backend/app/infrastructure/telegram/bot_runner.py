@@ -27,7 +27,7 @@ CATEGORY_PAGE_SIZE = 6
 SERVICE_PAGE_SIZE = 8
 from database.session import SessionLocal, engine
 
-from backend.app.api.routes.telegram_webhook import (
+from backend.app.infrastructure.telegram.messages import (
     _main_menu,
     _welcome_text,
 )
