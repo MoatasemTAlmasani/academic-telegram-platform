@@ -37,6 +37,18 @@ from backend.app.infrastructure.telegram.messages import (
 logger = logging.getLogger(__name__)
 
 
+def _normalize_request_deadline(value: Any) -> datetime | None:
+    """Convert persisted Telegram date strings to timezone-aware datetimes."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        parsed_date = date.fromisoformat(value)
+        return datetime.combine(parsed_date, time.min, tzinfo=timezone.utc)
+    raise TypeError("Unsupported request deadline value.")
+
+
 class TelegramBotRunner:
     """Run the Telegram Bot API through long polling."""
 
@@ -1062,30 +1074,23 @@ class TelegramBotRunner:
 
             from uuid import UUID
 
-            deadline_value = state.get("deadline")
-            if isinstance(deadline_value, str):
-                try:
-                    deadline_date = date.fromisoformat(deadline_value)
-                    deadline_value = datetime.combine(
-                        deadline_date,
-                        time.min,
-                        tzinfo=timezone.utc,
-                    )
-                except ValueError:
-                    await self._api_call(
-                        client,
-                        "sendMessage",
-                        {
-                            "chat_id": chat_id,
-                            "text": (
-                                "⚠️ تاريخ الموعد غير صالح. "
-                                "يرجى تعديل الموعد ثم إعادة تأكيد الطلب."
-                            ),
-                        },
-                    )
-                    return
-            elif isinstance(deadline_value, datetime) and deadline_value.tzinfo is None:
-                deadline_value = deadline_value.replace(tzinfo=timezone.utc)
+            try:
+                deadline_value = _normalize_request_deadline(
+                    state.get("deadline")
+                )
+            except (TypeError, ValueError):
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": (
+                            "⚠️ تاريخ الموعد غير صالح. "
+                            "يرجى تعديل الموعد ثم إعادة تأكيد الطلب."
+                        ),
+                    },
+                )
+                return
 
             try:
                 async with SessionLocal() as session:
