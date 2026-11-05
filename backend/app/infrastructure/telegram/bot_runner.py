@@ -13,6 +13,7 @@ import httpx
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import selectinload
 
 from database.models.catalog import Category, Service
 from database.models.enums import RequestPriority, ServiceRequestStatus, UserStatus
