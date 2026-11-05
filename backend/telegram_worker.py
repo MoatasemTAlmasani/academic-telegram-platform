@@ -15,6 +15,8 @@ from database.session import engine
 async def run_worker() -> None:
     configure_logging()
     settings = get_settings()
+    if settings.telegram_mode != "polling":
+        raise RuntimeError("Set TELEGRAM_MODE=polling to enable the dedicated polling worker.")
     if settings.telegram_bot_token is None:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required for the bot worker.")
 

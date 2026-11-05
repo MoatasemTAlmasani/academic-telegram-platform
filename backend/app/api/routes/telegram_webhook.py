@@ -1,56 +1,22 @@
-"""Secure Telegram webhook and first-touch bot interaction."""
+"""Secure Telegram webhook backed by the full TelegramBotRunner handlers."""
 
 from __future__ import annotations
 
+import hmac
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
 from backend.app.core.config import get_settings
-from backend.app.infrastructure.telegram.client import TelegramClient
+from backend.app.infrastructure.telegram.bot_runner import TelegramBotRunner
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/telegram",
     tags=["telegram"],
 )
-
-
-def _main_menu() -> dict[str, Any]:
-    return {
-        "inline_keyboard": [
-            [{"text": "📚 الخدمات الأكاديمية", "callback_data": "services"}],
-            [
-                {"text": "📝 تقديم طلب", "callback_data": "new_request"},
-                {"text": "📂 طلباتي", "callback_data": "my_requests"},
-            ],
-            [
-                {"text": "🔔 إشعاراتي", "callback_data": "notifications"},
-                {"text": "👤 حسابي", "callback_data": "profile"},
-            ],
-            [{"text": "💬 الدعم والمساعدة", "callback_data": "support"}],
-        ]
-    }
-
-
-def _welcome_text(first_name: str | None) -> str:
-    name = first_name.strip() if first_name and first_name.strip() else ""
-    greeting = f"مرحبًا {name} 👋" if name else "مرحبًا بك 👋"
-
-    return (
-        f"{greeting}\n\n"
-        "🎓 <b>مرحبًا بك في منصة إحتراف للخدمات الأكاديمية</b>\n\n"
-        "يسعدنا وجودك معنا 🌟\n\n"
-        "من خلال المنصة يمكنك الوصول بسهولة إلى مجموعة من "
-        "<b>الخدمات الأكاديمية</b>، وتقديم طلبك، متابعة حالته، "
-        "والتواصل مع فريقنا — كل ذلك من مكان واحد.\n\n"
-        "📚 <b>خدمات أكاديمية متنوعة</b>\n"
-        "📝 <b>تقديم الطلبات بسهولة</b>\n"
-        "📂 <b>رفع الملفات ومتابعة الطلب</b>\n"
-        "🔔 <b>استقبال التحديثات والإشعارات</b>\n"
-        "💬 <b>دعم ومساعدة عند الحاجة</b>\n\n"
-        "اختر من القائمة أدناه للبدء 👇"
-    )
-
 
 
 @router.post(
@@ -64,51 +30,66 @@ async def telegram_webhook(
 ) -> dict[str, bool]:
     settings = get_settings()
 
+    if settings.telegram_mode != "webhook":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telegram webhook delivery is disabled in polling mode.",
+        )
+
     expected_secret = (
         settings.telegram_webhook_secret.get_secret_value().strip()
         if settings.telegram_webhook_secret
         else ""
     )
-
     if not expected_secret:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Telegram webhook secret is not configured.",
         )
 
-    if x_telegram_bot_api_secret_token != expected_secret:
+    supplied_secret = x_telegram_bot_api_secret_token or ""
+    if not hmac.compare_digest(supplied_secret, expected_secret):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid Telegram webhook secret.",
         )
 
-    body = await request.json()
-    message = body.get("message") or {}
-    chat = message.get("chat") or {}
-
-    if chat.get("type") != "private":
-        return {"ok": True}
-
-    chat_id = chat.get("id")
-
-    if not isinstance(chat_id, int):
-        return {"ok": True}
-
-    text = str(message.get("text") or "").strip()
-
-    if text == "/start" or text.startswith("/start "):
-        if not settings.telegram_bot_token:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Telegram bot token is not configured.",
-            )
-
-        telegram = TelegramClient(settings.telegram_bot_token)
-
-        await telegram.send_message(
-            chat_id=chat_id,
-            text=_welcome_text(chat.get("first_name")),
-            reply_markup=_main_menu(),
+    if settings.telegram_bot_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telegram bot token is not configured.",
         )
+
+    try:
+        update: Any = await request.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Telegram update payload.",
+        ) from exc
+
+    if not isinstance(update, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Telegram update payload must be a JSON object.",
+        )
+
+    update_id = update.get("update_id")
+    if type(update_id) is not int or update_id < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Telegram update_id must be a non-negative integer.",
+        )
+
+    runner = TelegramBotRunner(settings.telegram_bot_token)
+    try:
+        await runner.process_webhook_update(update)
+    except Exception:
+        # Do not log the raw update: it may contain private user messages.
+        logger.exception("Telegram webhook update processing failed (update_id=%s)", update_id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telegram update could not be processed; Telegram may retry delivery.",
+        ) from None
 
     return {"ok": True}

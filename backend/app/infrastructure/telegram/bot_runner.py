@@ -11,7 +11,7 @@ from uuid import UUID
 
 import httpx
 from pydantic import SecretStr
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from database.models.catalog import Category, Service
@@ -25,9 +25,9 @@ from database.models.telegram_runtime import (
 
 CATEGORY_PAGE_SIZE = 6
 SERVICE_PAGE_SIZE = 8
-from database.session import SessionLocal
+from database.session import SessionLocal, engine
 
-from backend.app.api.routes.telegram_webhook import (
+from backend.app.infrastructure.telegram.messages import (
     _main_menu,
     _welcome_text,
 )
@@ -341,6 +341,67 @@ class TelegramBotRunner:
         while len(self._processed_update_order) > 1024:
             expired_update_id = self._processed_update_order.popleft()
             self._processed_update_ids.discard(expired_update_id)
+
+    async def process_webhook_update(self, update: dict[str, Any]) -> bool:
+        """Process one webhook update using the same handlers as long polling.
+
+        A PostgreSQL advisory lock serializes duplicate deliveries of the same
+        Telegram update across concurrent serverless invocations.
+        """
+        update_id = update.get("update_id")
+        if type(update_id) is not int or update_id < 0:
+            raise ValueError("Telegram update_id must be a non-negative integer.")
+
+        # Lock both the update and its private chat. The chat lock prevents
+        # concurrent messages from overwriting each other's conversation state.
+        lock_keys = [f"telegram-update:{update_id}"]
+        chat_id = self._chat_id_for_update(update)
+        if chat_id is not None:
+            lock_keys.append(f"telegram-chat:{chat_id}")
+        lock_keys = sorted(set(lock_keys))
+
+        async with engine.connect() as lock_connection:
+            acquired: list[str] = []
+            try:
+                for lock_key in lock_keys:
+                    await lock_connection.execute(
+                        text("SELECT pg_advisory_lock(hashtextextended(:lock_key, 0))"),
+                        {"lock_key": lock_key},
+                    )
+                    acquired.append(lock_key)
+                await lock_connection.commit()
+
+                await self._load_durable_state()
+                if await self._is_update_processed(update_id):
+                    return False
+
+                self._active_update_id = update_id
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(
+                        connect=10.0,
+                        read=20.0,
+                        write=10.0,
+                        pool=10.0,
+                    )
+                ) as client:
+                    await self._handle_update(client, update)
+
+                if chat_id is not None:
+                    await self._persist_conversation_state(chat_id)
+
+                await self._mark_update_processed(
+                    update_id,
+                    self._update_type(update),
+                )
+                return True
+            finally:
+                self._active_update_id = None
+                for lock_key in reversed(acquired):
+                    await lock_connection.execute(
+                        text("SELECT pg_advisory_unlock(hashtextextended(:lock_key, 0))"),
+                        {"lock_key": lock_key},
+                    )
+                await lock_connection.commit()
 
     async def _send_deadline_calendar(
         self,

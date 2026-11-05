@@ -1,0 +1,36 @@
+name: Python tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - fix/telegram-webhook-full-handler
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python 3.12 / pytest
+    runs-on: ubuntu-latest
+    env:
+      # Import-time engine configuration only; tests inject fakes and never connect.
+      DATABASE_URL: postgresql+psycopg://ci:ci@127.0.0.1:5432/ci_test
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install locked project and test dependencies
+        run: uv sync --locked --all-groups --all-extras
+      - name: Run test suite
+        run: uv run --no-sync pytest -q --tb=short
