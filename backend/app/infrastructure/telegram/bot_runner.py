@@ -352,15 +352,25 @@ class TelegramBotRunner:
         if type(update_id) is not int or update_id < 0:
             raise ValueError("Telegram update_id must be a non-negative integer.")
 
-        # Keep a stable lock namespace separate from the worker's lifetime lock.
-        lock_id = 5_400_000_000 + update_id
+        # Lock both the update and its private chat. The chat lock prevents
+        # concurrent messages from overwriting each other's conversation state.
+        lock_ids = [5_400_000_000 + update_id]
+        chat_id = self._chat_id_for_update(update)
+        if chat_id is not None:
+            lock_ids.append(6_400_000_000 + chat_id)
+        lock_ids = sorted(set(lock_ids))
+
         async with engine.connect() as lock_connection:
-            await lock_connection.execute(
-                text("SELECT pg_advisory_lock(:lock_id)"),
-                {"lock_id": lock_id},
-            )
-            await lock_connection.commit()
+            acquired: list[int] = []
             try:
+                for lock_id in lock_ids:
+                    await lock_connection.execute(
+                        text("SELECT pg_advisory_lock(:lock_id)"),
+                        {"lock_id": lock_id},
+                    )
+                    acquired.append(lock_id)
+                await lock_connection.commit()
+
                 await self._load_durable_state()
                 if await self._is_update_processed(update_id):
                     return False
@@ -376,7 +386,6 @@ class TelegramBotRunner:
                 ) as client:
                     await self._handle_update(client, update)
 
-                chat_id = self._chat_id_for_update(update)
                 if chat_id is not None:
                     await self._persist_conversation_state(chat_id)
 
@@ -387,10 +396,11 @@ class TelegramBotRunner:
                 return True
             finally:
                 self._active_update_id = None
-                await lock_connection.execute(
-                    text("SELECT pg_advisory_unlock(:lock_id)"),
-                    {"lock_id": lock_id},
-                )
+                for lock_id in reversed(acquired):
+                    await lock_connection.execute(
+                        text("SELECT pg_advisory_unlock(:lock_id)"),
+                        {"lock_id": lock_id},
+                    )
                 await lock_connection.commit()
 
     async def _send_deadline_calendar(
