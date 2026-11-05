@@ -37,6 +37,7 @@ def test_dashboard_reporting_period_openapi_contract() -> None:
     assert parameter["schema"]["minimum"] == 7
     assert parameter["schema"]["maximum"] == 365
     assert parameter["schema"]["default"] == 30
+    assert any(item["name"] == "service_id" for item in operation["parameters"])
 
 
 def test_dashboard_overview_still_requires_authentication_with_valid_period() -> None:
