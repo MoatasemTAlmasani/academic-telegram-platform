@@ -49,7 +49,7 @@ async def overview(period_days: int = Query(default=30, ge=7, le=365), service_i
     metrics["completed_requests"]=await count(session,select(func.count(ServiceRequest.id)).where(*request_filters,ServiceRequest.status==ServiceRequestStatus.COMPLETED))
     metrics["overdue_requests"]=await count(session,select(func.count(ServiceRequest.id)).where(*request_filters,ServiceRequest.deadline.is_not(None),ServiceRequest.deadline<now,ServiceRequest.status.not_in(TERMINAL)))
     metrics["active_staff"]=await count(session,select(func.count(func.distinct(User.id))).select_from(User).join(User.roles).join(StaffProfile,StaffProfile.user_id==User.id).where(Role.name=="staff",User.deleted_at.is_(None),User.status==UserStatus.ACTIVE,StaffProfile.is_active.is_(True)))
-    metrics["pending_quotations"]=await count(session,select(func.count(Quote.id)).where(Quote.deleted_at.is_(None),Quote.status==QuoteStatus.SENT))
+    metrics["pending_quotations"]=await count(session,select(func.count(Quote.id)).join(ServiceRequest,Quote.request_id==ServiceRequest.id).where(Quote.deleted_at.is_(None),Quote.status==QuoteStatus.SENT,*request_filters))
     metrics["revenue"]=None
     metrics["outstanding_balance"]=None
     sr=await session.execute(select(ServiceRequest.status,func.count(ServiceRequest.id)).where(*request_filters,ServiceRequest.created_at>=since).group_by(ServiceRequest.status))
