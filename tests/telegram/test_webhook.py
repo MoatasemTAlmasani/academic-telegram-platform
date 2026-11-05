@@ -13,6 +13,7 @@ from backend.app.api.routes import telegram_webhook
 class FakeSettings:
     telegram_webhook_secret = SecretStr("test-webhook-secret")
     telegram_bot_token = SecretStr("test-bot-token")
+    telegram_mode = "webhook"
 
 
 class FakeRunner:
@@ -81,4 +82,22 @@ async def test_webhook_rejects_invalid_update_id() -> None:
         )
 
     assert response.status_code == 400
+    assert FakeRunner.received == []
+
+
+@pytest.mark.anyio
+async def test_webhook_is_disabled_in_polling_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    class PollingSettings(FakeSettings):
+        telegram_mode = "polling"
+
+    monkeypatch.setattr(telegram_webhook, "get_settings", lambda: PollingSettings())
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/telegram/webhook",
+            headers={"X-Telegram-Bot-Api-Secret-Token": "test-webhook-secret"},
+            json={"update_id": 99, "message": {}},
+        )
+
+    assert response.status_code == 503
     assert FakeRunner.received == []
