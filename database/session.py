@@ -52,14 +52,15 @@ def _engine_pool_options() -> dict[str, Any]:
 
 DATABASE_URL = _get_database_url()
 
+if DATABASE_URL.startswith("postgresql+psycopg://"):
+    _connect_args: dict[str, Any] = {"connect_timeout": 5}
+else:
+    _connect_args = {"timeout": 5, "command_timeout": 30}
+
 engine = create_async_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    connect_args=(
-        {"connect_timeout": 5}
-        if DATABASE_URL.startswith("postgresql+psycopg://")
-        else {"timeout": 5, "command_timeout": 30}
-    ),
+    connect_args=_connect_args,
     future=True,
     **_engine_pool_options(),
 )
