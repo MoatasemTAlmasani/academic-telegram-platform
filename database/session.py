@@ -31,17 +31,23 @@ def _get_database_url() -> str:
 
 
 def _engine_pool_options() -> dict[str, Any]:
-    """Avoid reusing async connections across Vercel serverless invocations.
+    """Choose a pool strategy compatible with the hosting event-loop lifecycle.
 
-    Vercel may execute requests on different event loops within a warm
-    serverless instance. SQLAlchemy pooled async connections must not be
-    transferred between event loops, so use NullPool there. A connection is
-    still held for the full lifetime of each checked-out AsyncConnection,
-    which preserves the webhook's PostgreSQL session advisory locks.
+    Vercel may reuse a warm serverless process across different event loops.
+    Async pooled connections must not be transferred between event loops, so
+    Vercel uses NullPool. Each checked-out connection nevertheless remains
+    open for its complete context-manager lifetime, preserving PostgreSQL
+    session advisory locks used to serialize webhook updates.
     """
     if os.getenv("VERCEL") == "1":
         return {"poolclass": NullPool}
-    return {}
+
+    return {
+        "pool_size": 5,
+        "max_overflow": 5,
+        "pool_timeout": 10,
+        "pool_recycle": 1800,
+    }
 
 
 DATABASE_URL = _get_database_url()
@@ -49,10 +55,6 @@ DATABASE_URL = _get_database_url()
 engine = create_async_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=5,
-    pool_timeout=10,
-    pool_recycle=1800,
     connect_args=(
         {"connect_timeout": 5}
         if DATABASE_URL.startswith("postgresql+psycopg://")
