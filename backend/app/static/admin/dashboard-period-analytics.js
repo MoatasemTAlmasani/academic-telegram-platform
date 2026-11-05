@@ -2,8 +2,8 @@
 "use strict";
 var period=30;
 var text={
-ar:{period:"فترة التحليل",d7:"آخر 7 أيام",d30:"آخر 30 يوماً",d90:"آخر 90 يوماً",d365:"آخر 12 شهراً",services:"أداء الخدمات خلال الفترة",operations:"مركز العمليات",requests:"الطلبات خلال الفترة",overdue:"طلبات متأخرة",quotes:"عروض أسعار بانتظار الرد",empty:"لا توجد بيانات خلال الفترة المحددة",error:"تعذر تحميل التحليلات"},
-en:{period:"Analytics period",d7:"Last 7 days",d30:"Last 30 days",d90:"Last 90 days",d365:"Last 12 months",services:"Service performance for period",operations:"Operations center",requests:"Requests in period",overdue:"Overdue requests",quotes:"Quotations awaiting response",empty:"No data for the selected period",error:"Unable to load analytics"}
+ar:{period:"فترة التحليل",d7:"آخر 7 أيام",d30:"آخر 30 يوماً",d90:"آخر 90 يوماً",d365:"آخر 12 شهراً",services:"أداء الخدمات خلال الفترة",operations:"مركز العمليات",requests:"الطلبات خلال الفترة",trendDescription:"الطلبات المنشأة خلال آخر {days} يوماً",overdue:"طلبات متأخرة",quotes:"عروض أسعار بانتظار الرد",empty:"لا توجد بيانات خلال الفترة المحددة",error:"تعذر تحميل التحليلات"},
+en:{period:"Analytics period",d7:"Last 7 days",d30:"Last 30 days",d90:"Last 90 days",d365:"Last 12 months",services:"Service performance for period",operations:"Operations center",requests:"Requests in period",trendDescription:"Requests created in the last {days} days",overdue:"Overdue requests",quotes:"Quotations awaiting response",empty:"No data for the selected period",error:"Unable to load analytics"}
 };
 function lang(){return document.documentElement.lang==="ar"?"ar":"en"}
 function t(k){return text[lang()][k]||text.en[k]||k}
@@ -31,6 +31,8 @@ function drawBars(items){
 function render(d){
  var metrics=d.metrics||{},alerts=d.alerts||{};
  var chip=document.querySelector("#page-dashboard .period-chip");if(chip)chip.textContent=t("d"+period);
+ ["new_customers","new_users","new_requests"].forEach(function(key){var card=document.querySelector('[data-metric="'+key+'"] .metric-value');if(card)card.textContent=fmt(metrics[key]||0)});
+ var trendDescription=document.querySelector("#page-dashboard .chart-surface .surface-head p");if(trendDescription)trendDescription.textContent=t("trendDescription").replace("{days}",String(period));
  var requests=document.getElementById("periodRequests");if(requests)requests.textContent=fmt(metrics.requests_in_period);
  var trend=d.requests_trend||[],max=Math.max(1,...trend.map(x=>Number(x.count||0))),chart=document.getElementById("trendChart");
  if(chart)chart.innerHTML=trend.length?'<div class="chart-bars">'+trend.map(x=>'<div class="chart-bar" title="'+esc(x.date)+': '+fmt(x.count)+'" style="height:'+Math.max(3,Number(x.count||0)/max*100)+'%"></div>').join("")+'</div><div class="chart-labels"><span>'+esc(trend[0].date)+'</span><span>'+esc(trend[Math.floor(trend.length/2)].date)+'</span><span>'+esc(trend[trend.length-1].date)+'</span></div>':'<div class="empty-cell">'+t("empty")+'</div>';
