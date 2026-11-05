@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EHTERAF — Administration Center</title>
+    <title>EHTERAF — Administration</title>
 
     <style>
         * {
@@ -722,53 +722,24 @@
 <body>
 
 <div id="loginScreen" class="login-screen">
-    <div class="eh-login-shell">
-        <section class="eh-login-brand" aria-label="EHTERAF platform">
-            <div class="eh-login-brand-top">
-                <span class="eh-login-brand-mark">E</span>
-                <span class="eh-login-brand-name">EHTERAF</span>
-            </div>
-            <div class="eh-login-brand-copy">
-                <span class="eh-login-overline" data-login-copy="overline">ACADEMIC &amp; TECHNICAL SERVICES</span>
-                <h2 data-login-copy="brandTitle">One platform. Complete control.</h2>
-                <p data-login-copy="brandDescription">A unified workspace to manage customers, services, requests, teams and operations with confidence.</p>
-            </div>
-            <div class="eh-login-brand-footer">
-                <span class="eh-login-status-dot"></span>
-                <span data-login-copy="secureWorkspace">Secure administration workspace</span>
-            </div>
-        </section>
+    <div class="login-card">
+        <div class="brand-mark">A</div>
+        <h1>Academic Platform</h1>
+        <p class="muted">Administrator Control Center</p>
 
-        <section class="login-card eh-login-card">
-            <div class="eh-login-card-top">
-                <div>
-                    <span class="eh-login-overline" data-login-copy="welcome">WELCOME BACK</span>
-                    <h1 data-login-copy="title">Sign in to EHTERAF</h1>
-                    <p class="muted" data-login-copy="subtitle">Access your administration workspace.</p>
-                </div>
-                <button id="eh-login-language" class="eh-login-language" type="button" aria-label="Change language">ع</button>
-            </div>
+        <form id="loginForm">
+            <label for="username">Username</label>
+            <input id="username" type="text" autocomplete="username" required>
 
-            <form id="loginForm">
-                <label for="username" data-login-copy="username">Username or email</label>
-                <input id="username" name="username" type="text" autocomplete="username" placeholder="Enter your username or email" data-login-placeholder="username" required>
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password" required>
 
-                <label for="password" data-login-copy="password">Password</label>
-                <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" data-login-placeholder="password" required>
+            <button id="loginButton" class="primary-btn" type="submit">
+                Sign In
+            </button>
 
-                <button id="loginButton" class="primary-btn" type="submit" data-login-copy="submit">
-                    Sign in securely
-                </button>
-
-                <div id="loginError" class="error hidden" role="alert" aria-live="polite"></div>
-            </form>
-
-            <div class="eh-login-security">
-                <span aria-hidden="true">▣</span>
-                <span data-login-copy="securityNote">Your access is protected by EHTERAF authentication and role-based permissions.</span>
-            </div>
-            <div class="eh-login-copyright">© EHTERAF · <span data-login-copy="copyright">Administration Center</span></div>
-        </section>
+            <div id="loginError" class="error hidden"></div>
+        </form>
     </div>
 </div>
 
