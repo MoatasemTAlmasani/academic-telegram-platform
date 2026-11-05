@@ -1670,7 +1670,7 @@ class TelegramBotRunner:
 
         async with SessionLocal() as session:
             result = await session.execute(
-                select(User).where(
+                select(User).options(selectinload(User.roles)).where(
                     User.telegram_user_id == telegram_user_id,
                     User.deleted_at.is_(None),
                 )
