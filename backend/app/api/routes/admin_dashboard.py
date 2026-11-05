@@ -60,10 +60,21 @@ async def overview(period_days: int = Query(default=30, ge=7, le=365), current_u
         customer=item.customer
         cname=" ".join(x for x in (getattr(customer,"first_name",None),getattr(customer,"last_name",None)) if x) or getattr(customer,"username",None) or str(item.customer_id)
         recent.append({"id":str(item.id),"title":item.title,"customer":cname,"service":item.service.name if item.service else None,"status":item.status.value,"priority":item.priority.value,"deadline":item.deadline.isoformat() if item.deadline else None,"created_at":item.created_at.isoformat()})
+    overdue_result=await session.execute(select(ServiceRequest).options(selectinload(ServiceRequest.customer)).where(ServiceRequest.deleted_at.is_(None),ServiceRequest.deadline.is_not(None),ServiceRequest.deadline<now,ServiceRequest.status.not_in(TERMINAL)).order_by(ServiceRequest.deadline.asc()).limit(5))
+    overdue_items=[]
+    for item in overdue_result.scalars().all():
+        customer=item.customer
+        customer_name=" ".join(x for x in (getattr(customer,"first_name",None),getattr(customer,"last_name",None)) if x) or getattr(customer,"username",None) or str(item.customer_id)
+        overdue_items.append({"id":str(item.id),"title":item.title,"customer":customer_name,"deadline":item.deadline.isoformat(),"status":item.status.value})
+    pending_quote_result=await session.execute(select(Quote).options(selectinload(Quote.service_request)).where(Quote.deleted_at.is_(None),Quote.status==QuoteStatus.SENT).order_by(Quote.created_at.desc()).limit(5))
+    pending_quote_items=[]
+    for quote in pending_quote_result.scalars().all():
+        request=quote.service_request
+        pending_quote_items.append({"id":str(quote.id),"quote_number":quote.quote_number,"request_id":str(quote.request_id),"request_title":request.title if request else "","expires_at":quote.expires_at.isoformat() if quote.expires_at else None})
     ar=await session.execute(select(AuditLog).options(selectinload(AuditLog.actor)).order_by(AuditLog.created_at.desc()).limit(10))
     activity=[]
     for event in ar.scalars().all():
         actor=event.actor
         aname=" ".join(x for x in (getattr(actor,"first_name",None),getattr(actor,"last_name",None)) if x) or getattr(actor,"username",None) or "System"
         activity.append({"id":str(event.id),"actor":aname,"action":event.action,"resource_type":event.resource_type,"resource_id":str(event.resource_id) if event.resource_id else None,"description":event.description,"created_at":event.created_at.isoformat()})
-    return {"generated_at":now.isoformat(),"period_days":period_days,"metrics":metrics,"availability":{"revenue":"Unavailable until an invoice/payment ledger exists.","outstanding_balance":"Unavailable until receivables are implemented.","staff_performance":"Unavailable until requests support staff assignment.","branch_performance":"Unavailable until organization and branch scopes exist."},"requests_by_status":by_status,"requests_trend":trend,"requests_by_service":by_service,"recent_requests":recent,"recent_activity":activity,"alerts":{"overdue_requests":metrics["overdue_requests"],"pending_quotations":metrics["pending_quotations"]}}
+    return {"generated_at":now.isoformat(),"period_days":period_days,"metrics":metrics,"availability":{"revenue":"Unavailable until an invoice/payment ledger exists.","outstanding_balance":"Unavailable until receivables are implemented.","staff_performance":"Unavailable until requests support staff assignment.","branch_performance":"Unavailable until organization and branch scopes exist."},"requests_by_status":by_status,"requests_trend":trend,"requests_by_service":by_service,"recent_requests":recent,"recent_activity":activity,"overdue_items":overdue_items,"pending_quotation_items":pending_quote_items,"alerts":{"overdue_requests":metrics["overdue_requests"],"pending_quotations":metrics["pending_quotations"]}}
