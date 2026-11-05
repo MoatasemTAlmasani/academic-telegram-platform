@@ -2,8 +2,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from backend.app.api.router import api_router
 from backend.app.api.routes.health import router as health_router
@@ -105,6 +105,40 @@ async def public_service_worker():
         headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
     )
 
+
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def public_robots(request: Request):
+    base_url = str(request.base_url).rstrip("/")
+    return PlainTextResponse(
+        "User-agent: *\\n"
+        "Allow: /\\n"
+        "Disallow: /admin/\\n"
+        "Disallow: /api/\\n"
+        "Sitemap: " + base_url + "/sitemap.xml\\n"
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def public_sitemap(request: Request):
+    base_url = str(request.base_url).rstrip("/")
+    pages = [
+        "", "about", "academic-services", "technical-services",
+        "portfolio", "team", "why-ehteraf", "testimonials", "faq", "contact",
+    ]
+    urls = "".join(
+        f"<url><loc>{base_url}/{page}</loc></url>" for page in pages
+    )
+    return Response(
+        content=(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            + urls +
+            '</urlset>'
+        ),
+        media_type="application/xml",
+    )
 
 @app.get("/{page_name}", include_in_schema=False)
 async def public_website_page(page_name: str):
