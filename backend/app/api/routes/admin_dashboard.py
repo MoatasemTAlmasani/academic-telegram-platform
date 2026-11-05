@@ -64,7 +64,7 @@ async def overview(period_days: int = Query(default=30, ge=7, le=365), service_i
     tr=await session.execute(select(func.date(ServiceRequest.created_at),func.count(ServiceRequest.id)).where(*request_filters,ServiceRequest.created_at>=since).group_by(func.date(ServiceRequest.created_at)).order_by(func.date(ServiceRequest.created_at)))
     trend=[{"date":str(day),"count":int(n)} for day,n in tr.all()]
     sv=await session.execute(select(Service.name,func.count(ServiceRequest.id)).join(ServiceRequest,ServiceRequest.service_id==Service.id).where(*request_filters,ServiceRequest.created_at>=since,Service.deleted_at.is_(None)).group_by(Service.id,Service.name).order_by(func.count(ServiceRequest.id).desc()).limit(8))
-    by_service=[{"service":name,"count":int(n)} for name,n in sv.all()]
+    by_service=[{"service":name,"count":int(n)} for name,n in sv.all()] if can_read_services else []
     recent=[]
     if can_read_requests:
         rr=await session.execute(select(ServiceRequest).options(selectinload(ServiceRequest.customer),selectinload(ServiceRequest.service)).where(*request_filters).order_by(ServiceRequest.created_at.desc()).limit(8))
