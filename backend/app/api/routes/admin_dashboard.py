@@ -22,6 +22,9 @@ TERMINAL = (ServiceRequestStatus.COMPLETED, ServiceRequestStatus.CANCELLED, Serv
 async def count(session: AsyncSession, statement) -> int:
     result = await session.execute(statement)
     return int(result.scalar_one() or 0)
+def has_dashboard_permission(permission_codes: set[str], permission: Permission) -> bool:
+    """Check a persisted permission code before returning dashboard detail data."""
+    return permission.value in permission_codes
 @router.get("/access", dependencies=[Depends(require_permission(Permission.ADMIN_ACCESS))])
 async def access_summary(current_user=Depends(get_current_user), session: AsyncSession=Depends(get_session)):
     result = await session.execute(select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.id == current_user.id))
@@ -35,10 +38,10 @@ async def overview(period_days: int = Query(default=30, ge=7, le=365), service_i
     access_result=await session.execute(select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.id==current_user.id))
     access_user=access_result.scalar_one()
     user_permissions={permission.code for role in access_user.roles for permission in role.permissions}
-    can_read_requests=Permission.REQUESTS_READ.value in user_permissions
-    can_read_services=Permission.SERVICES_READ.value in user_permissions
-    can_read_quotes=Permission.QUOTES_READ.value in user_permissions
-    can_read_audit=Permission.AUDIT_READ.value in user_permissions
+    can_read_requests=has_dashboard_permission(user_permissions,Permission.REQUESTS_READ)
+    can_read_services=has_dashboard_permission(user_permissions,Permission.SERVICES_READ)
+    can_read_quotes=has_dashboard_permission(user_permissions,Permission.QUOTES_READ)
+    can_read_audit=has_dashboard_permission(user_permissions,Permission.AUDIT_READ)
     if service_id is not None:
         request_filters.append(ServiceRequest.service_id==service_id)
     metrics={}
