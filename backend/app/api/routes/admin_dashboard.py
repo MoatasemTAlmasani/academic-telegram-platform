@@ -32,6 +32,13 @@ async def overview(period_days: int = Query(default=30, ge=7, le=365), service_i
     now=datetime.now(timezone.utc)
     since=now-timedelta(days=period_days)
     request_filters=[ServiceRequest.deleted_at.is_(None)]
+    access_result=await session.execute(select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.id==current_user.id))
+    access_user=access_result.scalar_one()
+    user_permissions={permission.code for role in access_user.roles for permission in role.permissions}
+    can_read_requests=Permission.REQUESTS_READ.value in user_permissions
+    can_read_services=Permission.SERVICES_READ.value in user_permissions
+    can_read_quotes=Permission.QUOTES_READ.value in user_permissions
+    can_read_audit=Permission.AUDIT_READ.value in user_permissions
     if service_id is not None:
         request_filters.append(ServiceRequest.service_id==service_id)
     metrics={}
@@ -58,29 +65,48 @@ async def overview(period_days: int = Query(default=30, ge=7, le=365), service_i
     trend=[{"date":str(day),"count":int(n)} for day,n in tr.all()]
     sv=await session.execute(select(Service.name,func.count(ServiceRequest.id)).join(ServiceRequest,ServiceRequest.service_id==Service.id).where(*request_filters,ServiceRequest.created_at>=since,Service.deleted_at.is_(None)).group_by(Service.id,Service.name).order_by(func.count(ServiceRequest.id).desc()).limit(8))
     by_service=[{"service":name,"count":int(n)} for name,n in sv.all()]
-    rr=await session.execute(select(ServiceRequest).options(selectinload(ServiceRequest.customer),selectinload(ServiceRequest.service)).where(*request_filters).order_by(ServiceRequest.created_at.desc()).limit(8))
     recent=[]
-    for item in rr.scalars().all():
+    if can_read_requests:
+        rr=await session.execute(select(ServiceRequest).options(selectinload(ServiceRequest.customer),selectinload(ServiceRequest.service)).where(*request_filters).order_by(ServiceRequest.created_at.desc()).limit(8))
+        recent_rows=rr.scalars().all()
+    else:
+        recent_rows=[]
+    for item in recent_rows:
         customer=item.customer
         cname=" ".join(x for x in (getattr(customer,"first_name",None),getattr(customer,"last_name",None)) if x) or getattr(customer,"username",None) or str(item.customer_id)
         recent.append({"id":str(item.id),"title":item.title,"customer":cname,"service":item.service.name if item.service else None,"status":item.status.value,"priority":item.priority.value,"deadline":item.deadline.isoformat() if item.deadline else None,"created_at":item.created_at.isoformat()})
-    overdue_result=await session.execute(select(ServiceRequest).options(selectinload(ServiceRequest.customer)).where(*request_filters,ServiceRequest.deadline.is_not(None),ServiceRequest.deadline<now,ServiceRequest.status.not_in(TERMINAL)).order_by(ServiceRequest.deadline.asc()).limit(5))
     overdue_items=[]
-    for item in overdue_result.scalars().all():
+    if can_read_requests:
+        overdue_result=await session.execute(select(ServiceRequest).options(selectinload(ServiceRequest.customer)).where(*request_filters,ServiceRequest.deadline.is_not(None),ServiceRequest.deadline<now,ServiceRequest.status.not_in(TERMINAL)).order_by(ServiceRequest.deadline.asc()).limit(5))
+        overdue_rows=overdue_result.scalars().all()
+    else:
+        overdue_rows=[]
+    for item in overdue_rows:
         customer=item.customer
         customer_name=" ".join(x for x in (getattr(customer,"first_name",None),getattr(customer,"last_name",None)) if x) or getattr(customer,"username",None) or str(item.customer_id)
         overdue_items.append({"id":str(item.id),"title":item.title,"customer":customer_name,"deadline":item.deadline.isoformat(),"status":item.status.value})
-    pending_quote_result=await session.execute(select(Quote).join(ServiceRequest,Quote.request_id==ServiceRequest.id).options(selectinload(Quote.service_request)).where(Quote.deleted_at.is_(None),Quote.status==QuoteStatus.SENT,*request_filters).order_by(Quote.created_at.desc()).limit(5))
     pending_quote_items=[]
-    for quote in pending_quote_result.scalars().all():
+    if can_read_quotes:
+        pending_quote_result=await session.execute(select(Quote).join(ServiceRequest,Quote.request_id==ServiceRequest.id).options(selectinload(Quote.service_request)).where(Quote.deleted_at.is_(None),Quote.status==QuoteStatus.SENT,*request_filters).order_by(Quote.created_at.desc()).limit(5))
+        pending_quote_rows=pending_quote_result.scalars().all()
+    else:
+        pending_quote_rows=[]
+    for quote in pending_quote_rows:
         request=quote.service_request
         pending_quote_items.append({"id":str(quote.id),"quote_number":quote.quote_number,"request_id":str(quote.request_id),"request_title":request.title if request else "","expires_at":quote.expires_at.isoformat() if quote.expires_at else None})
-    ar=await session.execute(select(AuditLog).options(selectinload(AuditLog.actor)).order_by(AuditLog.created_at.desc()).limit(10))
     activity=[]
-    for event in ar.scalars().all():
+    if can_read_audit:
+        ar=await session.execute(select(AuditLog).options(selectinload(AuditLog.actor)).order_by(AuditLog.created_at.desc()).limit(10))
+        activity_rows=ar.scalars().all()
+    else:
+        activity_rows=[]
+    for event in activity_rows:
         actor=event.actor
         aname=" ".join(x for x in (getattr(actor,"first_name",None),getattr(actor,"last_name",None)) if x) or getattr(actor,"username",None) or "System"
         activity.append({"id":str(event.id),"actor":aname,"action":event.action,"resource_type":event.resource_type,"resource_id":str(event.resource_id) if event.resource_id else None,"description":event.description,"created_at":event.created_at.isoformat()})
-    service_result=await session.execute(select(Service.id,Service.name).where(Service.deleted_at.is_(None),Service.is_active.is_(True)).order_by(Service.name.asc()))
-    service_options=[{"id":str(service_key),"name":service_name} for service_key,service_name in service_result.all()]
+    if can_read_services:
+        service_result=await session.execute(select(Service.id,Service.name).where(Service.deleted_at.is_(None),Service.is_active.is_(True)).order_by(Service.name.asc()))
+        service_options=[{"id":str(service_key),"name":service_name} for service_key,service_name in service_result.all()]
+    else:
+        service_options=[]
     return {"generated_at":now.isoformat(),"period_days":period_days,"service_id":str(service_id) if service_id else None,"service_options":service_options,"metrics":metrics,"availability":{"revenue":"Unavailable until an invoice/payment ledger exists.","outstanding_balance":"Unavailable until receivables are implemented.","staff_performance":"Unavailable until requests support staff assignment.","branch_performance":"Unavailable until organization and branch scopes exist."},"requests_by_status":by_status,"requests_trend":trend,"requests_by_service":by_service,"recent_requests":recent,"recent_activity":activity,"overdue_items":overdue_items,"pending_quotation_items":pending_quote_items,"alerts":{"overdue_requests":metrics["overdue_requests"],"pending_quotations":metrics["pending_quotations"]}}
