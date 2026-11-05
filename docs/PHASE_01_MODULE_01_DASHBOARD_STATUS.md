@@ -18,7 +18,7 @@ This file records implementation evidence and remaining work. It does not mark t
 
 | Item | Status | Evidence |
 |---|---|---|
-| Selectable analytics period (7, 30, 90, 365 days) | IMPLEMENTED | `dashboard-period-analytics.js` |
+| Selectable analytics period (7, 30, 90, 365 days) | IMPLEMENTED | `dashboard-period-analytics.js` |\n| Service filter across request-focused dashboard analytics and operations | IMPLEMENTED | `service_id` API filter and `dashboardServiceFilter` control |
 | Backend period parameter with bounded validation | IMPLEMENTED | `GET /api/v1/admin/dashboard/overview?period_days=` |
 | Period-scoped new-customer count | IMPLEMENTED | `metrics.new_customers` |
 | Total users, active users, and period new users KPI | IMPLEMENTED | `metrics.total_users`, `metrics.active_users`, `metrics.new_users` |
@@ -31,7 +31,7 @@ This file records implementation evidence and remaining work. It does not mark t
 | Service performance panel | IMPLEMENTED | `#periodServiceChart` |
 | Operations summary for overdue requests and pending quotations | IMPLEMENTED | `#periodOperations` |
 | Actionable overdue request queue | IMPLEMENTED | `overdue_items`, opens Requests list filtered by title |
-| Actionable pending quotation queue | IMPLEMENTED | `pending_quotation_items`, opens related request in Requests list |
+| Actionable pending quotation queue | IMPLEMENTED | `pending_quotation_items`, opens related request in Requests list |\n| Loading, error, and retry states for period analytics | IMPLEMENTED | `dashboard-period-analytics.js` |\n| Service filter API contract | IMPLEMENTED | `tests/test_admin_console.py` |
 | Period analytics script is loaded after authenticated dashboard initialization | IMPLEMENTED | `loadDashboard()` invokes `window.refreshDashboardPeriodAnalytics()` |
 | Reporting period API contract and bounds tests | IMPLEMENTED | `tests/test_admin_console.py` |
 | Static analytics asset delivery test | IMPLEMENTED | `tests/test_admin_console.py` |
