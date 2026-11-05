@@ -2,8 +2,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from backend.app.api.router import api_router
 from backend.app.api.routes.health import router as health_router
@@ -64,3 +64,97 @@ register_exception_handlers(app)
 # Keep simple root health paths for operational probes and existing clients.
 app.include_router(health_router)
 app.include_router(api_router)
+
+
+# Public EHTERAF website routes. Keep these after API routers so API paths
+# retain their existing precedence.
+WEBSITE_ROOT = STATIC_ROOT / "website"
+
+app.mount(
+    "/website/static",
+    PublicStaticFiles(directory=WEBSITE_ROOT),
+    name="website-static",
+)
+
+
+@app.get("/", include_in_schema=False)
+async def public_website_home():
+    return FileResponse(WEBSITE_ROOT / "index.html")
+
+
+@app.get("/login", include_in_schema=False)
+async def public_login():
+    return FileResponse(WEBSITE_ROOT / "login.html")
+
+
+@app.get("/profile", include_in_schema=False)
+async def public_profile():
+    return FileResponse(WEBSITE_ROOT / "profile.html")
+
+
+@app.get("/offline", include_in_schema=False)
+async def public_offline():
+    return FileResponse(WEBSITE_ROOT / "offline.html")
+
+
+@app.get("/service-worker.js", include_in_schema=False)
+async def public_service_worker():
+    return FileResponse(
+        WEBSITE_ROOT / "sw.js",
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
+
+
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def public_robots(request: Request):
+    base_url = str(request.base_url).rstrip("/")
+    return PlainTextResponse(
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin/\n"
+        "Disallow: /api/\n"
+        "Sitemap: " + base_url + "/sitemap.xml\n"
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def public_sitemap(request: Request):
+    base_url = str(request.base_url).rstrip("/")
+    pages = [
+        "", "about", "academic-services", "technical-services",
+        "portfolio", "team", "why-ehteraf", "testimonials", "faq", "contact",
+    ]
+    urls = "".join(
+        f"<url><loc>{base_url}/{page}</loc></url>" for page in pages
+    )
+    return Response(
+        content=(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            + urls +
+            '</urlset>'
+        ),
+        media_type="application/xml",
+    )
+
+@app.get("/{page_name}", include_in_schema=False)
+async def public_website_page(page_name: str):
+    public_pages = {
+        "about",
+        "academic-services",
+        "technical-services",
+        "portfolio",
+        "team",
+        "faq",
+        "why-ehteraf",
+        "testimonials",
+        "contact",
+    }
+    if page_name not in public_pages:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Page not found")
+    return FileResponse(WEBSITE_ROOT / "index.html")
