@@ -17,6 +17,7 @@ def test_admin_console_entrypoint_is_served() -> None:
     assert response.status_code == 200
     assert "EHTERAF" in response.text
     assert "console.js" in response.text
+    assert "dashboard-period-analytics.js" in response.text
     assert "loginForm" in response.text
 
 
