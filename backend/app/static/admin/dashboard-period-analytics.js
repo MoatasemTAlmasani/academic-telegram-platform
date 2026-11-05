@@ -11,6 +11,7 @@ function t(k){return text[lang()][k]||text.en[k]||k}
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function fmt(v){return new Intl.NumberFormat(lang()==="ar"?"ar":"en-US").format(Number(v||0))}
 function fmtDate(v){if(!v)return "—";var date=new Date(v);return Number.isNaN(date.getTime())?String(v):date.toLocaleString(lang()==="ar"?"ar":"en-US",{dateStyle:"medium",timeStyle:"short"})}
+function statusLabel(v){return String(v||"unknown").replace(/_/g," ").toLowerCase().replace(/\\b\\w/g,function(c){return c.toUpperCase()})}
 function refreshLabels(){
  var wrap=document.querySelector(".dashboard-period-control");if(wrap){wrap.querySelector("span").textContent=t("period");var select=wrap.querySelector("select");if(select){select.options[0].text=t("d7");select.options[1].text=t("d30");select.options[2].text=t("d90");select.options[3].text=t("d365");}}
  var serviceWrap=document.querySelector(".dashboard-service-control");if(serviceWrap){serviceWrap.querySelector("span").textContent=t("service");var serviceSelect=serviceWrap.querySelector("select");if(serviceSelect&&serviceSelect.options.length)serviceSelect.options[0].text=t("allServices");}
@@ -41,6 +42,7 @@ function render(d){
  ["new_customers","new_users","new_requests"].forEach(function(key){var card=document.querySelector('[data-metric="'+key+'"] .metric-value');if(card)card.textContent=fmt(metrics[key]||0)});
  var trendDescription=document.querySelector("#page-dashboard .chart-surface .surface-head p");if(trendDescription)trendDescription.textContent=t("trendDescription").replace("{days}",String(period));
  var requests=document.getElementById("periodRequests");if(requests)requests.textContent=fmt(metrics.requests_in_period);
+ var recentBody=document.getElementById("recentRequestsBody");if(recentBody){var recent=d.recent_requests||[];recentBody.innerHTML=recent.map(function(x){return '<tr><td><div class="cell-main">'+esc(x.title)+'</div><div class="cell-sub">#'+esc(String(x.id).slice(0,8))+'</div></td><td>'+esc(x.customer)+'</td><td><span class="status-pill '+esc(String(x.status||"unknown").toLowerCase())+'">'+esc(statusLabel(x.status))+'</span></td><td>'+esc(fmtDate(x.created_at))+'</td></tr>'}).join("")||'<tr><td colspan="4" class="empty-cell">'+t("empty")+'</td></tr>';}
  var trend=d.requests_trend||[],max=Math.max(1,...trend.map(x=>Number(x.count||0))),chart=document.getElementById("trendChart");
  if(chart)chart.innerHTML=trend.length?'<div class="chart-bars">'+trend.map(x=>'<div class="chart-bar" title="'+esc(x.date)+': '+fmt(x.count)+'" style="height:'+Math.max(3,Number(x.count||0)/max*100)+'%"></div>').join("")+'</div><div class="chart-labels"><span>'+esc(trend[0].date)+'</span><span>'+esc(trend[Math.floor(trend.length/2)].date)+'</span><span>'+esc(trend[trend.length-1].date)+'</span></div>':'<div class="empty-cell">'+t("empty")+'</div>';
  var statuses=d.requests_by_status||[],sm=Math.max(1,...statuses.map(x=>Number(x.count||0))),status=document.getElementById("statusChart");
