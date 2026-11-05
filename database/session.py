@@ -1,15 +1,17 @@
-
 """Async SQLAlchemy engine and session management."""
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncGenerator
+from typing import Any
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from backend.app.core.config import get_settings
 from database.url import normalize_async_database_url
@@ -28,6 +30,20 @@ def _get_database_url() -> str:
     return normalize_async_database_url(database_url)
 
 
+def _engine_pool_options() -> dict[str, Any]:
+    """Avoid reusing async connections across Vercel serverless invocations.
+
+    Vercel may execute requests on different event loops within a warm
+    serverless instance. SQLAlchemy pooled async connections must not be
+    transferred between event loops, so use NullPool there. A connection is
+    still held for the full lifetime of each checked-out AsyncConnection,
+    which preserves the webhook's PostgreSQL session advisory locks.
+    """
+    if os.getenv("VERCEL") == "1":
+        return {"poolclass": NullPool}
+    return {}
+
+
 DATABASE_URL = _get_database_url()
 
 engine = create_async_engine(
@@ -43,6 +59,7 @@ engine = create_async_engine(
         else {"timeout": 5, "command_timeout": 30}
     ),
     future=True,
+    **_engine_pool_options(),
 )
 
 SessionLocal = async_sessionmaker(
