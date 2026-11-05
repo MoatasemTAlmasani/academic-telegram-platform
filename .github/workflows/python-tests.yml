@@ -15,6 +15,9 @@ jobs:
   test:
     name: Python 3.12 / pytest
     runs-on: ubuntu-latest
+    env:
+      # Import-time engine configuration only; tests inject fakes and never connect.
+      DATABASE_URL: postgresql+psycopg://ci:ci@127.0.0.1:5432/ci_test
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
