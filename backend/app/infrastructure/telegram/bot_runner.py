@@ -354,21 +354,21 @@ class TelegramBotRunner:
 
         # Lock both the update and its private chat. The chat lock prevents
         # concurrent messages from overwriting each other's conversation state.
-        lock_ids = [5_400_000_000 + update_id]
+        lock_keys = [f"telegram-update:{update_id}"]
         chat_id = self._chat_id_for_update(update)
         if chat_id is not None:
-            lock_ids.append(6_400_000_000 + chat_id)
-        lock_ids = sorted(set(lock_ids))
+            lock_keys.append(f"telegram-chat:{chat_id}")
+        lock_keys = sorted(set(lock_keys))
 
         async with engine.connect() as lock_connection:
-            acquired: list[int] = []
+            acquired: list[str] = []
             try:
-                for lock_id in lock_ids:
+                for lock_key in lock_keys:
                     await lock_connection.execute(
-                        text("SELECT pg_advisory_lock(:lock_id)"),
-                        {"lock_id": lock_id},
+                        text("SELECT pg_advisory_lock(hashtextextended(:lock_key, 0))"),
+                        {"lock_key": lock_key},
                     )
-                    acquired.append(lock_id)
+                    acquired.append(lock_key)
                 await lock_connection.commit()
 
                 await self._load_durable_state()
@@ -396,10 +396,10 @@ class TelegramBotRunner:
                 return True
             finally:
                 self._active_update_id = None
-                for lock_id in reversed(acquired):
+                for lock_key in reversed(acquired):
                     await lock_connection.execute(
-                        text("SELECT pg_advisory_unlock(:lock_id)"),
-                        {"lock_id": lock_id},
+                        text("SELECT pg_advisory_unlock(hashtextextended(:lock_key, 0))"),
+                        {"lock_key": lock_key},
                     )
                 await lock_connection.commit()
 
