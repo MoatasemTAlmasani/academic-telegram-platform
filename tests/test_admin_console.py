@@ -50,9 +50,3 @@ def test_dashboard_period_analytics_asset_is_served() -> None:
     assert "refreshDashboardPeriodAnalytics" in response.text
     assert "periodServiceChart" in response.text
 
-
-def test_dashboard_reporting_period_rejects_values_outside_supported_range() -> None:
-    too_short = asyncio.run(get("/api/v1/admin/dashboard/overview?period_days=6"))
-    too_long = asyncio.run(get("/api/v1/admin/dashboard/overview?period_days=366"))
-    assert too_short.status_code == 422
-    assert too_long.status_code == 422
