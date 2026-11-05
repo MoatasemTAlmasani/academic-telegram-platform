@@ -56,6 +56,11 @@ app.mount(
 
 @app.get("/admin", include_in_schema=False)
 async def admin_dashboard():
+    return FileResponse(STATIC_ROOT / "admin" / "console.html")
+
+
+@app.get("/admin/legacy", include_in_schema=False)
+async def admin_legacy_dashboard():
     return FileResponse(STATIC_ROOT / "admin" / "index.html")
 
 
