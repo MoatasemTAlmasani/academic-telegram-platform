@@ -4,6 +4,8 @@ import asyncio
 import httpx
 
 from backend.app.main import app
+from backend.app.api.routes.admin_dashboard import has_dashboard_permission
+from backend.app.modules.authentication.permissions import Permission
 
 
 async def get(path: str) -> httpx.Response:
@@ -52,3 +54,15 @@ def test_dashboard_period_analytics_asset_is_served() -> None:
     assert "refreshDashboardPeriodAnalytics" in response.text
     assert "periodServiceChart" in response.text
 
+
+
+def test_dashboard_detail_permissions_are_granular() -> None:
+    permissions = {
+        Permission.ADMIN_ACCESS.value,
+        Permission.REQUESTS_READ.value,
+    }
+
+    assert has_dashboard_permission(permissions, Permission.REQUESTS_READ)
+    assert not has_dashboard_permission(permissions, Permission.QUOTES_READ)
+    assert not has_dashboard_permission(permissions, Permission.AUDIT_READ)
+    assert not has_dashboard_permission(permissions, Permission.SERVICES_READ)
