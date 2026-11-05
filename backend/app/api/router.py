@@ -12,6 +12,7 @@ from backend.app.api.routes.admin_requests import router as admin_requests_route
 from backend.app.api.routes.admin_categories import router as admin_categories_router
 from backend.app.api.routes.admin_settings import router as admin_settings_router
 from backend.app.api.routes.admin_audit import router as admin_audit_router
+from backend.app.api.routes.admin_dashboard import router as admin_dashboard_router
 from backend.app.api.routes.dependencies import router as dependencies_router
 from backend.app.api.routes.auth import router as auth_router
 from backend.app.api.routes.rbac import router as rbac_router
@@ -30,6 +31,7 @@ api_router.include_router(admin_requests_router)
 api_router.include_router(admin_categories_router)
 api_router.include_router(admin_settings_router)
 api_router.include_router(admin_audit_router)
+api_router.include_router(admin_dashboard_router)
 api_router.include_router(dependencies_router)
 api_router.include_router(auth_router)
 api_router.include_router(rbac_router)

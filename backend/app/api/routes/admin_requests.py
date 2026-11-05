@@ -54,7 +54,7 @@ class RequestListResponse(BaseModel):
     "",
     response_model=RequestListResponse,
     dependencies=[
-        Depends(require_permission(Permission.SERVICES_READ)),
+        Depends(require_permission(Permission.REQUESTS_READ)),
     ],
 )
 async def list_admin_requests(
@@ -128,7 +128,7 @@ async def list_admin_requests(
 
 @router.get(
     "/{request_id}",
-    dependencies=[Depends(require_permission(Permission.SERVICES_READ))],
+    dependencies=[Depends(require_permission(Permission.REQUESTS_READ))],
 )
 async def get_admin_request_details(
     request_id: UUID,
@@ -159,7 +159,7 @@ async def get_admin_request_details(
 
 @router.patch(
     "/{request_id}",
-    dependencies=[Depends(require_permission(Permission.SERVICES_READ))],
+    dependencies=[Depends(require_permission(Permission.REQUESTS_UPDATE))],
 )
 async def update_admin_request(
     request_id: UUID,
