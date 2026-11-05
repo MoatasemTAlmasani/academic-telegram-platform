@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import pytest
 from pydantic import SecretStr
 
-from backend.app.infrastructure.telegram.bot_runner import TelegramBotRunner
+from backend.app.infrastructure.telegram.bot_runner import (
+    TelegramBotRunner,
+    _normalize_request_deadline,
+)
 
 
 CHAT_ID = 184_200_501
@@ -299,3 +303,26 @@ async def test_specialization_button_with_missing_session_is_safe(
 
     assert CHAT_ID not in bot._conversation_state
     assert "انتهت جلسة الطلب" in fake_api.last_sent_message()["text"]
+
+
+
+def test_request_deadline_date_string_is_normalized_to_utc_datetime() -> None:
+    deadline = _normalize_request_deadline("2026-11-30")
+
+    assert deadline == datetime(2026, 11, 30, tzinfo=timezone.utc)
+    assert deadline.tzinfo is timezone.utc
+
+
+def test_request_deadline_datetime_is_preserved() -> None:
+    deadline = datetime(2026, 11, 30, 12, 30, tzinfo=timezone.utc)
+
+    assert _normalize_request_deadline(deadline) is deadline
+
+
+def test_request_deadline_none_remains_none() -> None:
+    assert _normalize_request_deadline(None) is None
+
+
+def test_invalid_request_deadline_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        _normalize_request_deadline("not-a-date")

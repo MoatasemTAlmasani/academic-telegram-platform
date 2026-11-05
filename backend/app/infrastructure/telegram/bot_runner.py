@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import calendar
 import logging
+from datetime import date, datetime, time, timezone
 from collections import deque
 from typing import Any
 from uuid import UUID
@@ -34,6 +35,18 @@ from backend.app.infrastructure.telegram.messages import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_request_deadline(value: Any) -> datetime | None:
+    """Convert persisted Telegram date strings to timezone-aware datetimes."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        parsed_date = date.fromisoformat(value)
+        return datetime.combine(parsed_date, time.min, tzinfo=timezone.utc)
+    raise TypeError("Unsupported request deadline value.")
 
 
 class TelegramBotRunner:
@@ -1062,6 +1075,24 @@ class TelegramBotRunner:
             from uuid import UUID
 
             try:
+                deadline_value = _normalize_request_deadline(
+                    state.get("deadline")
+                )
+            except (TypeError, ValueError):
+                await self._api_call(
+                    client,
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": (
+                            "⚠️ تاريخ الموعد غير صالح. "
+                            "يرجى تعديل الموعد ثم إعادة تأكيد الطلب."
+                        ),
+                    },
+                )
+                return
+
+            try:
                 async with SessionLocal() as session:
                     result = await session.execute(
                         select(Service).where(
@@ -1099,7 +1130,7 @@ class TelegramBotRunner:
                             title=service.name,
                             description=state.get("description"),
                             specialization=state.get("specialization"),
-                            deadline=state.get("deadline"),
+                            deadline=deadline_value,
                             status=ServiceRequestStatus.NEW,
                             priority=RequestPriority.NORMAL,
                             telegram_update_id=self._active_update_id,
