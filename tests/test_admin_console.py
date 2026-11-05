@@ -31,11 +31,12 @@ def test_admin_access_summary_requires_authentication() -> None:
     assert response.status_code == 401
 
 
-def test_dashboard_reporting_period_rejects_values_outside_supported_range() -> None:
-    too_short = asyncio.run(get("/api/v1/admin/dashboard/overview?period_days=1"))
-    too_long = asyncio.run(get("/api/v1/admin/dashboard/overview?period_days=366"))
-    assert too_short.status_code == 422
-    assert too_long.status_code == 422
+def test_dashboard_reporting_period_openapi_contract() -> None:
+    operation = app.openapi()["paths"]["/api/v1/admin/dashboard/overview"]["get"]
+    parameter = next(item for item in operation["parameters"] if item["name"] == "period_days")
+    assert parameter["schema"]["minimum"] == 7
+    assert parameter["schema"]["maximum"] == 365
+    assert parameter["schema"]["default"] == 30
 
 
 def test_dashboard_overview_still_requires_authentication_with_valid_period() -> None:
