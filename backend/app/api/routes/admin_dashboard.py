@@ -35,6 +35,9 @@ async def overview(period_days: int = Query(default=30, ge=7, le=365), current_u
     metrics["new_customers"]=await count(session,select(func.count(func.distinct(User.id))).select_from(User).join(User.roles).where(Role.name=="customer",User.deleted_at.is_(None),User.created_at>=since))
     metrics["requests_in_period"]=await count(session,select(func.count(ServiceRequest.id)).where(ServiceRequest.deleted_at.is_(None),ServiceRequest.created_at>=since))
     metrics["total_users"]=await count(session,select(func.count(User.id)).where(User.deleted_at.is_(None)))
+    metrics["active_users"]=await count(session,select(func.count(User.id)).where(User.deleted_at.is_(None),User.status==UserStatus.ACTIVE))
+    metrics["new_users"]=await count(session,select(func.count(User.id)).where(User.deleted_at.is_(None),User.created_at>=since))
+    metrics["new_requests"]=metrics["requests_in_period"]
     metrics["total_services"]=await count(session,select(func.count(Service.id)).where(Service.deleted_at.is_(None)))
     metrics["active_services"]=await count(session,select(func.count(Service.id)).where(Service.deleted_at.is_(None),Service.is_active.is_(True)))
     metrics["total_requests"]=await count(session,select(func.count(ServiceRequest.id)).where(ServiceRequest.deleted_at.is_(None)))
