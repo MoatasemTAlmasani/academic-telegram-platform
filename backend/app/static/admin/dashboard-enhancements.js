@@ -35,7 +35,21 @@ function render(){
  root.querySelector("#eh-refresh")?.addEventListener("click",window.loadDashboard);
  root.querySelectorAll("[data-open-page]").forEach(b=>b.addEventListener("click",()=>document.querySelector(`.nav-btn[data-page="${b.dataset.openPage}"]`)?.click()));
 }
+function applyLoginCopy(){
+ const copy={
+  en:{overline:"ACADEMIC & TECHNICAL SERVICES",brandTitle:"One platform. Complete control.",brandDescription:"A unified workspace to manage customers, services, requests, teams and operations with confidence.",secureWorkspace:"Secure administration workspace",welcome:"WELCOME BACK",title:"Sign in to EHTERAF",subtitle:"Access your administration workspace.",username:"Username or email",password:"Password",submit:"Sign in securely",securityNote:"Your access is protected by EHTERAF authentication and role-based permissions.",copyright:"Administration Center",usernamePlaceholder:"Enter your username or email",passwordPlaceholder:"Enter your password"},
+  ar:{overline:"الخدمات الأكاديمية والتقنية",brandTitle:"منصة واحدة. تحكم متكامل.",brandDescription:"مساحة عمل موحدة لإدارة العملاء والخدمات والطلبات والفرق والعمليات بثقة واحترافية.",secureWorkspace:"مساحة إدارية محمية",welcome:"مرحباً بعودتك",title:"تسجيل الدخول إلى إحتراف",subtitle:"ادخل إلى مساحة الإدارة الخاصة بك.",username:"اسم المستخدم أو البريد الإلكتروني",password:"كلمة المرور",submit:"تسجيل الدخول بأمان",securityNote:"يتم حماية وصولك من خلال المصادقة وإدارة الصلاحيات في منصة إحتراف.",copyright:"مركز الإدارة",usernamePlaceholder:"أدخل اسم المستخدم أو البريد الإلكتروني",passwordPlaceholder:"أدخل كلمة المرور"}
+ };
+ const c=copy[s.lang]||copy.en;
+ document.querySelectorAll("[data-login-copy]").forEach(el=>{const k=el.dataset.loginCopy;if(c[k])el.textContent=c[k]});
+ const u=document.getElementById("username"),p=document.getElementById("password");
+ if(u)u.placeholder=c.usernamePlaceholder;if(p)p.placeholder=c.passwordPlaceholder;
+ const b=document.getElementById("eh-login-language");if(b)b.textContent=s.lang==="ar"?"EN":"ع";
+}
 function preferences(){
+ applyLoginCopy();
+ const loginLanguageButton=document.getElementById("eh-login-language");
+ if(loginLanguageButton&&!loginLanguageButton.dataset.bound){loginLanguageButton.dataset.bound="1";loginLanguageButton.addEventListener("click",()=>{s.lang=s.lang==="ar"?"en":"ar";localStorage.setItem("ehteraf_admin_language",s.lang);preferences()})}
  document.documentElement.lang=s.lang;document.documentElement.dir=s.lang==="ar"?"rtl":"ltr";document.body.dataset.adminTheme=s.theme;
  const map={dashboard:0,users:1,services:2,requests:3,"telegram-destinations":4,categories:5,staff:6,"access-control":7,audit:8,settings:9};
  document.querySelectorAll(".nav-btn[data-page]").forEach(b=>{const i=map[b.dataset.page];if(i===undefined)return;const icon=b.dataset.ehIcon||(b.textContent.trim().split(/\s+/)[0]);b.dataset.ehIcon=icon;b.textContent=icon+"  "+labels[s.lang].nav[i]});
