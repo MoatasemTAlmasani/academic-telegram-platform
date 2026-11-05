@@ -2,8 +2,8 @@
 "use strict";
 var period=30;
 var text={
-ar:{period:"فترة التحليل",d7:"آخر 7 أيام",d30:"آخر 30 يوماً",d90:"آخر 90 يوماً",d365:"آخر 12 شهراً",services:"أداء الخدمات خلال الفترة",operations:"مركز العمليات",requests:"الطلبات خلال الفترة",trendDescription:"الطلبات المنشأة خلال آخر {days} يوماً",overdue:"طلبات متأخرة",quotes:"عروض أسعار بانتظار الرد",empty:"لا توجد بيانات خلال الفترة المحددة",error:"تعذر تحميل التحليلات"},
-en:{period:"Analytics period",d7:"Last 7 days",d30:"Last 30 days",d90:"Last 90 days",d365:"Last 12 months",services:"Service performance for period",operations:"Operations center",requests:"Requests in period",trendDescription:"Requests created in the last {days} days",overdue:"Overdue requests",quotes:"Quotations awaiting response",empty:"No data for the selected period",error:"Unable to load analytics"}
+ar:{period:"فترة التحليل",d7:"آخر 7 أيام",d30:"آخر 30 يوماً",d90:"آخر 90 يوماً",d365:"آخر 12 شهراً",services:"أداء الخدمات خلال الفترة",operations:"مركز العمليات",requests:"الطلبات خلال الفترة",trendDescription:"الطلبات المنشأة خلال آخر {days} يوماً",overdue:"طلبات متأخرة",quotes:"عروض أسعار بانتظار الرد",openRequest:"فتح الطلب",empty:"لا توجد بيانات خلال الفترة المحددة",error:"تعذر تحميل التحليلات"},
+en:{period:"Analytics period",d7:"Last 7 days",d30:"Last 30 days",d90:"Last 90 days",d365:"Last 12 months",services:"Service performance for period",operations:"Operations center",requests:"Requests in period",trendDescription:"Requests created in the last {days} days",overdue:"Overdue requests",quotes:"Quotations awaiting response",openRequest:"Open request",empty:"No data for the selected period",error:"Unable to load analytics"}
 };
 function lang(){return document.documentElement.lang==="ar"?"ar":"en"}
 function t(k){return text[lang()][k]||text.en[k]||k}
@@ -39,7 +39,15 @@ function render(d){
  var statuses=d.requests_by_status||[],sm=Math.max(1,...statuses.map(x=>Number(x.count||0))),status=document.getElementById("statusChart");
  if(status)status.innerHTML=statuses.length?statuses.map(x=>'<div class="status-row"><span>'+esc(String(x.status||"").replace(/_/g," "))+'</span><span class="status-track"><span class="status-fill" style="display:block;width:'+(Number(x.count||0)/sm*100)+'%"></span></span><span class="status-count">'+fmt(x.count)+'</span></div>').join(""):'<div class="empty-cell">'+t("empty")+'</div>';
  drawBars(d.requests_by_service||[]);
- var ops=document.getElementById("periodOperations");if(ops)ops.innerHTML='<div class="operation-alert danger"><span>'+t("overdue")+'</span><b>'+fmt(alerts.overdue_requests)+'</b></div><div class="operation-alert warning"><span>'+t("quotes")+'</span><b>'+fmt(alerts.pending_quotations)+'</b></div>';
+ var ops=document.getElementById("periodOperations");
+ if(ops){
+  var overdueItems=d.overdue_items||[],quoteItems=d.pending_quotation_items||[];
+  var requestButton=function(title){return '<button type="button" class="operation-open-request" data-request-title="'+esc(title)+'">'+t("openRequest")+'</button>'};
+  ops.innerHTML='<div class="operation-alert danger"><span>'+t("overdue")+'</span><b>'+fmt(alerts.overdue_requests)+'</b></div>'+
+   (overdueItems.length?overdueItems.map(function(x){return '<div class="operation-item"><div><b>'+esc(x.title)+'</b><small>'+esc(x.customer)+' · '+esc(x.deadline||"")+'</small></div>'+requestButton(x.title)+'</div>'}).join(""):'<div class="operation-empty">'+t("empty")+'</div>')+
+   '<div class="operation-alert warning"><span>'+t("quotes")+'</span><b>'+fmt(alerts.pending_quotations)+'</b></div>'+
+   (quoteItems.length?quoteItems.map(function(x){return '<div class="operation-item"><div><b>'+esc(x.quote_number)+' · '+esc(x.request_title)+'</b><small>'+esc(x.expires_at||"")+'</small></div>'+requestButton(x.request_title)+'</div>'}).join(""):'<div class="operation-empty">'+t("empty")+'</div>');
+ }
 }
 async function load(){
  addUI();var token=localStorage.getItem("admin_access_token");if(!token)return;
@@ -47,6 +55,13 @@ async function load(){
  try{var r=await fetch("/api/v1/admin/dashboard/overview?period_days="+period,{headers:{Accept:"application/json",Authorization:"Bearer "+token}});if(!r.ok)throw Error("HTTP "+r.status);render(await r.json())}
  catch(e){var target=document.getElementById("periodServiceChart");if(target)target.innerHTML='<div class="empty-cell">'+t("error")+'</div>'}
 }
+document.addEventListener("click",function(event){
+ var button=event.target.closest&&event.target.closest("[data-request-title]");if(!button)return;
+ var nav=document.querySelector('.nav-item[data-page="requests"]'),search=document.getElementById("requestSearch");
+ if(!nav||nav.hidden||!search)return;
+ search.value=button.getAttribute("data-request-title")||"";
+ nav.click();
+});
 window.refreshDashboardPeriodAnalytics=load;
 document.addEventListener("DOMContentLoaded",function(){addUI();var previousLang=document.documentElement.lang;new MutationObserver(function(){if(previousLang!==document.documentElement.lang){previousLang=document.documentElement.lang;refreshLabels();load()}}).observe(document.documentElement,{attributes:true,attributeFilter:["lang"]})});
 })();
