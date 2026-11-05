@@ -2,13 +2,14 @@
 "use strict";
 var period=30;
 var text={
-ar:{period:"فترة التحليل",d7:"آخر 7 أيام",d30:"آخر 30 يوماً",d90:"آخر 90 يوماً",d365:"آخر 12 شهراً",services:"أداء الخدمات خلال الفترة",operations:"مركز العمليات",requests:"الطلبات خلال الفترة",trendDescription:"الطلبات المنشأة خلال آخر {days} يوماً",overdue:"طلبات متأخرة",quotes:"عروض أسعار بانتظار الرد",openRequest:"فتح الطلب",empty:"لا توجد بيانات خلال الفترة المحددة",error:"تعذر تحميل التحليلات"},
-en:{period:"Analytics period",d7:"Last 7 days",d30:"Last 30 days",d90:"Last 90 days",d365:"Last 12 months",services:"Service performance for period",operations:"Operations center",requests:"Requests in period",trendDescription:"Requests created in the last {days} days",overdue:"Overdue requests",quotes:"Quotations awaiting response",openRequest:"Open request",empty:"No data for the selected period",error:"Unable to load analytics"}
+ar:{period:"فترة التحليل",d7:"آخر 7 أيام",d30:"آخر 30 يوماً",d90:"آخر 90 يوماً",d365:"آخر 12 شهراً",services:"أداء الخدمات خلال الفترة",operations:"مركز العمليات",requests:"الطلبات خلال الفترة",trendDescription:"الطلبات المنشأة خلال آخر {days} يوماً",requestDistribution:"توزيع حالات الطلبات",overdue:"طلبات متأخرة",quotes:"عروض أسعار بانتظار الرد",openRequest:"فتح الطلب",empty:"لا توجد بيانات خلال الفترة المحددة",error:"تعذر تحميل التحليلات"},
+en:{period:"Analytics period",d7:"Last 7 days",d30:"Last 30 days",d90:"Last 90 days",d365:"Last 12 months",services:"Service performance for period",operations:"Operations center",requests:"Requests in period",trendDescription:"Requests created in the last {days} days",requestDistribution:"Request status distribution",overdue:"Overdue requests",quotes:"Quotations awaiting response",openRequest:"Open request",empty:"No data for the selected period",error:"Unable to load analytics"}
 };
 function lang(){return document.documentElement.lang==="ar"?"ar":"en"}
 function t(k){return text[lang()][k]||text.en[k]||k}
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function fmt(v){return new Intl.NumberFormat(lang()==="ar"?"ar":"en-US").format(Number(v||0))}
+function fmtDate(v){if(!v)return "—";var date=new Date(v);return Number.isNaN(date.getTime())?String(v):date.toLocaleString(lang()==="ar"?"ar":"en-US",{dateStyle:"medium",timeStyle:"short"})}
 function refreshLabels(){
  var wrap=document.querySelector(".dashboard-period-control");if(wrap){wrap.querySelector("span").textContent=t("period");var select=wrap.querySelector("select");if(select){select.options[0].text=t("d7");select.options[1].text=t("d30");select.options[2].text=t("d90");select.options[3].text=t("d365");}}
  var heads=document.querySelectorAll("#dashboardPeriodPanels .surface-head h3");if(heads[0])heads[0].textContent=t("services");if(heads[1])heads[1].textContent=t("operations");var p=document.querySelector("#dashboardPeriodPanels .surface-head p");if(p)p.firstChild.textContent=t("requests")+": ";
@@ -39,14 +40,16 @@ function render(d){
  var statuses=d.requests_by_status||[],sm=Math.max(1,...statuses.map(x=>Number(x.count||0))),status=document.getElementById("statusChart");
  if(status)status.innerHTML=statuses.length?statuses.map(x=>'<div class="status-row"><span>'+esc(String(x.status||"").replace(/_/g," "))+'</span><span class="status-track"><span class="status-fill" style="display:block;width:'+(Number(x.count||0)/sm*100)+'%"></span></span><span class="status-count">'+fmt(x.count)+'</span></div>').join(""):'<div class="empty-cell">'+t("empty")+'</div>';
  drawBars(d.requests_by_service||[]);
+ if(chart){chart.setAttribute("role","img");chart.setAttribute("aria-label",t("trendDescription").replace("{days}",String(period)));}
+ if(status){status.setAttribute("role","img");status.setAttribute("aria-label",t("requestDistribution"));}
  var ops=document.getElementById("periodOperations");
  if(ops){
   var overdueItems=d.overdue_items||[],quoteItems=d.pending_quotation_items||[];
   var requestButton=function(title){return '<button type="button" class="operation-open-request" data-request-title="'+esc(title)+'">'+t("openRequest")+'</button>'};
   ops.innerHTML='<div class="operation-alert danger"><span>'+t("overdue")+'</span><b>'+fmt(alerts.overdue_requests)+'</b></div>'+
-   (overdueItems.length?overdueItems.map(function(x){return '<div class="operation-item"><div><b>'+esc(x.title)+'</b><small>'+esc(x.customer)+' · '+esc(x.deadline||"")+'</small></div>'+requestButton(x.title)+'</div>'}).join(""):'<div class="operation-empty">'+t("empty")+'</div>')+
+   (overdueItems.length?overdueItems.map(function(x){return '<div class="operation-item"><div><b>'+esc(x.title)+'</b><small>'+esc(x.customer)+' · '+esc(fmtDate(x.deadline))+'</small></div>'+requestButton(x.title)+'</div>'}).join(""):'<div class="operation-empty">'+t("empty")+'</div>')+
    '<div class="operation-alert warning"><span>'+t("quotes")+'</span><b>'+fmt(alerts.pending_quotations)+'</b></div>'+
-   (quoteItems.length?quoteItems.map(function(x){return '<div class="operation-item"><div><b>'+esc(x.quote_number)+' · '+esc(x.request_title)+'</b><small>'+esc(x.expires_at||"")+'</small></div>'+requestButton(x.request_title)+'</div>'}).join(""):'<div class="operation-empty">'+t("empty")+'</div>');
+   (quoteItems.length?quoteItems.map(function(x){return '<div class="operation-item"><div><b>'+esc(x.quote_number)+' · '+esc(x.request_title)+'</b><small>'+esc(fmtDate(x.expires_at))+'</small></div>'+requestButton(x.request_title)+'</div>'}).join(""):'<div class="operation-empty">'+t("empty")+'</div>');
  }
 }
 async function load(){
