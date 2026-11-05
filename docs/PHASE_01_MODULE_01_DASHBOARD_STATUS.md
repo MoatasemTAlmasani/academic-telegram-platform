@@ -28,12 +28,12 @@ This file records implementation evidence and remaining work. It does not mark t
 | Period-scoped request count | IMPLEMENTED | `metrics.requests_in_period` |
 | Period-scoped request trend | IMPLEMENTED | `requests_trend` |
 | Period-scoped request status distribution | IMPLEMENTED | `requests_by_status` |
-| Period-scoped requests by service | IMPLEMENTED | `requests_by_service` |
+| Period-scoped requests by service | IMPLEMENTED | `requests_by_service` |\n| Service-scoped recent requests | IMPLEMENTED | `recent_requests` uses the selected service scope |
 | Service performance panel | IMPLEMENTED | `#periodServiceChart` |
 | Operations summary for overdue requests and pending quotations | IMPLEMENTED | `#periodOperations` |
 | Actionable overdue request queue | IMPLEMENTED | `overdue_items`, opens Requests list filtered by title |
 | Actionable pending quotation queue | IMPLEMENTED | `pending_quotation_items`, opens related request in Requests list |
-| Loading, error, and retry states for period analytics | IMPLEMENTED | `dashboard-period-analytics.js` |
+| Loading, error, and retry states for period analytics | IMPLEMENTED | `dashboard-period-analytics.js` |\n| Service filter is reflected in recent requests table | IMPLEMENTED | Selected-service response refreshes recent request rows |
 | Service filter API contract | IMPLEMENTED | `tests/test_admin_console.py` |
 | Period analytics script is loaded after authenticated dashboard initialization | IMPLEMENTED | `loadDashboard()` invokes `window.refreshDashboardPeriodAnalytics()` |
 | Reporting period API contract and bounds tests | IMPLEMENTED | `tests/test_admin_console.py` |
