@@ -267,6 +267,20 @@ class TelegramBotRunner:
             return chat_id if isinstance(chat_id, int) else None
         return None
 
+    async def _load_chat_state(self, chat_id: int) -> None:
+        """Load only the conversation touched by this webhook invocation.
+
+        Serverless webhook invocations use a fresh runner, so loading every
+        conversation and the polling offset is unnecessary. The per-chat
+        advisory lock is already held by the caller before this query.
+        """
+        async with SessionLocal() as session:
+            record = await session.get(TelegramConversationState, chat_id)
+            if record is None:
+                self._conversation_state.pop(chat_id, None)
+            else:
+                self._conversation_state[chat_id] = dict(record.state)
+
     async def _load_durable_state(self) -> None:
         async with SessionLocal() as session:
             states = await session.execute(
@@ -372,7 +386,8 @@ class TelegramBotRunner:
                     acquired.append(lock_key)
                 await lock_connection.commit()
 
-                await self._load_durable_state()
+                if chat_id is not None:
+                    await self._load_chat_state(chat_id)
                 if await self._is_update_processed(update_id):
                     return False
 
