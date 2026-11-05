@@ -112,11 +112,11 @@ async def public_service_worker():
 async def public_robots(request: Request):
     base_url = str(request.base_url).rstrip("/")
     return PlainTextResponse(
-        "User-agent: *\\n"
-        "Allow: /\\n"
-        "Disallow: /admin/\\n"
-        "Disallow: /api/\\n"
-        "Sitemap: " + base_url + "/sitemap.xml\\n"
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin/\n"
+        "Disallow: /api/\n"
+        "Sitemap: " + base_url + "/sitemap.xml\n"
     )
 
 
