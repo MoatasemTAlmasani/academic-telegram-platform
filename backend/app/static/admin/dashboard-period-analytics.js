@@ -9,7 +9,7 @@ function lang(){return document.documentElement.lang==="ar"?"ar":"en"}
 function t(k){return text[lang()][k]||text.en[k]||k}
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function fmt(v){return new Intl.NumberFormat(lang()==="ar"?"ar":"en-US").format(Number(v||0))}
-function addUI(){
+function refreshLabels(){\n var wrap=document.querySelector(".dashboard-period-control");if(wrap){wrap.querySelector("span").textContent=t("period");var select=wrap.querySelector("select");if(select){select.options[0].text=t("d7");select.options[1].text=t("d30");select.options[2].text=t("d90");select.options[3].text=t("d365");}}\n var heads=document.querySelectorAll("#dashboardPeriodPanels .surface-head h3");if(heads[0])heads[0].textContent=t("services");if(heads[1])heads[1].textContent=t("operations");var p=document.querySelector("#dashboardPeriodPanels .surface-head p");if(p)p.firstChild.textContent=t("requests")+": ";\n}\nfunction addUI(){
  var actions=document.querySelector("#page-dashboard .heading-actions");if(!actions||document.getElementById("dashboardPeriod"))return;
  var label=document.createElement("label");label.className="dashboard-period-control";
  label.innerHTML='<span>'+t("period")+'</span><select id="dashboardPeriod" class="filter-select"><option value="7">'+t("d7")+'</option><option value="30" selected>'+t("d30")+'</option><option value="90">'+t("d90")+'</option><option value="365">'+t("d365")+'</option></select>';
@@ -41,5 +41,5 @@ async function load(){
  try{var r=await fetch("/api/v1/admin/dashboard/overview?period_days="+period,{headers:{Accept:"application/json",Authorization:"Bearer "+token}});if(!r.ok)throw Error("HTTP "+r.status);render(await r.json())}
  catch(e){var target=document.getElementById("periodServiceChart");if(target)target.innerHTML='<div class="empty-cell">'+t("error")+'</div>'}
 }
-document.addEventListener("DOMContentLoaded",function(){addUI();setTimeout(load,0);var refresh=document.getElementById("refreshDashboard");if(refresh)refresh.addEventListener("click",load)});
+document.addEventListener("DOMContentLoaded",function(){addUI();setTimeout(load,0);var refresh=document.getElementById("refreshDashboard");if(refresh)refresh.addEventListener("click",load);var previousLang=document.documentElement.lang;new MutationObserver(function(){if(previousLang!==document.documentElement.lang){previousLang=document.documentElement.lang;refreshLabels();load()}}).observe(document.documentElement,{attributes:true,attributeFilter:["lang"]})});
 })();
