@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import calendar
 import logging
+from datetime import date, datetime, time, timezone
 from collections import deque
 from typing import Any
 from uuid import UUID
@@ -1061,6 +1062,31 @@ class TelegramBotRunner:
 
             from uuid import UUID
 
+            deadline_value = state.get("deadline")
+            if isinstance(deadline_value, str):
+                try:
+                    deadline_date = date.fromisoformat(deadline_value)
+                    deadline_value = datetime.combine(
+                        deadline_date,
+                        time.min,
+                        tzinfo=timezone.utc,
+                    )
+                except ValueError:
+                    await self._api_call(
+                        client,
+                        "sendMessage",
+                        {
+                            "chat_id": chat_id,
+                            "text": (
+                                "⚠️ تاريخ الموعد غير صالح. "
+                                "يرجى تعديل الموعد ثم إعادة تأكيد الطلب."
+                            ),
+                        },
+                    )
+                    return
+            elif isinstance(deadline_value, datetime) and deadline_value.tzinfo is None:
+                deadline_value = deadline_value.replace(tzinfo=timezone.utc)
+
             try:
                 async with SessionLocal() as session:
                     result = await session.execute(
@@ -1099,7 +1125,7 @@ class TelegramBotRunner:
                             title=service.name,
                             description=state.get("description"),
                             specialization=state.get("specialization"),
-                            deadline=state.get("deadline"),
+                            deadline=deadline_value,
                             status=ServiceRequestStatus.NEW,
                             priority=RequestPriority.NORMAL,
                             telegram_update_id=self._active_update_id,
