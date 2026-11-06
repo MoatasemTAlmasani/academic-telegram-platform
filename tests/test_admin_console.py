@@ -324,3 +324,17 @@ def test_user_creation_workspace_has_validated_bilingual_form() -> None:
     assert 'role:"customer"' in script.text
     assert 'has("users:create")' in script.text
     assert "إنشاء حساب جديد" in script.text
+
+
+def test_user_profile_detail_and_edit_workspace_is_permission_aware() -> None:
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userDetailsPanel"' in page.text
+    assert 'id="userEditForm"' in page.text
+    assert 'id="closeUserDetails"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert 'api("/admin/users/"+encodeURIComponent(userId))' in script.text
+    assert 'method:"PATCH"' in script.text
+    assert 'has("users:update")' in script.text
