@@ -273,3 +273,37 @@ def test_user_directories_render_independent_pagination_controls() -> None:
     assert 'page_size:String(userPageSize)' in script.text
     assert 'data-page-prev' in script.text
     assert 'data-page-next' in script.text
+
+
+
+def test_user_audit_snapshot_contains_only_approved_non_secret_fields() -> None:
+    from types import SimpleNamespace
+    from backend.app.api.routes.admin_users import _safe_user_audit_snapshot
+
+    snapshot = _safe_user_audit_snapshot(
+        SimpleNamespace(
+            username="operator",
+            email="operator@example.test",
+            first_name="Test",
+            last_name="Operator",
+            phone=None,
+            language="ar",
+            timezone="Asia/Aden",
+            status="ACTIVE",
+            password_hash="must-never-be-audited",
+            reset_token="must-never-be-audited",
+        )
+    )
+
+    assert snapshot == {
+        "username": "operator",
+        "email": "operator@example.test",
+        "first_name": "Test",
+        "last_name": "Operator",
+        "phone": None,
+        "language": "ar",
+        "timezone": "Asia/Aden",
+        "status": "ACTIVE",
+    }
+    assert "password_hash" not in snapshot
+    assert "reset_token" not in snapshot
