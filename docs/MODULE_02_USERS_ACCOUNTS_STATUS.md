@@ -36,6 +36,8 @@ This document records implementation evidence. The approved roadmap remains the 
 - Deactivation, suspension, and archival protect the last active account assigned the existing `admin` role. The guard locks the admin role row before counting active administrators to serialize concurrent transitions on databases supporting row locks.
 - Generic profile PATCH can no longer change account status; status changes must use the reasoned lifecycle endpoint.
 - Account archival requires a meaningful reason, records it in the audit log, preserves linked business records, and revokes all sessions. The UI exposes the archive action only with the delete permission.
+- Authenticated users can read/update allowlisted personal preferences (language, timezone, theme, date format, email/Telegram notification preferences); preference changes are audited without recording values.
+- Accounts support temporary lock and expiry timestamps; login and authenticated API access reject locked or expired accounts, and administrators can set policy with a reason, audit snapshot, last-admin protection, and session revocation on lock.
 - Authenticated users can change their own password only after supplying the current password; new passwords require at least 12 characters, password changes are audited without credential data, and all active sessions are revoked to require reauthentication.
 - Login attempts are stored using a keyed HMAC-SHA256 username key rather than raw usernames. Database-backed rolling-window throttling rejects further attempts after 5 failures for a username/IP pair or 10 for a username across IPs within 15 minutes; failed and successful attempts are recorded.
 - Telegram identity linking uses a short-lived, single-use challenge: an authenticated account requests a code, then sends `/link CODE` to the official bot. The bot validates the Telegram sender from the Bot API update, stores a verified external identity, and records an audit event. Raw challenge codes are not stored; only SHA-256 hashes are persisted.
@@ -65,8 +67,8 @@ This document records implementation evidence. The approved roadmap remains the 
 
 ## Not yet implemented — remains in Module 02 scope
 
-1. Complete profile workspace tabs, a user activity timeline distinct from the audit log, and user preferences. Account-specific audit history is implemented.
-2. Extend lifecycle policy with lock/unlock, expiry, and deletion-request states; last-active-admin protection for current deactivate/suspend/archive actions is implemented.
+1. Complete profile workspace tabs and a user activity timeline distinct from the audit log. Preference APIs are implemented; a full preference UI remains.
+2. Add a dedicated admin UI for lock/unlock and expiry, plus deletion-request states; lock and expiry API enforcement is implemented.
 3. Password reset/recovery for accounts that cannot authenticate, email/phone verification, and recovery rate limiting.
 4. Additional identity providers, broader identity-link recovery, and end-to-end verification of Telegram linking/unlinking.
 5. Full effective-access integration with Module 03, including actor authority checks and role/permission administration; this increment provides a read-only role/permission summary only.
@@ -78,7 +80,7 @@ This document records implementation evidence. The approved roadmap remains the 
 
 ## Database and production safety
 
-- The increment reuses existing user, role, and audit tables and adds reviewed Alembic migrations for `user_sessions`, `login_attempts`, `external_identities`, and `identity_link_challenges`.
+- The increment reuses existing user, role, and audit tables and adds reviewed Alembic migrations for `user_sessions`, `login_attempts`, `external_identities`, `identity_link_challenges`, and user preference/account lock/expiry columns.
 - The migrations are chained after `f4a29d806c12` (`aa11bb22cc33` sessions, `bb22cc33dd44` login attempts, `cc33dd44ee55` external identities/challenges); none has been applied to Supabase or production.
 - The live database previously showed RLS disabled on public tables and broad grants that require a deliberate access-control review. Do not enable RLS blindly or revoke grants until the deployed backend connection path, service role usage, and required policies are verified.
 - All new migration revisions still require isolated upgrade/downgrade tests against supported database engines and a documented rollback plan before deployment.
