@@ -2,7 +2,7 @@
 
 **Module:** 02 of Phase 1 Administration  
 **Current status:** `PARTIAL`  
-**Specification:** `docs/ROADMAP.md`, sections 11–32 (Module 02 detailed specification)  
+**Specification:** `docs/ROADMAP.md`, sections 11–35 (Module 02 detailed specification)  
 **Implementation branch:** `feature/module-02-users-accounts`  
 **Pull request:** #15
 
@@ -30,6 +30,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - Administrators can preview and execute bounded bulk lifecycle actions (up to 100 accounts) with per-record outcomes, reasoned audit records, self-protection, and last-active-admin safeguards. The bilingual admin workspace now supports selecting accounts across directory pages, reviewing a server-generated preview, confirming execution, and viewing per-account outcomes. Preview eligibility also checks self-protection and last-active-admin safeguards. A credential-free CSV directory export is available with a 5,000-row cap and a workspace export control.
 - Administrators can inspect verified external identities linked to an account; the view excludes challenge tokens and is read-only. Self-service Telegram linking uses a short-lived, single-use challenge in the authentication API.
 - Administrators can inspect the latest 50 account-linked login attempts with timestamp, outcome, and IP address; the endpoint never exposes username hashes or credentials.
+- The account workspace includes a separate chronological activity timeline that merges account-targeted audit events and login outcomes. Its paginated API requires both `users:read` and `audit:read`, uses database-side ordering/limits, and omits IP addresses, raw metadata, and secrets.
 - Users with `audit:read` can inspect the latest 100 redacted audit events related to the account or performed by it. The endpoint deliberately omits arbitrary metadata, tokens, and credential fields.
 - The account detail workspace includes a read-only effective-access summary of assigned roles and permission codes, loaded from the existing RBAC relations. It does not mutate role assignments or permissions; Module 03 remains the owner of those workflows.
 - The current administrator session is identified in the session list and preserved by revoke-all when an administrator operates on their own account.
@@ -62,7 +63,8 @@ This document records implementation evidence. The approved roadmap remains the 
 - Phase 01 verification passed on the same commit (run 42282611644).
 - Python tests passed on current functional commit `e6ba5191ff7881c7309cfe9b715d51de006695b8` (run 42283109343): **73 passed, 2 warnings**.
 - Bulk-operation UI increment passed Python tests on commit `4b02e24923016edb2d8a78dd9503bf12716d9180` (run 42287250581): **79 passed, 2 warnings**.
-- Phase 01 verification passed on that same UI increment (run 42287250584). The current code commit `bf7f00ef4f56229afe9efabf206a51d74b0b91e3` was verified in an isolated Vercel sandbox cloned at that exact SHA: `python -m compileall -q backend database tests` passed; `node --check` passed for `console.js` and `app.js`; the full pytest suite passed: **80 passed, 2 warnings**. The sandbox used only loopback test DATABASE_URL values; no production credentials or database were mounted, and no migration was applied. This verifies automated tests and syntax, not browser/device acceptance or a live PostgreSQL integration run.
+- Phase 01 verification passed on that same UI increment (run 42287250584). Code commit `082e9cf8c346fd490ab7e31d255a005878f7d405` was checked in an isolated Vercel sandbox cloned at that exact SHA: Python compileall passed; Node syntax check for `console.js` passed; full pytest suite: **82 passed, 2 warnings**. An additional isolated SQLite integration check exercised the timeline query and verified mixed-source ordering and offset pagination. The sandbox used loopback-only test DATABASE_URL values; no production credentials or database were mounted, and no migration was applied.
+- These checks verify automated tests, query behavior on SQLite, and syntax. They do not establish browser/device acceptance or a live PostgreSQL integration run.
 - Phase 01 verification passed on the same commit (run 42283109349).
 - The automated suite also checks JavaScript syntax with Node when Node is available in the runner.
 - These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
@@ -70,12 +72,12 @@ This document records implementation evidence. The approved roadmap remains the 
 
 ## Not yet implemented — remains in Module 02 scope
 
-1. Complete profile workspace tabs and a user activity timeline distinct from the audit log. Preference API and bilingual self-service preference UI are implemented.
+1. Complete profile workspace tabs and richer timeline filters/export. The chronological activity timeline is implemented separately from the authoritative audit log.
 2. Implement deletion-request and approved deletion/anonymization states. Account lock/expiry API enforcement and bilingual admin policy controls are implemented.
 3. Password reset/recovery for accounts that cannot authenticate, email/phone verification, and recovery rate limiting.
 4. Additional identity providers, broader identity-link recovery, and end-to-end verification of Telegram linking/unlinking.
 5. Full effective-access integration with Module 03, including actor authority checks and role/permission administration; this increment provides a read-only role/permission summary only.
-6. A unified security-event workflow and a user activity timeline distinct from the authoritative audit log; login-attempt history and throttling are implemented.
+6. A unified security-event triage workflow integrated with Module 22. Account activity timeline, login-attempt history, and throttling are implemented.
 7. A separate CSV import preview/validation/commit flow; bounded bulk preview/execute APIs and the bilingual bulk-operation UI are implemented.
 8. Validated CSV import, field-level authorization, and expiring protected downloads.
 9. End-to-end API authorization, IDOR, lifecycle, concurrency, and browser acceptance coverage.
