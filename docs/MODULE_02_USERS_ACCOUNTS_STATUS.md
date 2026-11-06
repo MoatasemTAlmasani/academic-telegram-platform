@@ -30,6 +30,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - The current administrator session is identified in the session list and preserved by revoke-all when an administrator operates on their own account.
 - Account lifecycle transitions (activate, reactivate, deactivate, suspend) require a reason, enforce allowed state transitions, and write before/after status plus the reason to the audit log. Deactivation and suspension revoke all active sessions in the same transaction; self-deactivation and self-suspension are blocked.
 - Generic profile PATCH can no longer change account status; status changes must use the reasoned lifecycle endpoint.
+- Account archival requires a meaningful reason, records it in the audit log, preserves linked business records, and revokes all sessions. The UI exposes the archive action only with the delete permission.
 
 ## Verification
 
