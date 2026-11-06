@@ -30,6 +30,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - Administrators can inspect verified external identities linked to an account; the view excludes challenge tokens and is read-only. Self-service Telegram linking uses a short-lived, single-use challenge in the authentication API.
 - Administrators can inspect the latest 50 account-linked login attempts with timestamp, outcome, and IP address; the endpoint never exposes username hashes or credentials.
 - Users with `audit:read` can inspect the latest 100 redacted audit events related to the account or performed by it. The endpoint deliberately omits arbitrary metadata, tokens, and credential fields.
+- The account detail workspace includes a read-only effective-access summary of assigned roles and permission codes, loaded from the existing RBAC relations. It does not mutate role assignments or permissions; Module 03 remains the owner of those workflows.
 - The current administrator session is identified in the session list and preserved by revoke-all when an administrator operates on their own account.
 - Account lifecycle transitions (activate, reactivate, deactivate, suspend) require a reason, enforce allowed state transitions, and write before/after status plus the reason to the audit log. Deactivation and suspension revoke all active sessions in the same transaction; self-deactivation and self-suspension are blocked.
 - Deactivation, suspension, and archival protect the last active account assigned the existing `admin` role. The guard locks the admin role row before counting active administrators to serialize concurrent transitions on databases supporting row locks.
@@ -48,13 +49,15 @@ This document records implementation evidence. The approved roadmap remains the 
 - New tests cover:
   - bounded pagination and credential-free response contracts,
   - safe audit snapshots,
-  - bilingual user/customer directories, account creation, profile editing, session controls, lifecycle/archive forms, linked-identity, login-history, and permission-gated audit-history panels,
-  - persistent session creation, session-bound JWTs, lifecycle API contracts, password-change validation, and last-active-admin protection.
+  - bilingual user/customer directories, account creation, profile editing, session controls, lifecycle/archive forms, linked-identity, login-history, permission-gated audit-history, and effective-access panels,
+  - persistent session creation, session-bound JWTs, lifecycle API contracts, password-change validation, last-active-admin protection, and isolated migration upgrade/downgrade behavior.
 - Python tests passed on commit `6c3b709d04eeca079da30e17464e8d572fca242b` (run 42271376772).
 - Phase 01 verification passed on the same commit (run 42271376792).
 - Python tests passed on commit `5c03071a3e9e906841ceb02e424f298511999021` (run 42281708050).
 - Phase 01 verification passed on the same commit (run 42281707996).
-- The current increment adds permission-gated account audit history after those runs; its CI checks are pending and will be recorded after completion.
+- Python tests passed on commit `d9bdddeace4f1a43542a3a181a8685396573a75e` (run 42282611667), including the isolated SQLite upgrade/downgrade test for all three Module 02 migration revisions.
+- Phase 01 verification passed on the same commit (run 42282611644).
+- The later read-only effective-access panel and its test are on the current branch head; their CI checks are pending.
 - These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
 - No browser/device acceptance has been claimed.
 
@@ -64,7 +67,7 @@ This document records implementation evidence. The approved roadmap remains the 
 2. Extend lifecycle policy with lock/unlock, expiry, and deletion-request states; last-active-admin protection for current deactivate/suspend/archive actions is implemented.
 3. Password reset/recovery for accounts that cannot authenticate, email/phone verification, and recovery rate limiting.
 4. Additional identity providers, broader identity-link recovery, and end-to-end verification of Telegram linking/unlinking.
-5. Effective-access summary integrated with Module 03, including actor authority checks and role/permission administration.
+5. Full effective-access integration with Module 03, including actor authority checks and role/permission administration; this increment provides a read-only role/permission summary only.
 6. A unified security-event workflow and a user activity timeline distinct from the authoritative audit log; login-attempt history and throttling are implemented.
 7. Previewed, bounded bulk operations with per-record outcomes.
 8. Validated CSV import/export, field-level authorization, and expiring protected downloads.
@@ -81,7 +84,7 @@ This document records implementation evidence. The approved roadmap remains the 
 
 ## Next implementation order
 
-1. Add isolated migration upgrade/downgrade and end-to-end tests for sessions, login attempts, and external identity linking.
+1. Add isolated migration upgrade/downgrade and end-to-end tests for sessions, login attempts, and external identity linking. The isolated SQLite migration upgrade/downgrade test is now implemented; production-engine and full linking-flow tests remain.
 2. Implement account lock/expiry and recovery/verification workflows.
 3. Integrate effective-access display/actions with Module 03 without duplicating RBAC ownership.
 4. Deliver bulk/import/export and preferences.
