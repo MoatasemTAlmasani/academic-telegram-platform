@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,7 @@ from backend.app.api.auth_dependencies import get_current_user
 from backend.app.api.rbac_dependencies import require_permission
 from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.permissions import Permission
+from database.models.audit import AuditLog
 from database.models.catalog import Category, Service
 
 
@@ -110,10 +112,11 @@ async def list_admin_services(
     query = (
         select(Service)
         .options(selectinload(Service.category))
+        .where(Service.deleted_at.is_(None))
         .order_by(Service.created_at.desc())
     )
 
-    count_query = select(func.count(Service.id))
+    count_query = select(func.count(Service.id)).where(Service.deleted_at.is_(None))
 
     if search:
         pattern = f"%{search.strip()}%"
@@ -208,7 +211,7 @@ async def get_admin_service(
     result = await session.execute(
         select(Service)
         .options(selectinload(Service.category))
-        .where(Service.id == service_id)
+        .where(Service.id == service_id, Service.deleted_at.is_(None))
     )
 
     service = result.scalar_one_or_none()
@@ -293,7 +296,7 @@ async def update_admin_service(
     result = await session.execute(
         select(Service)
         .options(selectinload(Service.category))
-        .where(Service.id == service_id)
+        .where(Service.id == service_id, Service.deleted_at.is_(None))
     )
 
     service = result.scalar_one_or_none()
@@ -339,3 +342,41 @@ async def update_admin_service(
     )
 
     return service_response(result.scalar_one())
+
+
+@router.delete(
+    "/{service_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission(Permission.SERVICES_DELETE))],
+)
+async def archive_admin_service(
+    service_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Archive a service without destroying request history or foreign keys."""
+    service = await session.scalar(
+        select(Service).where(
+            Service.id == service_id,
+            Service.deleted_at.is_(None),
+        )
+    )
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found.")
+
+    now = datetime.now(timezone.utc)
+    service.is_active = False
+    service.deleted_at = now
+    session.add(
+        AuditLog(
+            actor_id=current_user.id,
+            action="service.archived",
+            resource_type="service",
+            resource_id=service.id,
+            description=f"Admin archived service '{service.name}'.",
+            event_metadata={"service_id": str(service.id)},
+            created_at=now,
+        )
+    )
+    await session.commit()
+    return Response(status_code=204)
