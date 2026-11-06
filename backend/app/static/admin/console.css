@@ -205,3 +205,92 @@
 @media (prefers-reduced-motion: reduce) {
   .sidebar, .sidebar-scrim { transition: none !important; }
 }
+
+
+/* Module 02 account security and access panels */
+.session-management,
+.identity-management,
+.security-events,
+.account-audit-history,
+.account-access-summary,
+.lifecycle-management {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.session-management .surface-head,
+.identity-management .surface-head,
+.security-events .surface-head,
+.account-audit-history .surface-head,
+.account-access-summary .surface-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.session-management h4,
+.identity-management h4,
+.security-events h4,
+.account-audit-history h4,
+.account-access-summary h4,
+.lifecycle-management h4 {
+  margin: 0;
+  font-size: 15px;
+}
+.session-management .muted,
+.identity-management .muted,
+.security-events .muted,
+.account-audit-history .muted,
+.account-access-summary .muted,
+.lifecycle-management .muted {
+  margin: 5px 0 0;
+  line-height: 1.6;
+}
+.access-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.access-summary-grid h5 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.chip-list,
+.permission-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+.permission-code {
+  display: inline-block;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.session-management .table-scroll,
+.identity-management .table-scroll,
+.security-events .table-scroll,
+.account-audit-history .table-scroll {
+  border-radius: 9px;
+}
+.lifecycle-management textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+@media (max-width: 760px) {
+  .access-summary-grid { grid-template-columns: minmax(0, 1fr); }
+  .session-management,
+  .identity-management,
+  .security-events,
+  .account-audit-history,
+  .account-access-summary,
+  .lifecycle-management { padding: 14px; }
+}
