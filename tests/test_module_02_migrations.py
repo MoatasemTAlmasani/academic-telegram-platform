@@ -81,8 +81,9 @@ def test_module_02_migrations_upgrade_and_downgrade_in_isolated_database() -> No
             }
             assert ("token_hash",) in challenge_unique
 
-            for migration in reversed(migrations):
-                migration.downgrade()
+            with Operations.context(MigrationContext.configure(connection)):
+                for migration in reversed(migrations):
+                    migration.downgrade()
 
             remaining = set(inspect(connection).get_table_names())
             assert not expected_tables.intersection(remaining)
