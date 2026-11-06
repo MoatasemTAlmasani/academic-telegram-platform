@@ -84,6 +84,13 @@ This file records implementation evidence and remaining work. It does not mark t
 - Added OpenAPI-bound and unauthenticated-access regression checks.
 - Status: `IMPLEMENTED`; the tests and browser interaction still need execution before `VERIFIED`.
 
+## KPI drill-down slice
+
+- KPI cards for customers, users, requests, staff, and services now open their existing management lists.
+- Drill-down affordances are rendered only when the current user has the corresponding read permission.
+- Cards support pointer and keyboard activation and do not invent filters or expose inaccessible pages.
+- Status: `IMPLEMENTED`; browser and permission-matrix verification remain outstanding.
+
 ## Validation status
 
 - The latest commit has no GitHub Actions workflow run attached, so no automated test result is available yet.
