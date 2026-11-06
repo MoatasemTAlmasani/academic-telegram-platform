@@ -759,6 +759,60 @@ async def delete_admin_user(
     await session.commit()
 
 
+class AdminUserAuditEntryResponse(BaseModel):
+    """Redacted audit event associated with an account."""
+
+    id: UUID
+    actor_id: UUID | None = None
+    action: str
+    resource_type: str
+    description: str | None = None
+    created_at: datetime
+
+
+@router.get(
+    "/{user_id}/audit-history",
+    response_model=list[AdminUserAuditEntryResponse],
+    dependencies=[Depends(require_permission(Permission.AUDIT_READ))],
+)
+async def list_admin_user_audit_history(
+    user_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[AdminUserAuditEntryResponse]:
+    """Return redacted audit history related to or performed by the account."""
+    from fastapi import HTTPException
+
+    user_result = await session.execute(
+        select(User.id).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    if user_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    result = await session.execute(
+        select(AuditLog)
+        .where(
+            or_(
+                (AuditLog.resource_type == "user") & (AuditLog.resource_id == user_id),
+                AuditLog.actor_id == user_id,
+            )
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(100)
+    )
+    return [
+        AdminUserAuditEntryResponse(
+            id=item.id,
+            actor_id=item.actor_id,
+            action=item.action,
+            resource_type=item.resource_type,
+            description=item.description,
+            created_at=item.created_at,
+        )
+        for item in result.scalars().all()
+    ]
+
+
 class AdminUserLoginAttemptResponse(BaseModel):
     """Privacy-safe login attempt details for an account."""
 
