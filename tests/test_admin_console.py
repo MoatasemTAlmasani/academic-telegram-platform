@@ -60,6 +60,13 @@ def test_dashboard_period_analytics_asset_is_served() -> None:
     assert "periodServiceChart" in response.text
 
 
+
+def test_request_management_exposes_create_read_update_archive_routes() -> None:
+    paths = app.openapi()["paths"]
+    assert {"get", "post"}.issubset(paths["/api/v1/admin/requests"].keys())
+    assert {"get", "patch", "delete"}.issubset(paths["/api/v1/admin/requests/{request_id}"].keys())
+
+
 def test_staff_management_exposes_full_crud_routes() -> None:
     paths = app.openapi()["paths"]
     assert {"get", "post"}.issubset(paths["/api/v1/admin/staff"].keys())
