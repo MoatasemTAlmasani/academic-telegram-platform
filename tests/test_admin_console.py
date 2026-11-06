@@ -1036,6 +1036,13 @@ def test_admin_user_workspace_exposes_personal_preferences_access_policy_and_exp
     assert 'id="userPreferencesForm"' in page
     assert 'id="userAccessPolicyForm"' in page
     assert 'id="exportUsersCsv"' in page
+    assert 'id="bulkUsersPanel"' in page
+    assert 'id="selectAllUsersPage"' in page
+    assert 'id="previewBulkUsers"' in page
+    assert 'id="applyBulkUsers"' in page
+    assert '/admin/users/bulk/preview' in script
+    assert '/admin/users/bulk/lifecycle' in script
+    assert 'data-select-user' in script
     assert '/auth/preferences' in script
     assert '/access-policy' in script
     assert '/admin/users/export.csv' in script
