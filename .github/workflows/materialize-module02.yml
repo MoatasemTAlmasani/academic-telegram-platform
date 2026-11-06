@@ -40,6 +40,7 @@ jobs:
                       raise SystemExit(f"Unsafe archive member: {member.name}")
           PY
           tar -xJf /tmp/module02-release/source.tar.xz -C .
+          sed -i 's/[[:space:]]\+$//' docs/MODULE_02_USERS_ACCOUNTS_STATUS.md
           rm -rf .module02-transfer
           rm -f .github/workflows/materialize-module02.yml
           git add -A
