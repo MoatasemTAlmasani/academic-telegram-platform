@@ -108,8 +108,12 @@ async def list_admin_users(
         count_query = count_query.where(search_filter)
 
     if status:
-        query = query.where(User.status == status)
-        count_query = count_query.where(User.status == status)
+        normalized_status = status.strip().upper()
+        if normalized_status not in {"ACTIVE", "INACTIVE", "SUSPENDED"}:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=422, detail="Unsupported account status.")
+        query = query.where(func.upper(User.status) == normalized_status)
+        count_query = count_query.where(func.upper(User.status) == normalized_status)
 
     if role:
         query = query.join(User.roles).where(Role.name == role)
@@ -182,7 +186,7 @@ async def get_admin_user(
         .options(
             selectinload(User.roles).selectinload(Role.permissions)
         )
-        .where(User.id == user_id)
+        .where(User.id == user_id, User.deleted_at.is_(None))
     )
 
     user = result.scalar_one_or_none()
@@ -249,10 +253,15 @@ async def create_admin_user(
     from fastapi import HTTPException
     from backend.app.modules.authentication.passwords import hash_password
 
-    conditions = [User.username == payload.username]
+    normalized_username = payload.username.strip()
+    normalized_email = payload.email.strip().lower() if payload.email else None
+    if len(normalized_username) < 3:
+        raise HTTPException(status_code=422, detail="Username must contain at least 3 non-space characters.")
 
-    if payload.email:
-        conditions.append(User.email == payload.email)
+    conditions = [func.lower(User.username) == normalized_username.lower()]
+
+    if normalized_email:
+        conditions.append(func.lower(User.email) == normalized_email)
 
     existing = await session.execute(
         select(User).where(or_(*conditions))
@@ -264,8 +273,16 @@ async def create_admin_user(
             detail="Username or email already exists.",
         )
 
+    # Role governance belongs to Module 03. Module 02 must not let a user
+    # creator assign arbitrary or privileged roles through this endpoint.
+    if payload.role.strip().lower() != "customer":
+        raise HTTPException(
+            status_code=403,
+            detail="Role assignment is managed by the Roles & Permissions module.",
+        )
+
     role_result = await session.execute(
-        select(Role).where(Role.name == payload.role)
+        select(Role).where(func.lower(Role.name) == payload.role.strip().lower())
     )
 
     role = role_result.scalar_one_or_none()
@@ -280,9 +297,9 @@ async def create_admin_user(
         raise HTTPException(status_code=422, detail="Unsupported account status.")
 
     user = User(
-        username=payload.username.strip(),
+        username=normalized_username,
         password_hash=hash_password(payload.password),
-        email=payload.email,
+        email=normalized_email,
         first_name=payload.first_name,
         last_name=payload.last_name,
         phone=payload.phone,
@@ -379,16 +396,25 @@ async def update_admin_user(
 
     user = result.scalar_one_or_none()
 
-    if user is None:
+    if user is None or user.deleted_at is not None:
         raise HTTPException(
             status_code=404,
             detail="User not found.",
         )
 
-    if payload.username is not None and payload.username != user.username:
+    if payload.role is not None:
+        raise HTTPException(
+            status_code=403,
+            detail="Role assignment is managed by the Roles & Permissions module.",
+        )
+
+    if payload.username is not None:
+        normalized_username = payload.username.strip()
+        if len(normalized_username) < 3:
+            raise HTTPException(status_code=422, detail="Username must contain at least 3 non-space characters.")
         duplicate = await session.execute(
             select(User).where(
-                User.username == payload.username,
+                func.lower(User.username) == normalized_username.lower(),
                 User.id != user.id,
             )
         )
@@ -399,23 +425,24 @@ async def update_admin_user(
                 detail="Username already exists.",
             )
 
-        user.username = payload.username
+        user.username = normalized_username
 
-    if payload.email is not None and payload.email != user.email:
+    if payload.email is not None:
+        normalized_email = payload.email.strip().lower() or None
         duplicate = await session.execute(
             select(User).where(
-                User.email == payload.email,
+                func.lower(User.email) == normalized_email,
                 User.id != user.id,
             )
-        )
+        ) if normalized_email else None
 
-        if duplicate.scalar_one_or_none() is not None:
+        if duplicate is not None and duplicate.scalar_one_or_none() is not None:
             raise HTTPException(
                 status_code=409,
                 detail="Email already exists.",
             )
 
-        user.email = payload.email
+        user.email = normalized_email
 
     if payload.password is not None:
         user.password_hash = hash_password(payload.password)
@@ -440,22 +467,6 @@ async def update_admin_user(
         if normalized_status not in {"ACTIVE", "INACTIVE", "SUSPENDED"}:
             raise HTTPException(status_code=422, detail="Unsupported account status.")
         user.status = normalized_status
-
-    if payload.role is not None:
-        role_result = await session.execute(
-            select(Role).where(Role.name == payload.role)
-        )
-
-        role = role_result.scalar_one_or_none()
-
-        if role is None:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Role '{payload.role}' does not exist.",
-            )
-
-        user.roles.clear()
-        user.roles.append(role)
 
     audit_log = AuditLog(
         actor_id=current_user.id,
@@ -519,7 +530,7 @@ async def delete_admin_user(
 
     result = await session.execute(
         select(User)
-        .where(User.id == user_id)
+        .where(User.id == user_id, User.deleted_at.is_(None))
     )
 
     user = result.scalar_one_or_none()
