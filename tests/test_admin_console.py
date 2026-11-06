@@ -915,3 +915,18 @@ def test_admin_user_audit_history_is_permission_scoped_and_redacted() -> None:
     assert script.status_code == 200
     assert '"/audit-history"' in script.text
     assert 'has("audit:read")' in script.text
+
+
+def test_admin_user_effective_access_summary_is_read_only() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/admin/users/{user_id}/access-summary"]
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userAccessRoles"' in page.text
+    assert 'id="userEffectivePermissions"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/access-summary"' in script.text
+    assert "effectivePermissions" in script.text
