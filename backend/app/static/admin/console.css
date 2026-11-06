@@ -34,3 +34,20 @@
 .dashboard-service-control .filter-select{min-width:160px;padding:9px 11px;min-height:38px}
 .dashboard-service-control .filter-select:disabled{opacity:.65;cursor:wait}
 @media(max-width:520px){.dashboard-service-control{width:100%;justify-content:space-between}.dashboard-service-control .filter-select{min-width:130px;width:auto}}
+
+
+.global-search-wrap{position:relative;width:min(270px,24vw);min-width:170px}
+.global-search-wrap input{width:100%;height:36px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);padding:0 12px;font:11px Cairo,Inter,sans-serif;outline:none}
+.global-search-wrap input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+.global-search-results{position:absolute;top:calc(100% + 9px);inset-inline-end:0;z-index:70;width:min(390px,calc(100vw - 28px));max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:13px;background:var(--panel2);box-shadow:var(--shadow);padding:6px}
+.global-search-results[hidden]{display:none}
+.global-search-result{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;border:0;border-radius:9px;background:transparent;color:var(--text);text-align:start;padding:10px;cursor:pointer}
+.global-search-result:hover,.global-search-result:focus-visible{background:var(--panel);outline:1px solid var(--line)}
+.global-search-result-main{min-width:0;display:block}
+.global-search-result-main b,.global-search-result-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.global-search-result-main b{font-size:11px;font-weight:700}
+.global-search-result-main small{font-size:10px;color:var(--muted);margin-top:3px}
+.global-search-result-type{flex:none;font-size:9px;color:var(--accent2);border:1px solid var(--line);border-radius:20px;padding:4px 7px}
+.global-search-state{padding:16px 12px;color:var(--muted);font-size:11px;text-align:center}
+@media(max-width:900px){.global-search-wrap{width:190px;min-width:140px}.topbar{padding-inline:18px}}
+@media(max-width:620px){.global-search-wrap{width:clamp(120px,34vw,170px);min-width:0}.topbar-right{gap:7px}.user-meta{display:none}.environment-pill{display:none}.topbar{padding-inline:12px}}
