@@ -663,3 +663,53 @@ def test_login_attempt_migration_follows_user_session_migration() -> None:
     spec.loader.exec_module(migration)
     assert migration.revision == "bb22cc33dd44"
     assert migration.down_revision == "aa11bb22cc33"
+
+
+def test_telegram_identity_linking_uses_one_time_challenge_and_verified_bot_command() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/auth/identity-links"]
+    assert "post" in paths["/api/v1/auth/identity-links/telegram/challenge"]
+    assert "delete" in paths["/api/v1/auth/identity-links/telegram"]
+
+    from database.models.security import ExternalIdentity, IdentityLinkChallenge
+
+    identity_constraints = {
+        constraint.name for constraint in ExternalIdentity.__table__.constraints
+    }
+    assert "uq_external_identity_provider_subject" in identity_constraints
+    assert "uq_external_identity_user_provider" in identity_constraints
+    assert IdentityLinkChallenge.__table__.c.token_hash.type.length == 64
+
+    from pathlib import Path
+
+    bot_source = (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "app"
+        / "infrastructure"
+        / "telegram"
+        / "bot_runner.py"
+    ).read_text(encoding="utf-8")
+    assert '== "/link"' in bot_source
+    assert "IdentityLinkChallenge.token_hash == token_hash" in bot_source
+    assert "ExternalIdentity(" in bot_source
+    assert "لم يتم دمج الحسابات تلقائياً" in bot_source
+
+
+def test_external_identity_migration_follows_login_attempt_migration() -> None:
+    from importlib.util import module_from_spec, spec_from_file_location
+    from pathlib import Path
+
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "database"
+        / "migrations"
+        / "versions"
+        / "cc33dd44ee55_external_identity_linking.py"
+    )
+    spec = spec_from_file_location("external_identity_migration", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    assert migration.revision == "cc33dd44ee55"
+    assert migration.down_revision == "bb22cc33dd44"
