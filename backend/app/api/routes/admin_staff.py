@@ -301,6 +301,20 @@ async def create_staff(
     user.staff_profile = profile
 
     session.add(user)
+    await session.flush()
+    now = datetime.now(timezone.utc)
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="staff.created",
+        resource_type="staff",
+        resource_id=user.id,
+        description=f"Admin created staff member '{user.username}'.",
+        event_metadata={
+            "specialization": profile.specialization,
+            "is_active": profile.is_active,
+        },
+        created_at=now,
+    ))
 
     try:
         await session.commit()
@@ -345,6 +359,18 @@ async def update_staff(
         )
 
     data = payload.model_dump(exclude_unset=True)
+    before = {
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": user.phone,
+        "language": user.language,
+        "timezone": user.timezone,
+        "status": str(user.status),
+        "specialization": user.staff_profile.specialization if user.staff_profile else None,
+        "availability": user.staff_profile.availability if user.staff_profile else None,
+        "is_active": user.staff_profile.is_active if user.staff_profile else None,
+    }
 
     password = data.pop("password", None)
     specialization = data.pop("specialization", None)
@@ -385,6 +411,29 @@ async def update_staff(
 
     if "is_active" in payload.model_fields_set:
         profile.is_active = is_active
+
+    now = datetime.now(timezone.utc)
+    after = {
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": user.phone,
+        "language": user.language,
+        "timezone": user.timezone,
+        "status": str(user.status),
+        "specialization": profile.specialization,
+        "availability": profile.availability,
+        "is_active": profile.is_active,
+    }
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="staff.updated",
+        resource_type="staff",
+        resource_id=user.id,
+        description=f"Admin updated staff member '{user.username or user.id}'.",
+        event_metadata={"before": before, "after": after, "password_changed": password is not None},
+        created_at=now,
+    ))
 
     try:
         await session.commit()
