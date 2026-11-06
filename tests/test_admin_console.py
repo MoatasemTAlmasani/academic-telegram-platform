@@ -1026,3 +1026,16 @@ def test_account_policy_partial_updates_can_distinguish_omitted_fields() -> None
     payload = AdminUserAccessPolicyRequest(reason="Clear temporary lock", locked_until=None)
     assert "locked_until" in payload.model_fields_set
     assert "account_expires_at" not in payload.model_fields_set
+
+
+def test_admin_user_workspace_exposes_personal_preferences_access_policy_and_export() -> None:
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    page = (root / "backend" / "app" / "static" / "admin" / "console.html").read_text(encoding="utf-8")
+    script = (root / "backend" / "app" / "static" / "admin" / "console.js").read_text(encoding="utf-8")
+    assert 'id="userPreferencesForm"' in page
+    assert 'id="userAccessPolicyForm"' in page
+    assert 'id="exportUsersCsv"' in page
+    assert '/auth/preferences' in script
+    assert '/access-policy' in script
+    assert '/admin/users/export.csv' in script
