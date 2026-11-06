@@ -64,6 +64,21 @@ class AdminUserListResponse(BaseModel):
     total_pages: int
 
 
+def _safe_user_audit_snapshot(user: User) -> dict[str, str | None]:
+    """Return approved non-secret account fields for before/after audit metadata."""
+
+    return {
+        "username": user.username,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": user.phone,
+        "language": user.language,
+        "timezone": user.timezone,
+        "status": str(user.status),
+    }
+
+
 @router.get(
     "",
     response_model=AdminUserListResponse,
@@ -402,6 +417,8 @@ async def update_admin_user(
             detail="User not found.",
         )
 
+    before_values = _safe_user_audit_snapshot(user)
+
     if payload.role is not None:
         raise HTTPException(
             status_code=403,
@@ -474,7 +491,12 @@ async def update_admin_user(
         resource_type="user",
         resource_id=user.id,
         description=f"Admin updated user '{user.username}'.",
-        event_metadata={"user_id": str(user.id)},
+        event_metadata={
+            "user_id": str(user.id),
+            "before": before_values,
+            "after": _safe_user_audit_snapshot(user),
+            "password_changed": payload.password is not None,
+        },
         created_at=datetime.now(timezone.utc),
     )
     session.add(audit_log)
