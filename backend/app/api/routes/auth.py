@@ -224,6 +224,10 @@ async def create_telegram_link_challenge(
         )
 
     now = datetime.now(timezone.utc)
+    # Serialize challenge issuance on the owning user row to prevent parallel code creation.
+    await uow.session.execute(
+        select(type(current_user)).where(type(current_user).id == current_user.id).with_for_update()
+    )
     recent_challenge = await uow.session.execute(
         select(IdentityLinkChallenge.id).where(
             IdentityLinkChallenge.user_id == current_user.id,
@@ -249,12 +253,13 @@ async def create_telegram_link_challenge(
         .values(consumed_at=now)
     )
     link_code = secrets.token_urlsafe(24)
+    expires_at = now + timedelta(minutes=10)
     challenge = IdentityLinkChallenge(
         user_id=current_user.id,
         provider="telegram",
         token_hash=sha256(link_code.encode("utf-8")).hexdigest(),
         created_at=now,
-        expires_at=now + timedelta(minutes=10),
+        expires_at=expires_at,
     )
     uow.session.add(challenge)
     await uow.session.commit()
@@ -262,7 +267,7 @@ async def create_telegram_link_challenge(
     return TelegramLinkChallengeResponse(
         link_code=link_code,
         bot_command=f"/link {link_code}",
-        expires_at=challenge.expires_at,
+        expires_at=expires_at,
     )
 
 
