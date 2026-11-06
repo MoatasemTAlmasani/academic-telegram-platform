@@ -482,3 +482,37 @@ def test_account_deactivation_and_archival_revoke_sessions_in_transaction() -> N
     assert 'revoked_reason="account_status_changed"' in source
     assert 'revoked_reason="account_archived"' in source
     assert "UserSession.revoked_at.is_(None)" in source
+
+
+def test_user_lifecycle_requires_supported_action_and_reason() -> None:
+    from backend.app.api.routes.admin_users import AdminUserLifecycleRequest
+
+    valid = AdminUserLifecycleRequest(action="suspend", reason="Policy violation")
+    assert valid.action == "suspend"
+
+    for payload in (
+        {"action": "lock", "reason": "Policy violation"},
+        {"action": "suspend", "reason": "no"},
+    ):
+        try:
+            AdminUserLifecycleRequest(**payload)
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError("Lifecycle actions must be supported and include a meaningful reason.")
+
+
+def test_user_lifecycle_route_and_ui_are_exposed() -> None:
+    paths = app.openapi()["paths"]
+    assert "post" in paths["/api/v1/admin/users/{user_id}/lifecycle"]
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userLifecycleForm"' in page.text
+    assert 'id="userLifecycleReason"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/lifecycle"' in script.text
+    assert "reason:$(" in script.text
+    assert "دورة حياة الحساب" in script.text
