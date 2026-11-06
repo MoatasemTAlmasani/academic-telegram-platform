@@ -1875,7 +1875,7 @@ class TelegramBotRunner:
             return
 
         text = str(message.get("text") or "").strip()
-        if text.split(maxsplit=1)[0].split("@")[0] == "/link":
+        if text and text.split(maxsplit=1)[0].split("@")[0] == "/link":
             parts = text.split(maxsplit=1)
             if len(parts) != 2:
                 reply_text = "لربط حسابك، أرسل الأمر /link متبوعاً برمز الربط الذي أنشأته من حسابك في المنصة."
