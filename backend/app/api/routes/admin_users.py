@@ -55,6 +55,8 @@ class AdminUserResponse(BaseModel):
     language: str | None = None
     timezone: str | None = None
     status: str
+    locked_until: datetime | None = None
+    account_expires_at: datetime | None = None
     roles: list[AdminUserRoleResponse]
     created_at: object
     updated_at: object
@@ -950,6 +952,79 @@ async def list_admin_user_identities(
         )
         for item in result.scalars().all()
     ]
+
+
+class AdminUserAccessPolicyRequest(BaseModel):
+    locked_until: datetime | None = None
+    account_expires_at: datetime | None = None
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@router.patch(
+    "/{user_id}/access-policy",
+    response_model=AdminUserResponse,
+    dependencies=[Depends(require_permission(Permission.USERS_UPDATE))],
+)
+async def update_admin_user_access_policy(
+    user_id: UUID,
+    payload: AdminUserAccessPolicyRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminUserResponse:
+    """Set a temporary account lock and/or an account expiry date with an audit trail."""
+    from fastapi import HTTPException
+
+    now = datetime.now(timezone.utc)
+    if payload.locked_until is not None and payload.locked_until <= now:
+        raise HTTPException(status_code=422, detail="Lock expiry must be in the future.")
+    if payload.account_expires_at is not None and payload.account_expires_at <= now:
+        raise HTTPException(status_code=422, detail="Account expiry must be in the future.")
+    result = await session.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None)).options(selectinload(User.roles)).with_for_update()
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if user.id == current_user.id and payload.locked_until is not None:
+        raise HTTPException(status_code=400, detail="You cannot lock your own current account.")
+    if user.status == "ACTIVE" and (payload.locked_until is not None or payload.account_expires_at is not None):
+        await _protect_last_active_admin(session, user.id)
+
+    before = {
+        "locked_until": user.locked_until.isoformat() if user.locked_until else None,
+        "account_expires_at": user.account_expires_at.isoformat() if user.account_expires_at else None,
+    }
+    user.locked_until = payload.locked_until
+    user.account_expires_at = payload.account_expires_at
+    revoked = 0
+    if payload.locked_until is not None:
+        revoke_result = await session.execute(
+            update(UserSession).where(
+                UserSession.user_id == user.id,
+                UserSession.revoked_at.is_(None),
+            ).values(revoked_at=now, revoked_reason="account_locked")
+        )
+        revoked = revoke_result.rowcount or 0
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="user.access_policy_updated",
+        resource_type="user",
+        resource_id=user.id,
+        description=f"Admin updated access policy for '{user.username}'.",
+        event_metadata={
+            "reason": payload.reason.strip(),
+            "before": before,
+            "after": {
+                "locked_until": payload.locked_until.isoformat() if payload.locked_until else None,
+                "account_expires_at": payload.account_expires_at.isoformat() if payload.account_expires_at else None,
+            },
+            "revoked_sessions": revoked,
+        },
+        created_at=now,
+    ))
+    await session.commit()
+    await session.refresh(user)
+    return AdminUserResponse.model_validate(user)
 
 
 class AdminUserSessionResponse(BaseModel):
