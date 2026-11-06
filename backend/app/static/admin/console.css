@@ -205,3 +205,100 @@
 @media (prefers-reduced-motion: reduce) {
   .sidebar, .sidebar-scrim { transition: none !important; }
 }
+
+
+/* Module 02 account security and access panels */
+.session-management,
+.identity-management,
+.security-events,
+.account-audit-history,
+.account-access-summary,
+.lifecycle-management {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.session-management .surface-head,
+.identity-management .surface-head,
+.security-events .surface-head,
+.account-audit-history .surface-head,
+.account-access-summary .surface-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.session-management h4,
+.identity-management h4,
+.security-events h4,
+.account-audit-history h4,
+.account-access-summary h4,
+.lifecycle-management h4 {
+  margin: 0;
+  font-size: 15px;
+}
+.session-management .muted,
+.identity-management .muted,
+.security-events .muted,
+.account-audit-history .muted,
+.account-access-summary .muted,
+.lifecycle-management .muted {
+  margin: 5px 0 0;
+  line-height: 1.6;
+}
+.access-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.access-summary-grid h5 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.chip-list,
+.permission-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+.permission-code {
+  display: inline-block;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.session-management .table-scroll,
+.identity-management .table-scroll,
+.security-events .table-scroll,
+.account-audit-history .table-scroll {
+  border-radius: 9px;
+}
+.lifecycle-management textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+@media (max-width: 760px) {
+  .access-summary-grid { grid-template-columns: minmax(0, 1fr); }
+  .session-management,
+  .identity-management,
+  .security-events,
+  .account-audit-history,
+  .account-access-summary,
+  .lifecycle-management { padding: 14px; }
+}
+
+/* User profile workspace navigation */
+.profile-tabs{display:flex;gap:8px;overflow-x:auto;padding:10px 0 14px;margin:4px 0 18px;border-bottom:1px solid var(--line,rgba(148,163,184,.18));scrollbar-width:thin}
+.profile-tab{flex:0 0 auto;border:1px solid var(--line,rgba(148,163,184,.2));border-radius:10px;padding:9px 13px;background:var(--surface-2,rgba(148,163,184,.06));color:var(--text-muted,var(--muted,#94a3b8));font:inherit;font-size:.88rem;font-weight:600;cursor:pointer;transition:background .15s ease,border-color .15s ease,color .15s ease}
+.profile-tab:hover{border-color:var(--accent,#4f8cff);color:var(--text,var(--foreground,#e2e8f0))}
+.profile-tab.is-active{background:rgba(59,130,246,.14);border-color:var(--accent,#4f8cff);color:var(--accent-strong,#8db7ff)}
+.profile-tab:focus-visible{outline:2px solid var(--accent,#4f8cff);outline-offset:2px}
+@media(max-width:700px){.profile-tabs{margin-inline:-2px;padding-inline:2px}.profile-tab{padding:8px 11px;font-size:.82rem}}
