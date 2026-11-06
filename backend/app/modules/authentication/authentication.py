@@ -23,6 +23,7 @@ class AuthenticationError(Exception):
 
 LOGIN_WINDOW_MINUTES = 15
 USERNAME_IP_FAILURE_LIMIT = 5
+USERNAME_FAILURE_LIMIT = 10
 IP_FAILURE_LIMIT = 20
 LOGIN_LOCKOUT_MINUTES = 15
 
@@ -56,6 +57,15 @@ class AuthenticationService:
         )
         pair_failures = pair_count_result.scalar_one()
 
+        username_count_result = await self.uow.session.execute(
+            select(func.count(LoginAttempt.id)).where(
+                LoginAttempt.username_key == username_key,
+                LoginAttempt.succeeded.is_(False),
+                LoginAttempt.attempted_at >= window_start,
+            )
+        )
+        username_failures = username_count_result.scalar_one()
+
         ip_failures = 0
         if ip_address:
             ip_count_result = await self.uow.session.execute(
@@ -69,6 +79,7 @@ class AuthenticationService:
 
         if (
             pair_failures >= USERNAME_IP_FAILURE_LIMIT
+            or username_failures >= USERNAME_FAILURE_LIMIT
             or ip_failures >= IP_FAILURE_LIMIT
         ):
             self.uow.session.add(
