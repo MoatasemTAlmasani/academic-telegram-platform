@@ -7,9 +7,10 @@ import os
 """Admin service requests management API."""
 
 
+from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,7 @@ from backend.app.api.rbac_dependencies import require_permission
 from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.permissions import Permission
 from database.models.enums import RequestPriority, ServiceRequestStatus
+from database.models.audit import AuditLog
 from database.models.requests import ServiceRequest
 
 
@@ -315,3 +317,36 @@ async def update_admin_request(
         "priority": request.priority.value if hasattr(request.priority, "value") else str(request.priority),
         "notes": request.notes,
     }
+
+
+@router.delete(
+    "/{request_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission(Permission.REQUESTS_UPDATE))],
+)
+async def archive_admin_request(
+    request_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    request = await session.scalar(
+        select(ServiceRequest).where(
+            ServiceRequest.id == request_id,
+            ServiceRequest.deleted_at.is_(None),
+        )
+    )
+    if request is None:
+        raise HTTPException(status_code=404, detail="Request not found.")
+    now = datetime.now(timezone.utc)
+    request.deleted_at = now
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="request.archived",
+        resource_type="service_request",
+        resource_id=request.id,
+        description=f"Admin archived request '{request.title}'.",
+        event_metadata={"request_id": str(request.id)},
+        created_at=now,
+    ))
+    await session.commit()
+    return Response(status_code=204)
