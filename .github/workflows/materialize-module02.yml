@@ -45,7 +45,7 @@ jobs:
           rm -f .github/workflows/materialize-module02.yml
           git add -A
           git diff --cached --check
-          test "$(git diff --cached --name-only | wc -l)" -eq 28
+          test "$(git diff --cached --name-only --diff-filter=AM | wc -l)" -eq 28
           git diff --cached --stat
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
