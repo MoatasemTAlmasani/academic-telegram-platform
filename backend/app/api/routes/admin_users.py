@@ -567,7 +567,7 @@ async def transition_admin_user_lifecycle(
     from fastapi import HTTPException
 
     result = await session.execute(
-        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+        select(User).where(User.id == user_id, User.deleted_at.is_(None)).with_for_update()
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -659,6 +659,7 @@ async def delete_admin_user(
     result = await session.execute(
         select(User)
         .where(User.id == user_id, User.deleted_at.is_(None))
+        .with_for_update()
     )
 
     user = result.scalar_one_or_none()
