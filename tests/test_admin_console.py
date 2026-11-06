@@ -201,3 +201,44 @@ def test_admin_console_stylesheet_includes_mobile_and_tablet_layouts() -> None:
     assert ".sidebar-scrim.show" in response.text
     assert ".main-area" in response.text
     assert ".table-scroll" in response.text
+
+
+def test_users_section_uses_approved_bilingual_management_name() -> None:
+    response = asyncio.run(get("/admin/static/console.js"))
+    assert response.status_code == 200
+    assert "User & Account Management" in response.text
+    assert "إدارة المستخدمين والحسابات" in response.text
+
+
+def test_admin_users_exposes_existing_directory_and_update_contract() -> None:
+    paths = app.openapi()["paths"]
+    assert {"get", "post"}.issubset(paths["/api/v1/admin/users"].keys())
+    assert {"get", "patch", "delete"}.issubset(paths["/api/v1/admin/users/{user_id}"].keys())
+
+
+def test_suspended_users_cannot_authenticate() -> None:
+    from types import SimpleNamespace
+    from backend.app.modules.authentication.authentication import (
+        AuthenticationError,
+        AuthenticationService,
+    )
+
+    suspended_user = SimpleNamespace(
+        status="SUSPENDED",
+        deleted_at=None,
+        password_hash="not-used",
+    )
+
+    class FakeUsers:
+        async def get_by_username(self, username: str):
+            return suspended_user
+
+    class FakeUnitOfWork:
+        users = FakeUsers()
+
+    try:
+        asyncio.run(AuthenticationService(FakeUnitOfWork()).authenticate("operator", "password"))
+    except AuthenticationError:
+        pass
+    else:
+        raise AssertionError("Suspended accounts must not receive access tokens.")
