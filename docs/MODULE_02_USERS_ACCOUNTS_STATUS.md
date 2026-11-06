@@ -37,10 +37,10 @@ This document records implementation evidence. The approved roadmap remains the 
   - Python tests: run 42265113385.
   - Phase 01 verification: run 42265113438.
 - New tests cover:
-  - bounded pagination contract,
-  - safe user response schema and audit snapshots,
-  - separate bilingual admin directory pagination controls,
-  - account creation and profile detail/edit workspaces.
+  - bounded pagination and credential-free response contracts,
+  - safe audit snapshots,
+  - bilingual user/customer directories, account creation, profile editing, session controls, and lifecycle forms,
+  - persistent session creation, session-bound JWTs, and lifecycle API contracts.
 - Python tests passed on commit `6c3b709d04eeca079da30e17464e8d572fca242b` (run 42271376772).
 - Phase 01 verification passed on the same commit (run 42271376792).
 - These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
@@ -48,17 +48,16 @@ This document records implementation evidence. The approved roadmap remains the 
 
 ## Not yet implemented — remains in Module 02 scope
 
-1. Full user create/edit/detail forms and profile workspace with the required tabs.
+1. Complete profile workspace tabs, user activity timeline, and user preferences.
 2. Extend lifecycle policy with lock/unlock, expiry, deletion requests, and last active Super Admin protection.
 3. Password reset/change workflow, email/phone verification, attempt limits, and rate limiting.
-5. Verified external identity linking/unlinking, including Telegram proof validation and one-time linking challenges.
-6. Effective-access summary integrated with Module 03, including actor authority checks and last active Super Admin protection.
-7. Security events and a user activity timeline distinct from the authoritative audit log.
-8. User preferences and notification preferences integrated with the existing settings/notification services.
-9. Previewed, bounded bulk operations with per-record outcomes.
-10. Validated CSV import/export, field-level authorization, and expiring protected downloads.
-11. End-to-end API authorization, IDOR, lifecycle, concurrency, and browser acceptance coverage.
-12. Full operational documentation, retention policy, and acceptance evidence.
+4. Verified external identity linking/unlinking, including Telegram proof validation and one-time linking challenges.
+5. Effective-access summary integrated with Module 03, including actor authority checks and role/permission administration.
+6. Security events and a user activity timeline distinct from the authoritative audit log.
+7. Previewed, bounded bulk operations with per-record outcomes.
+8. Validated CSV import/export, field-level authorization, and expiring protected downloads.
+9. End-to-end API authorization, IDOR, lifecycle, concurrency, and browser acceptance coverage.
+10. Full operational documentation, retention policy, and acceptance evidence.
 
 ## Database and production safety
 
