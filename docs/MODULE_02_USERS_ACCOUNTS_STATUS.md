@@ -31,6 +31,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - Account lifecycle transitions (activate, reactivate, deactivate, suspend) require a reason, enforce allowed state transitions, and write before/after status plus the reason to the audit log. Deactivation and suspension revoke all active sessions in the same transaction; self-deactivation and self-suspension are blocked.
 - Generic profile PATCH can no longer change account status; status changes must use the reasoned lifecycle endpoint.
 - Account archival requires a meaningful reason, records it in the audit log, preserves linked business records, and revokes all sessions. The UI exposes the archive action only with the delete permission.
+- Authenticated users can change their own password only after supplying the current password; new passwords require at least 12 characters, password changes are audited without credential data, and all active sessions are revoked to require reauthentication.
 
 ## Verification
 
@@ -40,8 +41,8 @@ This document records implementation evidence. The approved roadmap remains the 
 - New tests cover:
   - bounded pagination and credential-free response contracts,
   - safe audit snapshots,
-  - bilingual user/customer directories, account creation, profile editing, session controls, and lifecycle forms,
-  - persistent session creation, session-bound JWTs, and lifecycle API contracts.
+  - bilingual user/customer directories, account creation, profile editing, session controls, lifecycle and archive forms,
+  - persistent session creation, session-bound JWTs, lifecycle API contracts, and password-change validation.
 - Python tests passed on commit `6c3b709d04eeca079da30e17464e8d572fca242b` (run 42271376772).
 - Phase 01 verification passed on the same commit (run 42271376792).
 - These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
