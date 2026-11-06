@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -62,6 +62,13 @@ class AdminRequestCreate(BaseModel):
     description: str | None = None
     specialization: str | None = Field(default=None, max_length=255)
     priority: RequestPriority = RequestPriority.NORMAL
+
+class AdminRequestUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: ServiceRequestStatus | None = None
+    priority: RequestPriority | None = None
+    notes: str | None = Field(default=None, max_length=10000)
 
 
 @router.get(
@@ -177,49 +184,44 @@ async def get_admin_request_details(
 )
 async def update_admin_request(
     request_id: UUID,
-    payload: dict,
+    payload: AdminRequestUpdate,
+    current_user=Depends(get_current_user),
     session=Depends(get_session),
 ):
-    from fastapi import HTTPException
-    from database.models.requests import ServiceRequest, ServiceRequestStatus, RequestPriority
-
     request = await session.get(ServiceRequest, request_id)
 
-    if request is None or getattr(request, "deleted_at", None) is not None:
+    if request is None or request.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    original_status = (
-        request.status.value
-        if hasattr(request.status, "value")
-        else str(request.status)
-    )
+    before = {
+        "status": request.status.value,
+        "priority": request.priority.value,
+        "notes": request.notes,
+    }
+    changes = payload.model_dump(exclude_unset=True)
+    if "status" in changes and changes["status"] is not None:
+        request.status = changes["status"]
+    if "priority" in changes and changes["priority"] is not None:
+        request.priority = changes["priority"]
+    if "notes" in changes:
+        request.notes = changes["notes"] or None
 
-    if "status" in payload and payload["status"]:
-        try:
-            request.status = ServiceRequestStatus(payload["status"])
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid status")
-
-    if "priority" in payload and payload["priority"]:
-        try:
-            request.priority = RequestPriority(payload["priority"])
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid priority")
-
-    if "notes" in payload:
-        request.notes = payload["notes"] or None
-
-    new_status = (
-        request.status.value
-        if hasattr(request.status, "value")
-        else str(request.status)
-    )
-    status_changed = original_status != new_status
-
-
-    # Detect status change and notify customer after successful update
-    # The original status is captured from the request object before mutation.
-    # This variable is populated below when the endpoint is patched.
+    after = {
+        "status": request.status.value,
+        "priority": request.priority.value,
+        "notes": request.notes,
+    }
+    status_changed = before["status"] != after["status"]
+    now = datetime.now(timezone.utc)
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="request.updated",
+        resource_type="service_request",
+        resource_id=request.id,
+        description=f"Admin updated request '{request.title}'.",
+        event_metadata={"before": before, "after": after},
+        created_at=now,
+    ))
     await session.commit()
     await session.refresh(request)
 
