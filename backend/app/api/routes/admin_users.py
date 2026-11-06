@@ -82,12 +82,13 @@ async def _protect_last_active_admin(
     from fastapi import HTTPException
 
     target_is_admin = await session.execute(
-        select(User.id).where(
+        select(User.status).where(
             User.id == user_id,
             User.roles.any(Role.name == "admin"),
         )
     )
-    if target_is_admin.scalar_one_or_none() is None:
+    target_status = target_is_admin.scalar_one_or_none()
+    if target_status is None or str(target_status).upper() != "ACTIVE":
         return
 
     admin_role = await session.execute(
