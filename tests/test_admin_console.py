@@ -242,3 +242,36 @@ def test_suspended_users_cannot_authenticate() -> None:
         pass
     else:
         raise AssertionError("Suspended accounts must not receive access tokens.")
+
+
+
+def test_admin_users_directory_exposes_bounded_server_pagination() -> None:
+    operation = app.openapi()["paths"]["/api/v1/admin/users"]["get"]
+    parameters = {item["name"]: item["schema"] for item in operation["parameters"]}
+    assert parameters["page"]["minimum"] == 1
+    assert parameters["page_size"]["minimum"] == 1
+    assert parameters["page_size"]["maximum"] == 100
+
+    response = asyncio.run(get("/api/v1/admin/users?page=1&page_size=101"))
+    assert response.status_code == 401
+
+
+def test_admin_user_safe_response_never_exposes_credentials() -> None:
+    schema = app.openapi()["components"]["schemas"]["AdminUserResponse"]
+    properties = schema["properties"]
+    assert "password_hash" not in properties
+    assert "password" not in properties
+    assert {"id", "username", "status", "roles"}.issubset(properties)
+
+
+def test_user_directories_render_independent_pagination_controls() -> None:
+    response = asyncio.run(get("/admin/static/console.html"))
+    assert response.status_code == 200
+    assert 'id="userPagination"' in response.text
+    assert 'id="customerPagination"' in response.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert 'page_size:String(userPageSize)' in script.text
+    assert 'data-page-prev' in script.text
+    assert 'data-page-next' in script.text
