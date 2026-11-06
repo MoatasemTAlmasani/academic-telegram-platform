@@ -201,3 +201,1033 @@ def test_admin_console_stylesheet_includes_mobile_and_tablet_layouts() -> None:
     assert ".sidebar-scrim.show" in response.text
     assert ".main-area" in response.text
     assert ".table-scroll" in response.text
+
+
+def test_users_section_uses_approved_bilingual_management_name() -> None:
+    response = asyncio.run(get("/admin/static/console.js"))
+    assert response.status_code == 200
+    assert "User & Account Management" in response.text
+    assert "إدارة المستخدمين والحسابات" in response.text
+
+
+def test_admin_users_exposes_existing_directory_and_update_contract() -> None:
+    paths = app.openapi()["paths"]
+    assert {"get", "post"}.issubset(paths["/api/v1/admin/users"].keys())
+    assert {"get", "patch", "delete"}.issubset(paths["/api/v1/admin/users/{user_id}"].keys())
+
+
+def test_suspended_users_cannot_authenticate(monkeypatch) -> None:
+    from types import SimpleNamespace
+    from backend.app.modules.authentication import authentication as auth_module
+    from backend.app.modules.authentication.authentication import (
+        AuthenticationError,
+        AuthenticationService,
+    )
+
+    from backend.app.modules.authentication import jwt as jwt_module
+    from pydantic import SecretStr
+    monkeypatch.setattr(
+        jwt_module,
+        "get_settings",
+        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret")),
+    )
+    suspended_user = SimpleNamespace(
+        id=uuid4(),
+        status="SUSPENDED",
+        deleted_at=None,
+        password_hash="not-used",
+    )
+
+    class FakeUsers:
+        async def get_by_username(self, username: str):
+            return suspended_user
+
+    class FakeResult:
+        def scalar_one(self):
+            return 0
+
+    class FakeSession:
+        async def execute(self, statement):
+            return FakeResult()
+
+        def add(self, item):
+            pass
+
+        async def commit(self):
+            pass
+
+    class FakeUnitOfWork:
+        users = FakeUsers()
+        session = FakeSession()
+
+    try:
+        asyncio.run(AuthenticationService(FakeUnitOfWork()).authenticate("operator", "password"))
+    except AuthenticationError:
+        pass
+    else:
+        raise AssertionError("Suspended accounts must not receive access tokens.")
+
+
+
+def test_admin_users_directory_exposes_bounded_server_pagination() -> None:
+    operation = app.openapi()["paths"]["/api/v1/admin/users"]["get"]
+    parameters = {item["name"]: item["schema"] for item in operation["parameters"]}
+    assert parameters["page"]["minimum"] == 1
+    assert parameters["page_size"]["minimum"] == 1
+    assert parameters["page_size"]["maximum"] == 100
+
+
+
+def test_admin_user_safe_response_never_exposes_credentials() -> None:
+    schema = app.openapi()["components"]["schemas"]["AdminUserResponse"]
+    properties = schema["properties"]
+    assert "password_hash" not in properties
+    assert "password" not in properties
+    assert {"id", "username", "status", "roles"}.issubset(properties)
+
+
+def test_user_directories_render_independent_pagination_controls() -> None:
+    response = asyncio.run(get("/admin"))
+    assert response.status_code == 200
+    assert 'id="userPagination"' in response.text
+    assert 'id="customerPagination"' in response.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert 'page_size:String(userPageSize)' in script.text
+    assert 'data-page-prev' in script.text
+    assert 'data-page-next' in script.text
+
+
+
+def test_user_audit_snapshot_contains_only_approved_non_secret_fields() -> None:
+    from types import SimpleNamespace
+    from backend.app.api.routes.admin_users import _safe_user_audit_snapshot
+
+    snapshot = _safe_user_audit_snapshot(
+        SimpleNamespace(
+            username="operator",
+            email="operator@example.test",
+            first_name="Test",
+            last_name="Operator",
+            phone=None,
+            language="ar",
+            timezone="Asia/Aden",
+            status="ACTIVE",
+            password_hash="must-never-be-audited",
+            reset_token="must-never-be-audited",
+        )
+    )
+
+    assert snapshot == {
+        "username": "operator",
+        "email": "operator@example.test",
+        "first_name": "Test",
+        "last_name": "Operator",
+        "phone": None,
+        "language": "ar",
+        "timezone": "Asia/Aden",
+        "status": "ACTIVE",
+    }
+    assert "password_hash" not in snapshot
+    assert "reset_token" not in snapshot
+
+
+def test_user_creation_workspace_has_validated_bilingual_form() -> None:
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userCreateForm"' in page.text
+    assert 'id="newUserUsername"' in page.text
+    assert 'id="newUserPassword"' in page.text
+    assert 'minlength="12"' in page.text
+    assert 'id="newUserStatus"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert 'api("/admin/users",{method:"POST"' in script.text
+    assert 'role:"customer"' in script.text
+    assert 'has("users:create")' in script.text
+    assert "إنشاء حساب جديد" in script.text
+
+
+def test_user_profile_detail_and_edit_workspace_is_permission_aware() -> None:
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userDetailsPanel"' in page.text
+    assert 'id="userEditForm"' in page.text
+    assert 'id="closeUserDetails"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert 'api("/admin/users/"+encodeURIComponent(userId))' in script.text
+    assert 'method:"PATCH"' in script.text
+    assert 'has("users:update")' in script.text
+
+
+def test_user_session_api_contract_and_session_migration_head() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/admin/users/{user_id}/sessions"]
+    assert "delete" in paths["/api/v1/admin/users/{user_id}/sessions/{session_id}"]
+    assert "post" in paths["/api/v1/admin/users/{user_id}/sessions/revoke-all"]
+
+    from importlib.util import module_from_spec, spec_from_file_location
+    from pathlib import Path
+
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "database"
+        / "migrations"
+        / "versions"
+        / "aa11bb22cc33_add_user_sessions.py"
+    )
+    spec = spec_from_file_location("user_sessions_migration", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    assert migration.revision == "aa11bb22cc33"
+    assert migration.down_revision == "f4a29d806c12"
+
+
+def test_authentication_creates_persistent_session_before_issuing_token(monkeypatch) -> None:
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from backend.app.modules.authentication import authentication as auth_module
+    from backend.app.modules.authentication.authentication import AuthenticationService
+    from database.models.identity import UserSession
+    from database.models.security import LoginAttempt
+
+    user = SimpleNamespace(
+        id=uuid4(),
+        status="ACTIVE",
+        deleted_at=None,
+        password_hash="stored-hash",
+    )
+
+    class FakeUsers:
+        async def get_by_username(self, username):
+            return user
+
+    class FakeResult:
+        def scalar_one(self):
+            return 0
+
+    class FakeSession:
+        def __init__(self):
+            self.added = []
+            self.committed = False
+
+        def add(self, item):
+            self.added.append(item)
+
+        async def execute(self, statement):
+            return FakeResult()
+
+        async def commit(self):
+            self.committed = True
+
+    fake_session = FakeSession()
+
+    class FakeUnitOfWork:
+        users = FakeUsers()
+        session = fake_session
+
+    from backend.app.modules.authentication import jwt as jwt_module
+    from pydantic import SecretStr
+    monkeypatch.setattr(
+        jwt_module,
+        "get_settings",
+        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret")),
+    )
+    monkeypatch.setattr(auth_module, "verify_password", lambda password, password_hash: True)
+    monkeypatch.setattr(
+        auth_module,
+        "create_access_token",
+        lambda user_id, session_id: f"token:{user_id}:{session_id}",
+    )
+
+    token = asyncio.run(
+        AuthenticationService(FakeUnitOfWork()).authenticate(
+            "operator",
+            "correct-password",
+            ip_address="192.0.2.10",
+            user_agent="Test Browser",
+        )
+    )
+
+    assert token.startswith(f"token:{user.id}:")
+    assert fake_session.committed is True
+    assert len(fake_session.added) == 2
+    stored = next(item for item in fake_session.added if isinstance(item, UserSession))
+    successful_attempt = next(item for item in fake_session.added if isinstance(item, LoginAttempt))
+    assert stored.user_id == user.id
+    assert stored.ip_address == "192.0.2.10"
+    assert stored.user_agent == "Test Browser"
+    assert stored.expires_at > datetime.now(timezone.utc)
+    assert successful_attempt.succeeded is True
+
+
+def test_access_tokens_require_a_server_side_session_identifier(monkeypatch) -> None:
+    from uuid import uuid4
+    import jwt as jwt_library
+    from backend.app.modules.authentication import jwt as token_module
+
+    user_id = uuid4()
+    session_id = uuid4()
+    monkeypatch.setattr(token_module, "_get_secret_key", lambda: "test-secret-key")
+
+    token = token_module.create_access_token(user_id, session_id)
+    assert token_module.decode_access_token_with_session(token) == (user_id, session_id)
+
+    legacy_token = jwt_library.encode(
+        {"sub": str(user_id), "type": "access", "exp": 4102444800},
+        "test-secret-key",
+        algorithm=token_module.ALGORITHM,
+    )
+    try:
+        token_module.decode_access_token_with_session(legacy_token)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Tokens without a server-side session ID must be rejected.")
+
+
+def test_authenticated_requests_refresh_session_and_user_last_seen_at() -> None:
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "app"
+        / "api"
+        / "auth_dependencies.py"
+    ).read_text(encoding="utf-8")
+
+    assert "UserSession.last_seen_at.is_(None)" in source
+    assert "UserSession.last_seen_at < now - timedelta(minutes=5)" in source
+    assert '.values(last_seen_at=now)' in source
+    assert "update(User)" in source
+    assert "await session.commit()" in source
+
+
+def test_admin_user_details_exposes_bilingual_session_controls() -> None:
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userSessionsBody"' in page.text
+    assert 'id="revokeAllUserSessions"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/sessions/revoke-all"' in script.text
+    assert 'data-revoke-session' in script.text
+    assert 's.is_current' in script.text
+    assert "جلسات الحساب" in script.text
+
+
+def test_account_deactivation_and_archival_revoke_sessions_in_transaction() -> None:
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "app"
+        / "api"
+        / "routes"
+        / "admin_users.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'revoked_reason=f"account_{payload.action}"' in source
+    assert 'revoked_reason="account_archived"' in source
+    assert "UserSession.revoked_at.is_(None)" in source
+
+
+def test_user_lifecycle_requires_supported_action_and_reason() -> None:
+    from backend.app.api.routes.admin_users import AdminUserLifecycleRequest
+
+    valid = AdminUserLifecycleRequest(action="suspend", reason="Policy violation")
+    assert valid.action == "suspend"
+
+    for payload in (
+        {"action": "lock", "reason": "Policy violation"},
+        {"action": "suspend", "reason": "no"},
+    ):
+        try:
+            AdminUserLifecycleRequest(**payload)
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError("Lifecycle actions must be supported and include a meaningful reason.")
+
+
+def test_user_lifecycle_route_and_ui_are_exposed() -> None:
+    paths = app.openapi()["paths"]
+    assert "post" in paths["/api/v1/admin/users/{user_id}/lifecycle"]
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userLifecycleForm"' in page.text
+    assert 'id="userLifecycleReason"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/lifecycle"' in script.text
+    assert "reason:$(" in script.text
+    assert "دورة حياة الحساب" in script.text
+
+
+def test_account_archive_requires_reason_and_permission_aware_ui_action() -> None:
+    operation = app.openapi()["paths"]["/api/v1/admin/users/{user_id}"]["delete"]
+    reason_parameter = next(
+        parameter for parameter in operation["parameters"]
+        if parameter["name"] == "reason"
+    )
+    assert reason_parameter["required"] is True
+    assert reason_parameter["schema"]["minLength"] == 5
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="archiveUserAccount"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert 'has("users:delete")' in script.text
+    assert 'method:"DELETE"' in script.text
+
+
+def test_authenticated_password_change_requires_current_password_and_revokes_sessions() -> None:
+    from backend.app.api.routes.auth import ChangePasswordRequest
+
+    valid = ChangePasswordRequest(
+        current_password="old-password",
+        new_password="a-new-password-with-12-chars",
+    )
+    assert len(valid.new_password) >= 12
+
+    try:
+        ChangePasswordRequest(
+            current_password="old-password",
+            new_password="short",
+        )
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("New passwords shorter than 12 characters must be rejected.")
+
+    operation = app.openapi()["paths"]["/api/v1/auth/change-password"]["post"]
+    assert operation["responses"]["200"]["content"]["application/json"]
+
+    page = asyncio.run(get("/admin"))
+    assert 'id="selfPasswordManagement"' in page.text
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert 'api("/auth/change-password"' in script.text
+    assert "selectedUserId!==tokenSubject()" in script.text
+
+
+def test_login_throttling_blocks_after_five_failed_username_ip_attempts(monkeypatch) -> None:
+    from types import SimpleNamespace
+    from backend.app.modules.authentication import authentication as auth_module
+    from backend.app.modules.authentication.authentication import (
+        AuthenticationError,
+        AuthenticationService,
+    )
+    from database.models.security import LoginAttempt
+
+    from backend.app.modules.authentication import jwt as jwt_module
+    from pydantic import SecretStr
+    monkeypatch.setattr(
+        jwt_module,
+        "get_settings",
+        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret")),
+    )
+
+    class FakeResult:
+        def scalar_one(self):
+            return 5
+
+    class FakeSession:
+        def __init__(self):
+            self.added = []
+            self.committed = False
+
+        async def execute(self, statement):
+            return FakeResult()
+
+        def add(self, item):
+            self.added.append(item)
+
+        async def commit(self):
+            self.committed = True
+
+    class FakeUsers:
+        async def get_by_username(self, username):
+            raise AssertionError("Locked attempts must be rejected before user lookup.")
+
+    fake_session = FakeSession()
+
+    class FakeUnitOfWork:
+        users = FakeUsers()
+        session = fake_session
+
+    try:
+        asyncio.run(
+            AuthenticationService(FakeUnitOfWork()).authenticate(
+                "Operator",
+                "wrong-password",
+                ip_address="192.0.2.20",
+            )
+        )
+    except AuthenticationError:
+        pass
+    else:
+        raise AssertionError("The username/IP failure threshold must lock further login attempts.")
+
+    assert fake_session.committed is True
+    assert len(fake_session.added) == 1
+    assert isinstance(fake_session.added[0], LoginAttempt)
+    assert fake_session.added[0].succeeded is False
+
+
+def test_login_attempt_migration_follows_user_session_migration() -> None:
+    from importlib.util import module_from_spec, spec_from_file_location
+    from pathlib import Path
+
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "database"
+        / "migrations"
+        / "versions"
+        / "bb22cc33dd44_add_login_attempts.py"
+    )
+    spec = spec_from_file_location("login_attempts_migration", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    assert migration.revision == "bb22cc33dd44"
+    assert migration.down_revision == "aa11bb22cc33"
+
+
+def test_telegram_identity_linking_uses_one_time_challenge_and_verified_bot_command() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/auth/identity-links"]
+    assert "post" in paths["/api/v1/auth/identity-links/telegram/challenge"]
+    assert "delete" in paths["/api/v1/auth/identity-links/telegram"]
+
+    from database.models.security import ExternalIdentity, IdentityLinkChallenge
+
+    identity_constraints = {
+        constraint.name for constraint in ExternalIdentity.__table__.constraints
+    }
+    assert "uq_external_identity_provider_subject" in identity_constraints
+    assert "uq_external_identity_user_provider" in identity_constraints
+    assert IdentityLinkChallenge.__table__.c.token_hash.type.length == 64
+
+    from pathlib import Path
+
+    bot_source = (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "app"
+        / "infrastructure"
+        / "telegram"
+        / "bot_runner.py"
+    ).read_text(encoding="utf-8")
+    assert '== "/link"' in bot_source
+    assert "IdentityLinkChallenge.token_hash == token_hash" in bot_source
+    assert "ExternalIdentity(" in bot_source
+    assert "لم يتم دمج الحسابات تلقائياً" in bot_source
+
+
+def test_external_identity_migration_follows_login_attempt_migration() -> None:
+    from importlib.util import module_from_spec, spec_from_file_location
+    from pathlib import Path
+
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "database"
+        / "migrations"
+        / "versions"
+        / "cc33dd44ee55_external_identity_linking.py"
+    )
+    spec = spec_from_file_location("external_identity_migration", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    assert migration.revision == "cc33dd44ee55"
+    assert migration.down_revision == "bb22cc33dd44"
+
+
+def test_telegram_bot_consumes_one_time_challenge_without_account_merging(monkeypatch) -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from backend.app.infrastructure.telegram import bot_runner as bot_module
+    from database.models.audit import AuditLog
+    from database.models.security import ExternalIdentity
+
+    user_id = uuid4()
+    telegram_id = 99887766
+    challenge = SimpleNamespace(user_id=user_id, consumed_at=None)
+    user = SimpleNamespace(
+        id=user_id,
+        deleted_at=None,
+        status="ACTIVE",
+        telegram_user_id=None,
+        username="web-user",
+    )
+
+    class FakeResult:
+        def __init__(self, value):
+            self.value = value
+
+        def scalar_one_or_none(self):
+            return self.value
+
+    class FakeSession:
+        def __init__(self):
+            self.calls = 0
+            self.added = []
+            self.committed = False
+
+        async def execute(self, statement):
+            self.calls += 1
+            return FakeResult(
+                {
+                    1: challenge,
+                    2: user,
+                    3: None,
+                    4: None,
+                }[self.calls]
+            )
+
+        def add(self, item):
+            self.added.append(item)
+
+        async def commit(self):
+            self.committed = True
+
+    fake_session = FakeSession()
+
+    class FakeSessionContext:
+        async def __aenter__(self):
+            return fake_session
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+    monkeypatch.setattr(bot_module, "SessionLocal", lambda: FakeSessionContext())
+    runner = bot_module.TelegramBotRunner.__new__(bot_module.TelegramBotRunner)
+
+    result = asyncio.run(
+        runner._complete_telegram_identity_link(
+            "A" * 32,
+            {
+                "id": telegram_id,
+                "first_name": "Telegram",
+                "last_name": "Member",
+            },
+        )
+    )
+
+    assert "تم ربط" in result
+    assert user.telegram_user_id == telegram_id
+    assert challenge.consumed_at is not None
+    assert fake_session.committed is True
+    assert any(isinstance(item, ExternalIdentity) for item in fake_session.added)
+    assert any(isinstance(item, AuditLog) for item in fake_session.added)
+
+
+def test_last_active_admin_is_protected_from_deactivation_and_archive() -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from fastapi import HTTPException
+    from backend.app.api.routes.admin_users import _protect_last_active_admin
+
+    class Result:
+        def __init__(self, value):
+            self.value = value
+
+        def scalar_one_or_none(self):
+            return self.value
+
+        def scalar_one(self):
+            return self.value
+
+    class FakeSession:
+        def __init__(self, active_admin_count):
+            self.results = [Result("ACTIVE"), Result(SimpleNamespace(name="admin")), Result(active_admin_count)]
+
+        async def execute(self, statement):
+            return self.results.pop(0)
+
+    async def run():
+        try:
+            await _protect_last_active_admin(FakeSession(1), uuid4())
+        except HTTPException as exc:
+            assert exc.status_code == 409
+            assert "last active administrator" in exc.detail.lower()
+        else:
+            raise AssertionError("The last active admin must be protected.")
+
+        await _protect_last_active_admin(FakeSession(2), uuid4())
+
+        inactive_session = FakeSession(0)
+        inactive_session.results = [Result("INACTIVE")]
+        await _protect_last_active_admin(inactive_session, uuid4())
+        assert inactive_session.results == []
+
+    asyncio.run(run())
+
+
+def test_last_admin_protection_is_used_for_lifecycle_and_archive() -> None:
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "app"
+        / "api"
+        / "routes"
+        / "admin_users.py"
+    ).read_text(encoding="utf-8")
+
+    assert source.count("await _protect_last_active_admin(session, user.id)") >= 2
+    assert 'User.roles.any(Role.name == "admin")' in source
+
+
+def test_admin_user_linked_identity_endpoint_and_workspace() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/admin/users/{user_id}/identities"]
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userIdentitiesBody"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/identities"' in script.text
+    assert "الحسابات المرتبطة" in script.text
+
+
+def test_admin_user_login_attempt_history_is_exposed_without_hashes() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/admin/users/{user_id}/login-attempts"]
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userLoginAttemptsBody"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/login-attempts"' in script.text
+    assert "loginSecurityHistory" in script.text
+    assert "username_key" not in script.text
+
+
+def test_admin_user_audit_history_is_permission_scoped_and_redacted() -> None:
+    paths = app.openapi()["paths"]
+    operation = paths["/api/v1/admin/users/{user_id}/audit-history"]["get"]
+    assert operation is not None
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userAuditHistoryBody"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/audit-history"' in script.text
+    assert 'has("audit:read")' in script.text
+
+
+def test_admin_user_effective_access_summary_is_read_only() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/admin/users/{user_id}/access-summary"]
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userAccessRoles"' in page.text
+    assert 'id="userEffectivePermissions"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/access-summary"' in script.text
+    assert "effectivePermissions" in script.text
+
+
+def test_admin_console_javascript_parses_with_node_when_available() -> None:
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "app"
+        / "static"
+        / "admin"
+        / "console.js"
+    )
+    result = subprocess.run(
+        [node, "--check", str(script)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_user_access_policy_endpoint_requires_reason_and_exposes_lock_expiry() -> None:
+    from backend.app.api.routes.admin_users import AdminUserAccessPolicyRequest
+    from pydantic import ValidationError
+
+    valid = AdminUserAccessPolicyRequest(reason="Temporary access restriction")
+    assert valid.reason.startswith("Temporary")
+    try:
+        AdminUserAccessPolicyRequest(reason="no")
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("Access-policy changes must require a meaningful reason.")
+
+    operation = app.openapi()["paths"]["/api/v1/admin/users/{user_id}/access-policy"]["patch"]
+    assert operation["responses"].get("200")
+
+
+def test_authentication_rejects_locked_or_expired_accounts() -> None:
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "backend" / "app" / "modules" / "authentication" / "authentication.py").read_text(encoding="utf-8")
+    assert "user.locked_until <= now" in source
+    assert "user.account_expires_at > now" in source
+
+
+def test_users_bulk_preview_execute_and_csv_export_contracts() -> None:
+    paths = app.openapi()["paths"]
+    assert "post" in paths["/api/v1/admin/users/bulk/preview"]
+    assert "post" in paths["/api/v1/admin/users/bulk/lifecycle"]
+    assert "get" in paths["/api/v1/admin/users/export.csv"]
+    from backend.app.api.routes.admin_users import AdminUsersBulkLifecycleRequest
+    payload = AdminUsersBulkLifecycleRequest(user_ids=[uuid4()], action="suspend", reason="Security review")
+    assert len(payload.user_ids) == 1
+    try:
+        AdminUsersBulkLifecycleRequest(user_ids=[uuid4(), uuid4()] * 51, action="suspend", reason="Security review")
+    except Exception:
+        pass
+    else:
+        raise AssertionError("Bulk lifecycle requests must be bounded to 100 users.")
+
+
+def test_bulk_preview_checks_self_and_last_admin_protection() -> None:
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "backend" / "app" / "api" / "routes" / "admin_users.py").read_text(encoding="utf-8")
+    start = source.index("async def preview_admin_users_bulk_lifecycle")
+    end = source.index("@router.post(", start)
+    preview_source = source[start:end]
+    assert "current_user=Depends(get_current_user)" in preview_source
+    assert "cannot_change_own_access" in preview_source
+    assert "await _protect_last_active_admin(session, row.id)" in preview_source
+    assert "last_admin_protection" in preview_source
+
+
+def test_admin_user_activity_timeline_merges_and_paginates_sqlite() -> None:
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from database.models.base import Base
+    from database.models.identity import User
+    from database.models.audit import AuditLog
+    from database.models.security import LoginAttempt
+    from backend.app.api.routes.admin_users import list_admin_user_activity
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine, tables=[User.__table__, AuditLog.__table__, LoginAttempt.__table__])
+    user_id = uuid4()
+    now = datetime.now(timezone.utc)
+    with Session(engine) as sync:
+        sync.add(User(id=user_id, username="timeline-test", status="ACTIVE"))
+        sync.flush()
+        sync.add(AuditLog(
+            actor_id=user_id,
+            action="user.profile_updated",
+            resource_type="user",
+            resource_id=user_id,
+            description="Profile updated",
+            created_at=now - timedelta(minutes=5),
+        ))
+        sync.add(LoginAttempt(
+            username_key="hmac-test-key",
+            user_id=user_id,
+            succeeded=False,
+            attempted_at=now,
+        ))
+        sync.commit()
+
+        class AsyncSessionShim:
+            async def execute(self, statement):
+                return sync.execute(statement)
+
+        latest = asyncio.run(list_admin_user_activity(
+            user_id=user_id, offset=0, limit=1, session=AsyncSessionShim()
+        ))
+        assert latest.total == 2
+        assert len(latest.items) == 1
+        assert latest.items[0].source == "security"
+        earlier = asyncio.run(list_admin_user_activity(
+            user_id=user_id, offset=1, limit=1, session=AsyncSessionShim()
+        ))
+        assert earlier.items[0].source == "audit"
+        assert earlier.items[0].description == "Profile updated"
+
+
+def test_admin_user_activity_filters_and_csv_export_are_bounded() -> None:
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from database.models.base import Base
+    from database.models.identity import User
+    from database.models.audit import AuditLog
+    from database.models.security import LoginAttempt
+    from backend.app.api.routes.admin_users import (
+        export_admin_user_activity_csv,
+        list_admin_user_activity,
+    )
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine, tables=[User.__table__, AuditLog.__table__, LoginAttempt.__table__])
+    user_id = uuid4()
+    now = datetime.now(timezone.utc)
+    with Session(engine) as sync:
+        sync.add(User(id=user_id, username="timeline-filter-test", status="ACTIVE"))
+        sync.flush()
+        sync.add(AuditLog(
+            actor_id=user_id, action="user.profile_updated", resource_type="user",
+            resource_id=user_id, description="Profile updated", created_at=now - timedelta(minutes=5),
+        ))
+        sync.add(LoginAttempt(
+            username_key="timeline-hmac", user_id=user_id, succeeded=False, attempted_at=now,
+        ))
+        sync.commit()
+
+        class AsyncSessionShim:
+            async def execute(self, statement):
+                return sync.execute(statement)
+
+        security = asyncio.run(list_admin_user_activity(
+            user_id=user_id, offset=0, limit=20, source="security", session=AsyncSessionShim()
+        ))
+        assert security.total == 1
+        assert security.items[0].event_type == "auth.login_failed"
+
+        audit = asyncio.run(list_admin_user_activity(
+            user_id=user_id, offset=0, limit=20, source="audit",
+            event_type="user.profile_updated", session=AsyncSessionShim()
+        ))
+        assert audit.total == 1
+        assert audit.items[0].description == "Profile updated"
+
+        exported = asyncio.run(export_admin_user_activity_csv(
+            user_id=user_id, source="security", event_type="auth.login_failed",
+            session=AsyncSessionShim(),
+        ))
+        assert exported.media_type.startswith("text/csv")
+        assert "auth.login_failed" in exported.body.decode("utf-8-sig")
+        assert "timeline-hmac" not in exported.body.decode("utf-8-sig")
+        assert "ip_address" not in exported.body.decode("utf-8-sig")
+
+
+def test_admin_user_activity_timeline_is_paginated_and_permission_gated() -> None:
+    operation = app.openapi()["paths"]["/api/v1/admin/users/{user_id}/activity"]["get"]
+    parameters = {item["name"]: item for item in operation["parameters"]}
+    assert parameters["offset"]["schema"]["minimum"] == 0
+    assert parameters["limit"]["schema"]["minimum"] == 1
+    assert parameters["limit"]["schema"]["maximum"] == 50
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "backend" / "app" / "api" / "routes" / "admin_users.py").read_text(encoding="utf-8")
+    assert 'Depends(require_permission(Permission.USERS_READ))' in source
+    assert 'Depends(require_permission(Permission.AUDIT_READ))' in source
+    assert 'LoginAttempt.user_id == user_id' in source
+    assert 'AuditLog.resource_id == user_id' in source
+
+
+def test_account_policy_partial_updates_can_distinguish_omitted_fields() -> None:
+    from backend.app.api.routes.admin_users import AdminUserAccessPolicyRequest
+    payload = AdminUserAccessPolicyRequest(reason="Clear temporary lock", locked_until=None)
+    assert "locked_until" in payload.model_fields_set
+    assert "account_expires_at" not in payload.model_fields_set
+
+
+def test_admin_user_workspace_exposes_personal_preferences_access_policy_and_export() -> None:
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    page = (root / "backend" / "app" / "static" / "admin" / "console.html").read_text(encoding="utf-8")
+    script = (root / "backend" / "app" / "static" / "admin" / "console.js").read_text(encoding="utf-8")
+    assert 'id="userPreferencesForm"' in page
+    assert 'id="userAccessPolicyForm"' in page
+    assert 'id="exportUsersCsv"' in page
+    assert 'id="bulkUsersPanel"' in page
+    assert 'id="userActivityPanel"' in page
+    assert 'userActivitySourceFilter' in page
+    assert 'userActivityTypeFilter' in page
+    assert 'exportUserActivityCsv' in page
+    assert '/activity"+query' in script
+    assert '/activity.csv' in script
+    assert 'id="selectAllUsersPage"' in page
+    assert 'id="previewBulkUsers"' in page
+    assert 'id="applyBulkUsers"' in page
+    assert '/admin/users/bulk/preview' in script
+    assert '/admin/users/bulk/lifecycle' in script
+    assert 'data-select-user' in script
+    assert '/auth/preferences' in script
+    assert '/access-policy' in script
+    assert '/admin/users/export.csv' in script
+
+
+def test_user_profile_workspace_has_accessible_bilingual_tabs() -> None:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    page = (root / "backend" / "app" / "static" / "admin" / "console.html").read_text(encoding="utf-8")
+    script = (root / "backend" / "app" / "static" / "admin" / "console.js").read_text(encoding="utf-8")
+    stylesheet = (root / "backend" / "app" / "static" / "admin" / "console.css").read_text(encoding="utf-8")
+
+    expected_tabs = {
+        "overview", "personal", "account", "access", "sessions",
+        "identities", "security", "activity", "audit",
+    }
+    for tab in expected_tabs:
+        assert f'data-profile-tab="{tab}"' in page
+        assert f'profile{tab.title()}' in script
+        assert f'data-profile-section="{tab}"' in page
+
+    assert 'role="tablist"' in page
+    assert 'aria-selected="true"' in page
+    assert "function setUserProfileTab(tab)" in script
+    assert 'button.dataset.profileTab' in script
+    assert 'profileIntrinsicHidden' in script
+    assert "profile-tab.is-active" in stylesheet
+
+
+def test_public_login_includes_bilingual_verified_telegram_recovery_flow() -> None:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    page = (root / "backend" / "app" / "static" / "website" / "login.html").read_text(encoding="utf-8")
+    script = (root / "backend" / "app" / "static" / "website" / "login.js").read_text(encoding="utf-8")
+    stylesheet = (root / "backend" / "app" / "static" / "website" / "auth.css").read_text(encoding="utf-8")
+
+    for element_id in (
+        "showRecovery", "recoveryPanel", "recoveryRequestForm",
+        "recoveryVerifyForm", "recoveryIdentifier", "recoveryCode",
+        "newPassword", "recoveryMessage", "backToLogin",
+    ):
+        assert f'id="{element_id}"' in page
+    assert "/api/v1/auth/password-recovery/request" in script
+    assert "/api/v1/auth/password-recovery/verify" in script
+    assert "verified linked Telegram account" in script
+    assert "هوية Telegram موثّقة" in script
+    assert "dir=\"rtl\"" in page
+    assert "[hidden]{display:none!important}" in stylesheet

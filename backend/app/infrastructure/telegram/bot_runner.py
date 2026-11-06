@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import calendar
 import logging
+from hashlib import sha256
 from datetime import date, datetime, time, timezone
 from collections import deque
 from typing import Any
@@ -13,12 +14,15 @@ from uuid import UUID
 import httpx
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
 from database.models.catalog import Category, Service
 from database.models.enums import RequestPriority, ServiceRequestStatus, UserStatus
+from database.models.audit import AuditLog
 from database.models.identity import Role, User
+from database.models.security import ExternalIdentity, IdentityLinkChallenge
 from database.models.requests import ServiceRequest
 from database.models.telegram_runtime import (
     TelegramConversationState,
@@ -1686,6 +1690,118 @@ class TelegramBotRunner:
             },
         )
 
+    async def _complete_telegram_identity_link(
+        self,
+        code: str,
+        from_user: dict[str, Any],
+    ) -> str:
+        """Consume a one-time challenge and link the Telegram sender to an account."""
+        telegram_user_id = from_user.get("id")
+        if not isinstance(telegram_user_id, int) or not 20 <= len(code) <= 100:
+            return "رمز الربط غير صالح أو منتهي الصلاحية."
+        if any(not (char.isalnum() or char in "-_") for char in code):
+            return "رمز الربط غير صالح أو منتهي الصلاحية."
+
+        now = datetime.now(timezone.utc)
+        token_hash = sha256(code.encode("utf-8")).hexdigest()
+        async with SessionLocal() as session:
+            challenge_result = await session.execute(
+                select(IdentityLinkChallenge)
+                .where(
+                    IdentityLinkChallenge.provider == "telegram",
+                    IdentityLinkChallenge.token_hash == token_hash,
+                    IdentityLinkChallenge.consumed_at.is_(None),
+                    IdentityLinkChallenge.expires_at > now,
+                )
+                .with_for_update()
+            )
+            challenge = challenge_result.scalar_one_or_none()
+            if challenge is None:
+                return "رمز الربط غير صالح أو منتهي الصلاحية."
+
+            user_result = await session.execute(
+                select(User)
+                .where(User.id == challenge.user_id)
+                .with_for_update()
+            )
+            user = user_result.scalar_one_or_none()
+            if (
+                user is None
+                or user.deleted_at is not None
+                or str(user.status).upper() != UserStatus.ACTIVE.value
+            ):
+                challenge.consumed_at = now
+                await session.commit()
+                return "تعذر ربط الحساب. تحقق من حالة حسابك في المنصة."
+
+            if user.telegram_user_id not in (None, telegram_user_id):
+                challenge.consumed_at = now
+                await session.commit()
+                return "هذا الحساب مرتبط مسبقاً بحساب Telegram آخر."
+
+            identity_result = await session.execute(
+                select(ExternalIdentity).where(
+                    ExternalIdentity.provider == "telegram",
+                    ExternalIdentity.subject == str(telegram_user_id),
+                )
+            )
+            existing_identity = identity_result.scalar_one_or_none()
+            if existing_identity is not None:
+                challenge.consumed_at = now
+                await session.commit()
+                if existing_identity.user_id == user.id:
+                    return "حساب Telegram مرتبط بالفعل بهذا الحساب."
+                return "حساب Telegram مرتبط بحساب آخر. لم يتم دمج الحسابات تلقائياً."
+
+            owner_result = await session.execute(
+                select(User.id).where(
+                    User.telegram_user_id == telegram_user_id,
+                    User.id != user.id,
+                )
+            )
+            if owner_result.scalar_one_or_none() is not None:
+                challenge.consumed_at = now
+                await session.commit()
+                return "حساب Telegram مستخدم في ملف آخر. لم يتم دمج الحسابات تلقائياً."
+
+            display_name = " ".join(
+                part for part in (
+                    str(from_user.get("first_name") or "").strip(),
+                    str(from_user.get("last_name") or "").strip(),
+                )
+                if part
+            ) or (str(from_user.get("username")) if from_user.get("username") else None)
+
+            user.telegram_user_id = telegram_user_id
+            challenge.consumed_at = now
+            session.add(
+                ExternalIdentity(
+                    user_id=user.id,
+                    provider="telegram",
+                    subject=str(telegram_user_id),
+                    display_name=display_name,
+                    linked_at=now,
+                    verified_at=now,
+                )
+            )
+            session.add(
+                AuditLog(
+                    actor_id=user.id,
+                    action="user.identity_linked",
+                    resource_type="user",
+                    resource_id=user.id,
+                    description="User linked a Telegram identity through a one-time bot challenge.",
+                    event_metadata={"provider": "telegram"},
+                    created_at=now,
+                )
+            )
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                return "حساب Telegram مرتبط بحساب آخر. لم يتم دمج الحسابات تلقائياً."
+            return "تم ربط حساب Telegram بنجاح بحسابك في المنصة."
+
     async def _get_or_create_user(
         self,
         message: dict[str, Any],
@@ -1759,6 +1875,21 @@ class TelegramBotRunner:
             return
 
         text = str(message.get("text") or "").strip()
+        if text and text.split(maxsplit=1)[0].split("@")[0] == "/link":
+            parts = text.split(maxsplit=1)
+            if len(parts) != 2:
+                reply_text = "لربط حسابك، أرسل الأمر /link متبوعاً برمز الربط الذي أنشأته من حسابك في المنصة."
+            else:
+                reply_text = await self._complete_telegram_identity_link(
+                    parts[1].strip(),
+                    message.get("from") or {},
+                )
+            await self._api_call(
+                client,
+                "sendMessage",
+                {"chat_id": chat_id, "text": reply_text},
+            )
+            return
         logger.debug("Telegram private message received (text_present=%s)", bool(text))
         state = self._conversation_state.get(chat_id)
 

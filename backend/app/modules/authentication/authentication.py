@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-from database.models.identity import User
+from datetime import datetime, timedelta, timezone
+import hmac
+from uuid import uuid4
+
+from sqlalchemy import func, select
+
+from database.models.identity import User, UserSession
+from database.models.security import LoginAttempt
 
 from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 
-from .jwt import create_access_token
+from .jwt import ACCESS_TOKEN_EXPIRE_MINUTES, _get_secret_key, create_access_token
 from .passwords import verify_password
 
 
@@ -14,8 +21,13 @@ class AuthenticationError(Exception):
     """Raised when authentication fails."""
 
 
+LOGIN_WINDOW_MINUTES = 15
+USERNAME_IP_FAILURE_LIMIT = 5
+USERNAME_FAILURE_LIMIT = 10
+
+
 class AuthenticationService:
-    """Authenticate users and issue access tokens."""
+    """Authenticate users, throttle repeated failures, and issue revocable sessions."""
 
     def __init__(self, uow: UnitOfWork) -> None:
         self.uow = uow
@@ -24,23 +36,101 @@ class AuthenticationService:
         self,
         username: str,
         password: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> str:
-        """Authenticate by username and return an access token."""
-        user = await self.uow.users.get_by_username(username)
+        """Authenticate a user and return a session-bound access token."""
+        now = datetime.now(timezone.utc)
+        normalized_username = username.strip().lower()
+        username_key = hmac.new(
+            _get_secret_key().encode("utf-8"),
+            normalized_username.encode("utf-8"),
+            "sha256",
+        ).hexdigest()
+        window_start = now - timedelta(minutes=LOGIN_WINDOW_MINUTES)
 
-        if user is None:
-            raise AuthenticationError(
-                "Invalid username or password."
+        pair_count_result = await self.uow.session.execute(
+            select(func.count(LoginAttempt.id)).where(
+                LoginAttempt.username_key == username_key,
+                LoginAttempt.ip_address == ip_address,
+                LoginAttempt.succeeded.is_(False),
+                LoginAttempt.attempted_at >= window_start,
             )
+        )
+        pair_failures = pair_count_result.scalar_one()
 
-        password_hash = getattr(user, "password_hash", None)
+        username_count_result = await self.uow.session.execute(
+            select(func.count(LoginAttempt.id)).where(
+                LoginAttempt.username_key == username_key,
+                LoginAttempt.succeeded.is_(False),
+                LoginAttempt.attempted_at >= window_start,
+            )
+        )
+        username_failures = username_count_result.scalar_one()
 
-        if not password_hash or not verify_password(
-            password,
-            password_hash,
+
+        if (
+            pair_failures >= USERNAME_IP_FAILURE_LIMIT
+            or username_failures >= USERNAME_FAILURE_LIMIT
         ):
-            raise AuthenticationError(
-                "Invalid username or password."
+            self.uow.session.add(
+                LoginAttempt(
+                    username_key=username_key,
+                    ip_address=ip_address,
+                    succeeded=False,
+                    attempted_at=now,
+                )
             )
+            await self.uow.session.commit()
+            raise AuthenticationError("Invalid username or password.")
 
-        return create_access_token(user.id)
+        user = await self.uow.users.get_by_username(normalized_username)
+        password_hash = getattr(user, "password_hash", None) if user else None
+        account_is_active = (
+            user is not None
+            and str(user.status).upper() == "ACTIVE"
+            and getattr(user, "deleted_at", None) is None
+            and (getattr(user, "locked_until", None) is None or user.locked_until <= now)
+            and (getattr(user, "account_expires_at", None) is None or user.account_expires_at > now)
+        )
+
+        if (
+            not account_is_active
+            or not password_hash
+            or not verify_password(password, password_hash)
+        ):
+            self.uow.session.add(
+                LoginAttempt(
+                    username_key=username_key,
+                    ip_address=ip_address,
+                    user_id=user.id if user is not None else None,
+                    succeeded=False,
+                    attempted_at=now,
+                )
+            )
+            await self.uow.session.commit()
+            raise AuthenticationError("Invalid username or password.")
+
+        session_id = uuid4()
+        session = UserSession(
+            id=session_id,
+            user_id=user.id,
+            created_at=now,
+            expires_at=now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+            ip_address=ip_address,
+            user_agent=(user_agent[:500] if user_agent else None),
+        )
+        self.uow.session.add(session)
+        self.uow.session.add(
+            LoginAttempt(
+                username_key=username_key,
+                ip_address=ip_address,
+                user_id=user.id,
+                succeeded=True,
+                attempted_at=now,
+            )
+        )
+        token = create_access_token(user.id, session_id)
+        await self.uow.session.commit()
+
+        return token

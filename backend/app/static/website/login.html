@@ -1,1 +1,61 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1d36"><title>تسجيل الدخول | إحتراف</title><link rel="icon" href="/website/static/icon.svg"><link rel="stylesheet" href="/website/static/auth.css"></head><body><main class="auth-shell"><a class="auth-brand" href="/"><span class="mark">E</span><span><b>إحتراف</b><small>EHTERAF · ACADEMIC & TECHNICAL</small></span></a><button class="lang-toggle" id="languageToggle" type="button">English</button><section class="auth-card"><div class="eyebrow">WELCOME BACK</div><h1 id="heading">تسجيل الدخول</h1><p id="intro">سجّل الدخول إلى حسابك للانتقال إلى مساحة الخدمات الخاصة بك.</p><form id="loginForm"><label id="usernameLabel" for="username">اسم المستخدم</label><input id="username" name="username" autocomplete="username" required maxlength="150"><label id="passwordLabel" for="password">كلمة المرور</label><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="500"><p class="error" id="error" role="alert" hidden></p><button id="submit" type="submit">تسجيل الدخول <span>↗</span></button></form><p class="auth-foot">سيتم استخدام حساب المنصة الحالي. لا يتم إنشاء حساب جديد من هذه الصفحة.</p><a class="back-link" href="/">العودة إلى الموقع الرسمي</a></section><footer>© <span id="year"></span> EHTERAF</footer></main><script src="/website/static/login.js" defer></script></body></html>
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1d36">
+  <title>تسجيل الدخول | إحتراف</title>
+  <link rel="icon" href="/website/static/icon.svg">
+  <link rel="stylesheet" href="/website/static/auth.css?v=20261106-recovery">
+</head>
+<body>
+  <main class="auth-shell">
+    <a class="auth-brand" href="/" aria-label="EHTERAF home">
+      <span class="mark">E</span>
+      <span><b>إحتراف</b><small>EHTERAF · ACADEMIC &amp; TECHNICAL</small></span>
+    </a>
+    <button class="lang-toggle" id="languageToggle" type="button">English</button>
+
+    <section class="auth-card" aria-labelledby="heading">
+      <div class="eyebrow">WELCOME BACK</div>
+      <h1 id="heading">تسجيل الدخول</h1>
+      <p id="intro">سجّل الدخول إلى حسابك للانتقال إلى مساحة الخدمات الخاصة بك.</p>
+
+      <form id="loginForm">
+        <label id="usernameLabel" for="username">اسم المستخدم</label>
+        <input id="username" name="username" autocomplete="username" required maxlength="150">
+        <label id="passwordLabel" for="password">كلمة المرور</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="500">
+        <p class="error" id="error" role="alert" hidden></p>
+        <button id="submit" type="submit">تسجيل الدخول <span>↗</span></button>
+      </form>
+
+      <button class="auth-link" id="showRecovery" type="button">نسيت كلمة المرور؟</button>
+
+      <section class="recovery-panel" id="recoveryPanel" aria-labelledby="recoveryHeading" hidden>
+        <h2 id="recoveryHeading">استعادة كلمة المرور</h2>
+        <p id="recoveryIntro">أدخل اسم المستخدم أو البريد الإلكتروني. إذا كان الحساب مرتبطًا بهوية Telegram موثّقة، فسنرسل رمز الاستعادة إليها.</p>
+        <form id="recoveryRequestForm">
+          <label id="recoveryIdentifierLabel" for="recoveryIdentifier">اسم المستخدم أو البريد الإلكتروني</label>
+          <input id="recoveryIdentifier" name="identifier" autocomplete="username" required maxlength="320">
+          <button id="recoveryRequestButton" type="submit">إرسال رمز الاستعادة</button>
+        </form>
+        <form id="recoveryVerifyForm" hidden>
+          <label id="recoveryCodeLabel" for="recoveryCode">رمز الاستعادة المكوّن من 8 أرقام</label>
+          <input id="recoveryCode" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{8}" minlength="8" maxlength="8" required>
+          <label id="newPasswordLabel" for="newPassword">كلمة المرور الجديدة (12 حرفًا على الأقل)</label>
+          <input id="newPassword" name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="500" required>
+          <button id="recoveryVerifyButton" type="submit">تأكيد الرمز وتغيير كلمة المرور</button>
+        </form>
+        <p class="recovery-message" id="recoveryMessage" role="status" aria-live="polite" hidden></p>
+        <button class="auth-link" id="backToLogin" type="button">العودة إلى تسجيل الدخول</button>
+      </section>
+
+      <p class="auth-foot">سيتم استخدام حساب المنصة الحالي. لا يتم إنشاء حساب جديد من هذه الصفحة.</p>
+      <a class="back-link" href="/">العودة إلى الموقع الرسمي</a>
+    </section>
+    <footer>© <span id="year"></span> EHTERAF</footer>
+  </main>
+  <script src="/website/static/login.js?v=20261106-recovery" defer></script>
+</body>
+</html>
