@@ -233,8 +233,23 @@ def test_suspended_users_cannot_authenticate() -> None:
         async def get_by_username(self, username: str):
             return suspended_user
 
+    class FakeResult:
+        def scalar_one(self):
+            return 0
+
+    class FakeSession:
+        async def execute(self, statement):
+            return FakeResult()
+
+        def add(self, item):
+            pass
+
+        async def commit(self):
+            pass
+
     class FakeUnitOfWork:
         users = FakeUsers()
+        session = FakeSession()
 
     try:
         asyncio.run(AuthenticationService(FakeUnitOfWork()).authenticate("operator", "password"))
@@ -384,6 +399,10 @@ def test_authentication_creates_persistent_session_before_issuing_token(monkeypa
         async def get_by_username(self, username):
             return user
 
+    class FakeResult:
+        def scalar_one(self):
+            return 0
+
     class FakeSession:
         def __init__(self):
             self.added = []
@@ -391,6 +410,9 @@ def test_authentication_creates_persistent_session_before_issuing_token(monkeypa
 
         def add(self, item):
             self.added.append(item)
+
+        async def execute(self, statement):
+            return FakeResult()
 
         async def commit(self):
             self.committed = True
@@ -564,3 +586,77 @@ def test_authenticated_password_change_requires_current_password_and_revokes_ses
     script = asyncio.run(get("/admin/static/console.js"))
     assert 'api("/auth/change-password"' in script.text
     assert "selectedUserId!==tokenSubject()" in script.text
+
+
+def test_login_throttling_blocks_after_five_failed_username_ip_attempts() -> None:
+    from types import SimpleNamespace
+    from backend.app.modules.authentication.authentication import (
+        AuthenticationError,
+        AuthenticationService,
+    )
+    from database.models.security import LoginAttempt
+
+    class FakeResult:
+        def scalar_one(self):
+            return 5
+
+    class FakeSession:
+        def __init__(self):
+            self.added = []
+            self.committed = False
+
+        async def execute(self, statement):
+            return FakeResult()
+
+        def add(self, item):
+            self.added.append(item)
+
+        async def commit(self):
+            self.committed = True
+
+    class FakeUsers:
+        async def get_by_username(self, username):
+            raise AssertionError("Locked attempts must be rejected before user lookup.")
+
+    fake_session = FakeSession()
+
+    class FakeUnitOfWork:
+        users = FakeUsers()
+        session = fake_session
+
+    try:
+        asyncio.run(
+            AuthenticationService(FakeUnitOfWork()).authenticate(
+                "Operator",
+                "wrong-password",
+                ip_address="192.0.2.20",
+            )
+        )
+    except AuthenticationError:
+        pass
+    else:
+        raise AssertionError("The username/IP failure threshold must lock further login attempts.")
+
+    assert fake_session.committed is True
+    assert len(fake_session.added) == 1
+    assert isinstance(fake_session.added[0], LoginAttempt)
+    assert fake_session.added[0].succeeded is False
+
+
+def test_login_attempt_migration_follows_user_session_migration() -> None:
+    from importlib.util import module_from_spec, spec_from_file_location
+    from pathlib import Path
+
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "database"
+        / "migrations"
+        / "versions"
+        / "bb22cc33dd44_add_login_attempts.py"
+    )
+    spec = spec_from_file_location("login_attempts_migration", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    assert migration.revision == "bb22cc33dd44"
+    assert migration.down_revision == "aa11bb22cc33"
