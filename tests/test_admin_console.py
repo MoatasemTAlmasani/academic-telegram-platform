@@ -6,6 +6,9 @@ import httpx
 from backend.app.main import app
 from backend.app.api.routes.admin_dashboard import has_dashboard_permission
 from backend.app.modules.authentication.permissions import Permission
+from backend.app.api.routes.admin_requests import AdminRequestUpdate
+from database.models.enums import RequestPriority, ServiceRequestStatus
+from pydantic import ValidationError
 
 
 async def get(path: str) -> httpx.Response:
@@ -105,3 +108,19 @@ def test_admin_console_assets_include_search_and_drill_down() -> None:
     assert "bindGlobalSearch" in response.text
     assert 'has("requests:read")' in response.text
     assert "data-metric-page" in response.text
+
+def test_admin_request_update_schema_accepts_only_supported_fields() -> None:
+    payload = AdminRequestUpdate(
+        status=ServiceRequestStatus.UNDER_REVIEW,
+        priority=RequestPriority.HIGH,
+        notes="Reviewed by administration",
+    )
+    assert payload.status is ServiceRequestStatus.UNDER_REVIEW
+    assert payload.priority is RequestPriority.HIGH
+
+    try:
+        AdminRequestUpdate(status="UNKNOWN", arbitrary_field="not allowed")
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("Unknown request fields and status values must be rejected.")
