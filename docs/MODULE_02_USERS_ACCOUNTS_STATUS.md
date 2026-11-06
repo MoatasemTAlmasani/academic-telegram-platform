@@ -15,7 +15,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - User and customer directory pages now use independent server-side pagination controls.
 - The admin workspace includes a bilingual, validated account-creation form; it submits through the existing protected API and creates a customer account without accepting a privileged role from the browser.
 - The admin workspace includes a user detail panel and profile edit form; profile reads/updates use existing protected APIs, and the edit form is hidden without the update permission.
-- Profile edits support clearing optional contact/profile fields and record safe before/after values. Generic profile editing rejects password changes until the secure recovery/session-revocation workflow is implemented.
+- Profile edits support clearing optional contact/profile fields and record safe before/after values. Generic profile editing rejects password changes; a separate current-password-verified workflow handles password changes and session revocation.
 - Usernames are trimmed and compared case-insensitively during account creation/update; email addresses are normalized to lowercase and conflict-checked case-insensitively.
 - Unsupported account status filters and mutations are rejected.
 - Archived users are excluded from directory/detail retrieval.
@@ -45,6 +45,9 @@ This document records implementation evidence. The approved roadmap remains the 
   - persistent session creation, session-bound JWTs, lifecycle API contracts, and password-change validation.
 - Python tests passed on commit `6c3b709d04eeca079da30e17464e8d572fca242b` (run 42271376772).
 - Phase 01 verification passed on the same commit (run 42271376792).
+- Python tests passed on commit `ac55663aec601c03edd4f9c5f2c527eb11b0296d` (run 42278697363).
+- Phase 01 verification passed on the same commit (run 42278697376).
+- The current branch includes a later documentation-only update; the passing runs cover the latest functional code.
 - These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
 - No browser/device acceptance has been claimed.
 
@@ -52,7 +55,7 @@ This document records implementation evidence. The approved roadmap remains the 
 
 1. Complete profile workspace tabs, user activity timeline, and user preferences.
 2. Extend lifecycle policy with lock/unlock, expiry, deletion requests, and last active Super Admin protection.
-3. Password reset/change workflow, email/phone verification, attempt limits, and rate limiting.
+3. Password reset/recovery for accounts that cannot authenticate, email/phone verification, attempt limits, and rate limiting.
 4. Verified external identity linking/unlinking, including Telegram proof validation and one-time linking challenges.
 5. Effective-access summary integrated with Module 03, including actor authority checks and role/permission administration.
 6. Security events and a user activity timeline distinct from the authoritative audit log.
