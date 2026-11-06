@@ -99,11 +99,19 @@ This file records implementation evidence and remaining work. It does not mark t
 - The actions reuse existing routes and do not create fake create/edit workflows.
 - Status: `IMPLEMENTED`; responsive browser and permission-matrix verification remain outstanding.
 
+## CI diagnostics (2026-11-06)
+
+- The existing `Python tests` workflow ran on PR #11 and reported **33 passed, 1 failed**. The failure was the new audit-search test assuming OpenAPI emitted `maxLength` at a specific schema path; the test now checks the runtime 201-character request rejection (HTTP 422) instead.
+- The newly added `Phase 01 verification` workflow initially failed before tests because `pip install -e ".[dev]"` triggered setuptools flat-layout package discovery across multiple top-level folders. The workflow was corrected to use the repository's locked `uv sync --locked --all-groups --all-extras` path.
+- A rerun after these corrections is not yet available in the retrieved Actions evidence. Do not interpret Vercel's successful Preview deployment as a passing Python test suite.
+- Latest Vercel Preview for commit `cfe898307578e3b0411a12c2f990af867ca5f9c4` reached `READY`; it is a Preview deployment, not Production.
+
 ## Validation status
 
-- The latest commit has no GitHub Actions workflow run attached, so no automated test result is available yet.
-- The Vercel check reports a build-rate-limit failure (`upgradeToPro/build-rate-limit`); this is not a passing build and does not establish a code test result.
-- No test suite or browser session was executed from this remote GitHub editing session.
+- One GitHub Actions test run was observed: 33 passed, 1 failed; its assertion has been corrected, but a passing rerun is not yet evidenced.
+- The Phase 01 verification workflow is configured to use the locked project environment; its first dependency-install attempt failed and was corrected. Await the rerun before claiming a pass.
+- Vercel Preview deployment for the latest corrected test commit reached `READY`; this confirms deployment build only, not backend test success or browser acceptance.
+- No browser session or end-to-end visual acceptance has been executed from this remote GitHub editing session.
 
 ## Safety
 
