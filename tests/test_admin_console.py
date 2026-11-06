@@ -216,13 +216,15 @@ def test_admin_users_exposes_existing_directory_and_update_contract() -> None:
     assert {"get", "patch", "delete"}.issubset(paths["/api/v1/admin/users/{user_id}"].keys())
 
 
-def test_suspended_users_cannot_authenticate() -> None:
+def test_suspended_users_cannot_authenticate(monkeypatch) -> None:
     from types import SimpleNamespace
+    from backend.app.modules.authentication import authentication as auth_module
     from backend.app.modules.authentication.authentication import (
         AuthenticationError,
         AuthenticationService,
     )
 
+    monkeypatch.setattr(auth_module, "_get_secret_key", lambda: "test-application-secret")
     suspended_user = SimpleNamespace(
         id=uuid4(),
         status="SUSPENDED",
@@ -425,6 +427,7 @@ def test_authentication_creates_persistent_session_before_issuing_token(monkeypa
         users = FakeUsers()
         session = fake_session
 
+    monkeypatch.setattr(auth_module, "_get_secret_key", lambda: "test-application-secret")
     monkeypatch.setattr(auth_module, "verify_password", lambda password, password_hash: True)
     monkeypatch.setattr(
         auth_module,
@@ -591,13 +594,16 @@ def test_authenticated_password_change_requires_current_password_and_revokes_ses
     assert "selectedUserId!==tokenSubject()" in script.text
 
 
-def test_login_throttling_blocks_after_five_failed_username_ip_attempts() -> None:
+def test_login_throttling_blocks_after_five_failed_username_ip_attempts(monkeypatch) -> None:
     from types import SimpleNamespace
+    from backend.app.modules.authentication import authentication as auth_module
     from backend.app.modules.authentication.authentication import (
         AuthenticationError,
         AuthenticationService,
     )
     from database.models.security import LoginAttempt
+
+    monkeypatch.setattr(auth_module, "_get_secret_key", lambda: "test-application-secret")
 
     class FakeResult:
         def scalar_one(self):
