@@ -19,6 +19,7 @@ from backend.app.modules.authentication.passwords import hash_password
 from backend.app.modules.authentication.permissions import Permission
 from database.models.audit import AuditLog
 from database.models.identity import Role, StaffProfile, User
+from database.models.enums import UserStatus
 
 
 router = APIRouter(
@@ -61,7 +62,7 @@ class StaffCreateRequest(BaseModel):
     phone: str | None = None
     language: str | None = None
     timezone: str | None = None
-    status: str = "active"
+    status: UserStatus = UserStatus.ACTIVE
     specialization: str | None = None
     availability: str | None = None
     is_active: bool = True
@@ -74,7 +75,7 @@ class StaffUpdateRequest(BaseModel):
     phone: str | None = None
     language: str | None = None
     timezone: str | None = None
-    status: str | None = None
+    status: UserStatus | None = None
     specialization: str | None = None
     availability: str | None = None
     is_active: bool | None = None
@@ -475,7 +476,7 @@ async def archive_staff(
     now = datetime.now(timezone.utc)
     username = user.username or str(user.id)
     user.deleted_at = now
-    user.status = "SUSPENDED"
+    user.status = UserStatus.SUSPENDED
     if user.staff_profile is not None:
         user.staff_profile.is_active = False
 
