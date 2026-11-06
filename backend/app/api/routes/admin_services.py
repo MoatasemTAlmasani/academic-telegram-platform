@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -53,21 +53,25 @@ class ServiceListResponse(BaseModel):
 
 
 class ServiceCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     category_id: UUID
-    name: str
-    description: str | None = None
-    short_description: str | None = None
+    name: str = Field(min_length=1, max_length=180)
+    description: str | None = Field(default=None, max_length=10000)
+    short_description: str | None = Field(default=None, max_length=500)
     is_active: bool = True
-    sort_order: int = 0
+    sort_order: int = Field(default=0, ge=0)
 
 
 class ServiceUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     category_id: UUID | None = None
-    name: str | None = None
-    description: str | None = None
-    short_description: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=180)
+    description: str | None = Field(default=None, max_length=10000)
+    short_description: str | None = Field(default=None, max_length=500)
     is_active: bool | None = None
-    sort_order: int | None = None
+    sort_order: int | None = Field(default=None, ge=0)
 
 
 def service_response(service: Service) -> ServiceResponse:
