@@ -27,8 +27,11 @@ This document records implementation evidence. The approved roadmap remains the 
 - Safe account response schema excludes password hashes and credentials.
 - Login creates a persistent server-side session before issuing a session-bound JWT. Protected requests reject missing, expired, or revoked session records.
 - Administrators can inspect the latest 100 sessions, revoke one session, or revoke all active sessions. Revocations are audited; account deactivation/suspension and archival revoke sessions in the same transaction.
+- Administrators can inspect verified external identities linked to an account; the view excludes challenge tokens and is read-only. Self-service Telegram linking uses a short-lived, single-use challenge in the authentication API.
+- Administrators can inspect the latest 50 account-linked login attempts with timestamp, outcome, and IP address; the endpoint never exposes username hashes or credentials.
 - The current administrator session is identified in the session list and preserved by revoke-all when an administrator operates on their own account.
 - Account lifecycle transitions (activate, reactivate, deactivate, suspend) require a reason, enforce allowed state transitions, and write before/after status plus the reason to the audit log. Deactivation and suspension revoke all active sessions in the same transaction; self-deactivation and self-suspension are blocked.
+- Deactivation, suspension, and archival protect the last active account assigned the existing `admin` role. The guard locks the admin role row before counting active administrators to serialize concurrent transitions on databases supporting row locks.
 - Generic profile PATCH can no longer change account status; status changes must use the reasoned lifecycle endpoint.
 - Account archival requires a meaningful reason, records it in the audit log, preserves linked business records, and revokes all sessions. The UI exposes the archive action only with the delete permission.
 - Authenticated users can change their own password only after supplying the current password; new passwords require at least 12 characters, password changes are audited without credential data, and all active sessions are revoked to require reauthentication.
@@ -72,16 +75,15 @@ This document records implementation evidence. The approved roadmap remains the 
 - The increment reuses existing user, role, and audit tables and adds reviewed Alembic migrations for `user_sessions` and `login_attempts`.
 - The migrations are chained after `f4a29d806c12` (`aa11bb22cc33` sessions, `bb22cc33dd44` login attempts, `cc33dd44ee55` external identities/challenges); none has been applied to Supabase or production.
 - The live database previously showed RLS disabled on public tables and broad grants that require a deliberate access-control review. Do not enable RLS blindly or revoke grants until the deployed backend connection path, service role usage, and required policies are verified.
-- Future identity-link, reset-challenge, and security-event tables require reviewed Alembic migrations, isolated upgrade/downgrade tests, and documented rollback plans.
+- All new migration revisions still require isolated upgrade/downgrade tests against supported database engines and a documented rollback plan before deployment.
 - No production deployment is part of this increment.
 
 ## Next implementation order
 
-1. Complete and verify the new session migration and end-to-end revocation behavior in isolated test databases.
-2. Implement secure recovery/verification and account lifecycle transitions, including lock/expiry policies.
-3. Implement verified external identity linking.
-4. Integrate effective-access display/actions with Module 03 without duplicating RBAC ownership.
-5. Deliver bulk/import/export and preferences.
-6. Complete security review, full E2E coverage, and browser acceptance evidence.
+1. Add isolated migration upgrade/downgrade and end-to-end tests for sessions, login attempts, and external identity linking.
+2. Implement account lock/expiry and recovery/verification workflows.
+3. Integrate effective-access display/actions with Module 03 without duplicating RBAC ownership.
+4. Deliver bulk/import/export and preferences.
+5. Complete security review, full E2E coverage, and browser acceptance evidence.
 
 **Status remains `PARTIAL` until all applicable Module 02 acceptance criteria in the roadmap are implemented and verified.**
