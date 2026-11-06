@@ -1133,7 +1133,7 @@ def test_admin_user_activity_filters_and_csv_export_are_bounded() -> None:
             user_id=user_id, source="security", event_type="auth.login_failed",
             session=AsyncSessionShim(),
         ))
-        assert exported.media_type == "text/csv"
+        assert exported.media_type.startswith("text/csv")
         assert "auth.login_failed" in exported.body.decode("utf-8-sig")
         assert "timeline-hmac" not in exported.body.decode("utf-8-sig")
         assert "ip_address" not in exported.body.decode("utf-8-sig")
@@ -1170,7 +1170,7 @@ def test_admin_user_workspace_exposes_personal_preferences_access_policy_and_exp
     assert 'id="exportUsersCsv"' in page
     assert 'id="bulkUsersPanel"' in page
     assert 'id="userActivityPanel"' in page
-    assert '/activity?offset=' in script
+    assert 'userActivitySourceFilter' in page\n    assert 'userActivityTypeFilter' in page\n    assert 'exportUserActivityCsv' in page\n    assert '/activity"+query' in script\n    assert '/activity.csv' in script
     assert 'id="selectAllUsersPage"' in page
     assert 'id="previewBulkUsers"' in page
     assert 'id="applyBulkUsers"' in page
