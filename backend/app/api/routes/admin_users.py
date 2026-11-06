@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -46,6 +46,8 @@ class AdminUserRoleResponse(BaseModel):
 
 class AdminUserResponse(BaseModel):
     """Safe public representation of an administrative user."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     telegram_user_id: int | None = None
@@ -232,6 +234,31 @@ async def list_admin_users(
         total_pages=total_pages,
     )
 
+
+@router.get(
+    "/export.csv",
+    dependencies=[Depends(require_permission(Permission.USERS_READ))],
+)
+async def export_admin_users_csv(
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Export a bounded, credential-free CSV snapshot of the user directory."""
+    result = await session.execute(
+        select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc()).limit(5000)
+    )
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "username", "email", "first_name", "last_name", "phone", "language", "timezone", "status", "created_at"])
+    for user in result.scalars().all():
+        writer.writerow([
+            user.id, user.username, user.email, user.first_name, user.last_name,
+            user.phone, user.language, user.timezone, user.status, user.created_at,
+        ])
+    return Response(
+        content="\ufeff" + output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="users-export.csv"'},
+    )
 
 @router.get(
     "/{user_id}",
@@ -1155,30 +1182,7 @@ async def apply_admin_users_bulk_lifecycle(
     }
 
 
-@router.get(
-    "/export.csv",
-    dependencies=[Depends(require_permission(Permission.USERS_READ))],
-)
-async def export_admin_users_csv(
-    session: AsyncSession = Depends(get_session),
-) -> Response:
-    """Export a bounded, credential-free CSV snapshot of the user directory."""
-    result = await session.execute(
-        select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc()).limit(5000)
-    )
-    output = StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["id", "username", "email", "first_name", "last_name", "phone", "language", "timezone", "status", "created_at"])
-    for user in result.scalars().all():
-        writer.writerow([
-            user.id, user.username, user.email, user.first_name, user.last_name,
-            user.phone, user.language, user.timezone, user.status, user.created_at,
-        ])
-    return Response(
-        content="\ufeff" + output.getvalue(),
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="users-export.csv"'},
-    )
+
 
 
 class AdminUserSessionResponse(BaseModel):
