@@ -67,6 +67,8 @@ async def get_current_user(
         user is None
         or str(user.status).upper() != "ACTIVE"
         or getattr(user, "deleted_at", None) is not None
+        or (getattr(user, "locked_until", None) is not None and user.locked_until > datetime.now(timezone.utc))
+        or (getattr(user, "account_expires_at", None) is not None and user.account_expires_at <= datetime.now(timezone.utc))
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
