@@ -69,6 +69,46 @@ class AdminUserListResponse(BaseModel):
     total_pages: int
 
 
+async def _protect_last_active_admin(
+    session: AsyncSession,
+    user_id: UUID,
+) -> None:
+    """Prevent deactivating or archiving the final active admin account.
+
+    Locking the admin role row serializes concurrent lifecycle changes to admin
+    accounts on databases that support SELECT FOR UPDATE.
+    """
+    from fastapi import HTTPException
+
+    target_is_admin = await session.execute(
+        select(User.id).where(
+            User.id == user_id,
+            User.roles.any(Role.name == "admin"),
+        )
+    )
+    if target_is_admin.scalar_one_or_none() is None:
+        return
+
+    admin_role = await session.execute(
+        select(Role).where(Role.name == "admin").with_for_update()
+    )
+    if admin_role.scalar_one_or_none() is None:
+        return
+
+    active_admin_count = await session.execute(
+        select(func.count(User.id)).where(
+            func.upper(User.status) == "ACTIVE",
+            User.deleted_at.is_(None),
+            User.roles.any(Role.name == "admin"),
+        )
+    )
+    if (active_admin_count.scalar_one() or 0) <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="The last active administrator account cannot be deactivated or archived.",
+        )
+
+
 def _safe_user_audit_snapshot(user: User) -> dict[str, str | None]:
     """Return approved non-secret account fields for before/after audit metadata."""
 
@@ -595,6 +635,9 @@ async def transition_admin_user_lifecycle(
             detail="You cannot deactivate or suspend your own current account.",
         )
 
+    if next_status != "ACTIVE":
+        await _protect_last_active_admin(session, user.id)
+
     now = datetime.now(timezone.utc)
     user.status = next_status
     revoked_sessions = 0
@@ -681,6 +724,8 @@ async def delete_admin_user(
             status_code=422,
             detail="A meaningful archive reason is required.",
         )
+
+    await _protect_last_active_admin(session, user.id)
 
     archived_username = user.username
 
