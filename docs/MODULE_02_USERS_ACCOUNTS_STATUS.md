@@ -23,8 +23,11 @@ This document records implementation evidence. The approved roadmap remains the 
 - Login and protected API requests reject inactive, suspended, or soft-deleted accounts.
 - Module 02 account creation/update cannot assign arbitrary roles. Role catalog and privileged role governance remain in Module 03; this prevents a generic user-management endpoint from becoming a privilege-escalation path.
 - Account creation and its audit record are committed together.
-- Profile update audit metadata records approved before/after fields and a boolean password-change indicator; it excludes password hashes, tokens, and credentials.
+- Profile update audit metadata records approved before/after fields and excludes password hashes, tokens, and credentials.
 - Safe account response schema excludes password hashes and credentials.
+- Login creates a persistent server-side session before issuing a session-bound JWT. Protected requests reject missing, expired, or revoked session records.
+- Administrators can inspect the latest 100 sessions, revoke one session, or revoke all active sessions. Revocations are audited; account deactivation/suspension and archival revoke sessions in the same transaction.
+- The current administrator session is identified in the session list and preserved by revoke-all when an administrator operates on their own account.
 
 ## Verification
 
@@ -46,7 +49,7 @@ This document records implementation evidence. The approved roadmap remains the 
 1. Full user create/edit/detail forms and profile workspace with the required tabs.
 2. Complete account lifecycle actions and reason capture, including lock/unlock, deactivate/reactivate, expiry, and deletion requests where policy supports them.
 3. Password reset/change workflow, email/phone verification, attempt limits, and rate limiting.
-4. Server-side session registry, per-session revocation, revoke-all, and token invalidation on security/lifecycle events.
+4. Password reset/change workflow, email/phone verification, attempt limits, and rate limiting.
 5. Verified external identity linking/unlinking, including Telegram proof validation and one-time linking challenges.
 6. Effective-access summary integrated with Module 03, including actor authority checks and last active Super Admin protection.
 7. Security events and a user activity timeline distinct from the authoritative audit log.
