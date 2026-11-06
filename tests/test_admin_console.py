@@ -307,3 +307,20 @@ def test_user_audit_snapshot_contains_only_approved_non_secret_fields() -> None:
     }
     assert "password_hash" not in snapshot
     assert "reset_token" not in snapshot
+
+
+def test_user_creation_workspace_has_validated_bilingual_form() -> None:
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userCreateForm"' in page.text
+    assert 'id="newUserUsername"' in page.text
+    assert 'id="newUserPassword"' in page.text
+    assert 'minlength="12"' in page.text
+    assert 'id="newUserStatus"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert 'api("/admin/users",{method:"POST"' in script.text
+    assert 'role:"customer"' in script.text
+    assert 'has("users:create")' in script.text
+    assert "إنشاء حساب جديد" in script.text
