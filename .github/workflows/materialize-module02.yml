@@ -1,0 +1,52 @@
+name: Materialize verified Module 02 source
+
+on:
+  push:
+    branches:
+      - release/module-02-verified
+    paths:
+      - ".module02-transfer/**"
+      - ".github/workflows/materialize-module02.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: true
+      - name: Reconstruct and verify source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/module02-release
+          cat .module02-transfer/*.b64 | base64 --decode > /tmp/module02-release/source.tar.xz
+          echo "d2f6c25553ee07f84f76619f4c0715275dc0302c56ffb364f3b39e02db672cce  /tmp/module02-release/source.tar.xz" | sha256sum --check -
+          python - <<'PY'
+          import pathlib, tarfile
+          archive = pathlib.Path("/tmp/module02-release/source.tar.xz")
+          with tarfile.open(archive, "r:xz") as bundle:
+              members = bundle.getmembers()
+              if len(members) != 28:
+                  raise SystemExit(f"Expected 28 source files, found {len(members)}")
+              for member in members:
+                  path = pathlib.PurePosixPath(member.name)
+                  if path.is_absolute() or ".." in path.parts or member.issym() or member.islnk() or not member.isfile():
+                      raise SystemExit(f"Unsafe archive member: {member.name}")
+          PY
+          tar -xJf /tmp/module02-release/source.tar.xz -C .
+          rm -rf .module02-transfer
+          rm -f .github/workflows/materialize-module02.yml
+          git add -A
+          git diff --cached --check
+          test "$(git diff --cached --name-only | wc -l)" -eq 28
+          git diff --cached --stat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat(users): restore complete verified Module 02 implementation"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
