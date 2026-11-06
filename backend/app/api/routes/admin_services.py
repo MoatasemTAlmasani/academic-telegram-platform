@@ -56,7 +56,7 @@ class ServiceCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     category_id: UUID
-    name: str = Field(min_length=1, max_length=180)
+    name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=10000)
     short_description: str | None = Field(default=None, max_length=500)
     is_active: bool = True
@@ -67,7 +67,7 @@ class ServiceUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     category_id: UUID | None = None
-    name: str | None = Field(default=None, min_length=1, max_length=180)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=10000)
     short_description: str | None = Field(default=None, max_length=500)
     is_active: bool | None = None
