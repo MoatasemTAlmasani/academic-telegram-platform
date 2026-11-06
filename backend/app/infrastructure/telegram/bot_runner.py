@@ -1757,7 +1757,6 @@ class TelegramBotRunner:
                 select(User.id).where(
                     User.telegram_user_id == telegram_user_id,
                     User.id != user.id,
-                    User.deleted_at.is_(None),
                 )
             )
             if owner_result.scalar_one_or_none() is not None:
