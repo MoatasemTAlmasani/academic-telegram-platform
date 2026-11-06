@@ -69,3 +69,14 @@ def test_dashboard_detail_permissions_are_granular() -> None:
     assert not has_dashboard_permission(permissions, Permission.QUOTES_READ)
     assert not has_dashboard_permission(permissions, Permission.AUDIT_READ)
     assert not has_dashboard_permission(permissions, Permission.SERVICES_READ)
+
+
+def test_audit_search_contract_is_bounded_and_authenticated() -> None:
+    operation = app.openapi()["paths"]["/api/v1/admin/audit-logs"]["get"]
+    search_parameter = next(
+        item for item in operation["parameters"] if item["name"] == "search"
+    )
+    assert search_parameter["schema"]["maxLength"] == 200
+
+    response = asyncio.run(get("/api/v1/admin/audit-logs?search=login&limit=25&offset=0"))
+    assert response.status_code == 401
