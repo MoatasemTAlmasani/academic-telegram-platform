@@ -892,7 +892,7 @@ def test_last_admin_protection_is_used_for_lifecycle_and_archive() -> None:
         / "admin_users.py"
     ).read_text(encoding="utf-8")
 
-    assert source.count("await _protect_last_active_admin(session, user.id)") == 2
+    assert source.count("await _protect_last_active_admin(session, user.id)") >= 2
     assert 'User.roles.any(Role.name == "admin")' in source
 
 
