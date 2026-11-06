@@ -86,6 +86,56 @@ async def me(
     }
 
 
+class UserPreferencesRequest(BaseModel):
+    language: Literal["ar", "en"] | None = None
+    timezone: str | None = Field(default=None, min_length=1, max_length=64)
+    theme: Literal["light", "dark", "system"] | None = None
+    date_format: Literal["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"] | None = None
+    notifications_email: bool | None = None
+    notifications_telegram: bool | None = None
+
+
+@router.get("/preferences")
+async def get_my_preferences(current_user=Depends(get_current_user)):
+    return {
+        "language": current_user.language or "ar",
+        "timezone": current_user.timezone or "Asia/Aden",
+        **(current_user.preferences or {}),
+    }
+
+
+@router.patch("/preferences")
+async def update_my_preferences(
+    payload: UserPreferencesRequest,
+    current_user=Depends(get_current_user),
+    uow: UnitOfWork = Depends(get_unit_of_work),
+):
+    updates = payload.model_dump(exclude_unset=True)
+    if "language" in updates:
+        current_user.language = updates.pop("language")
+    if "timezone" in updates:
+        current_user.timezone = updates.pop("timezone")
+    preferences = dict(current_user.preferences or {})
+    preferences.update(updates)
+    current_user.preferences = preferences
+    now = datetime.now(timezone.utc)
+    uow.session.add(AuditLog(
+        actor_id=current_user.id,
+        action="user.preferences_updated",
+        resource_type="user",
+        resource_id=current_user.id,
+        description="User updated personal preferences.",
+        event_metadata={"fields": sorted(payload.model_fields_set)},
+        created_at=now,
+    ))
+    await uow.session.commit()
+    return {
+        "language": current_user.language,
+        "timezone": current_user.timezone,
+        **preferences,
+    }
+
+
 class ChangePasswordRequest(BaseModel):
     """Authenticated password change requiring proof of the current password."""
 
