@@ -6,6 +6,7 @@ import httpx
 
 from backend.app.main import app
 from backend.app.api.routes import health
+from backend.app.core.config import get_settings
 
 
 async def get(path: str) -> httpx.Response:
@@ -25,7 +26,7 @@ def test_health_check() -> None:
         "success": True,
         "status": "ok",
         "service": "academic-services-platform-api",
-        "environment": "development",
+        "environment": get_settings().environment,
     }
 
 
