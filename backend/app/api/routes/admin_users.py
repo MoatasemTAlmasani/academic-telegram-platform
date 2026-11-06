@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
 from sqlalchemy import func, or_, select, update
@@ -18,6 +19,9 @@ from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.permissions import Permission
 from database.models.identity import Role, User, UserSession
 from database.models.audit import AuditLog
+from backend.app.modules.authentication.jwt import decode_access_token_with_session
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 router = APIRouter(
@@ -639,6 +643,7 @@ class AdminUserSessionResponse(BaseModel):
 async def list_admin_user_sessions(
     user_id: UUID,
     current_user=Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: AsyncSession = Depends(get_session),
 ) -> list[AdminUserSessionResponse]:
     """List recent sessions for an account without exposing token material."""
@@ -650,6 +655,11 @@ async def list_admin_user_sessions(
     if user_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="User not found.")
 
+    current_session_id = (
+        decode_access_token_with_session(credentials.credentials)[1]
+        if credentials is not None
+        else None
+    )
     result = await session.execute(
         select(UserSession)
         .where(UserSession.user_id == user_id)
@@ -665,6 +675,7 @@ async def list_admin_user_sessions(
             last_seen_at=item.last_seen_at,
             revoked_at=item.revoked_at,
             revoked_reason=item.revoked_reason,
+            is_current=item.id == current_session_id,
             ip_address=item.ip_address,
             user_agent=item.user_agent,
             is_current=False,
@@ -724,6 +735,7 @@ async def revoke_admin_user_session(
 async def revoke_all_admin_user_sessions(
     user_id: UUID,
     current_user=Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, int]:
     """Revoke every active session belonging to the specified account."""
@@ -737,14 +749,20 @@ async def revoke_all_admin_user_sessions(
         raise HTTPException(status_code=404, detail="User not found.")
 
     now = datetime.now(timezone.utc)
+    current_session_id = (
+        decode_access_token_with_session(credentials.credentials)[1]
+        if credentials is not None
+        else None
+    )
+    revoke_query = update(UserSession).where(
+        UserSession.user_id == user_id,
+        UserSession.revoked_at.is_(None),
+        UserSession.expires_at > now,
+    )
+    if user_id == current_user.id and current_session_id is not None:
+        revoke_query = revoke_query.where(UserSession.id != current_session_id)
     result = await session.execute(
-        update(UserSession)
-        .where(
-            UserSession.user_id == user_id,
-            UserSession.revoked_at.is_(None),
-            UserSession.expires_at > now,
-        )
-        .values(revoked_at=now, revoked_reason="revoked_all_by_admin")
+        revoke_query.values(revoked_at=now, revoked_reason="revoked_all_by_admin")
     )
     revoked_count = result.rowcount or 0
     session.add(
