@@ -1,9 +1,12 @@
 """Authentication API routes."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from hashlib import sha256
+import secrets
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import update
+from sqlalchemy import delete, select, update
 from pydantic import BaseModel, Field
 
 from backend.app.api.auth_dependencies import get_current_user
@@ -12,6 +15,7 @@ from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 from backend.app.modules.authentication.passwords import hash_password, verify_password
 from database.models.audit import AuditLog
 from database.models.identity import UserSession
+from database.models.security import ExternalIdentity, IdentityLinkChallenge
 
 from backend.app.modules.authentication.authentication import (
     AuthenticationError,
@@ -148,3 +152,161 @@ async def change_password(
         revoked_sessions=revoked_count,
         reauthentication_required=True,
     )
+
+
+class ExternalIdentityResponse(BaseModel):
+    provider: str
+    subject: str
+    display_name: str | None = None
+    linked_at: datetime
+    verified_at: datetime
+
+
+class TelegramLinkChallengeResponse(BaseModel):
+    provider: Literal["telegram"] = "telegram"
+    link_code: str
+    bot_command: str
+    expires_at: datetime
+
+
+@router.get(
+    "/identity-links",
+    response_model=list[ExternalIdentityResponse],
+)
+async def list_my_identity_links(
+    current_user=Depends(get_current_user),
+    uow: UnitOfWork = Depends(get_unit_of_work),
+) -> list[ExternalIdentityResponse]:
+    """List verified external identities linked to the authenticated account."""
+    result = await uow.session.execute(
+        select(ExternalIdentity)
+        .where(ExternalIdentity.user_id == current_user.id)
+        .order_by(ExternalIdentity.linked_at.desc())
+    )
+    return [
+        ExternalIdentityResponse(
+            provider=item.provider,
+            subject=item.subject,
+            display_name=item.display_name,
+            linked_at=item.linked_at,
+            verified_at=item.verified_at,
+        )
+        for item in result.scalars().all()
+    ]
+
+
+@router.post(
+    "/identity-links/telegram/challenge",
+    response_model=TelegramLinkChallengeResponse,
+    status_code=201,
+)
+async def create_telegram_link_challenge(
+    current_user=Depends(get_current_user),
+    uow: UnitOfWork = Depends(get_unit_of_work),
+) -> TelegramLinkChallengeResponse:
+    """Create a short-lived, single-use code to prove Telegram account ownership."""
+    if current_user.telegram_user_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="A Telegram account is already linked to this profile.",
+        )
+
+    existing_identity = await uow.session.execute(
+        select(ExternalIdentity).where(
+            ExternalIdentity.user_id == current_user.id,
+            ExternalIdentity.provider == "telegram",
+        )
+    )
+    if existing_identity.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="A Telegram identity is already linked to this profile.",
+        )
+
+    now = datetime.now(timezone.utc)
+    recent_challenge = await uow.session.execute(
+        select(IdentityLinkChallenge.id).where(
+            IdentityLinkChallenge.user_id == current_user.id,
+            IdentityLinkChallenge.provider == "telegram",
+            IdentityLinkChallenge.consumed_at.is_(None),
+            IdentityLinkChallenge.expires_at > now,
+            IdentityLinkChallenge.created_at >= now - timedelta(minutes=1),
+        )
+    )
+    if recent_challenge.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="A link code was created recently. Wait before requesting another.",
+        )
+
+    await uow.session.execute(
+        update(IdentityLinkChallenge)
+        .where(
+            IdentityLinkChallenge.user_id == current_user.id,
+            IdentityLinkChallenge.provider == "telegram",
+            IdentityLinkChallenge.consumed_at.is_(None),
+        )
+        .values(consumed_at=now)
+    )
+    link_code = secrets.token_urlsafe(24)
+    challenge = IdentityLinkChallenge(
+        user_id=current_user.id,
+        provider="telegram",
+        token_hash=sha256(link_code.encode("utf-8")).hexdigest(),
+        created_at=now,
+        expires_at=now + timedelta(minutes=10),
+    )
+    uow.session.add(challenge)
+    await uow.session.commit()
+
+    return TelegramLinkChallengeResponse(
+        link_code=link_code,
+        bot_command=f"/link {link_code}",
+        expires_at=challenge.expires_at,
+    )
+
+
+@router.delete(
+    "/identity-links/telegram",
+    status_code=204,
+)
+async def unlink_my_telegram_identity(
+    current_user=Depends(get_current_user),
+    uow: UnitOfWork = Depends(get_unit_of_work),
+) -> None:
+    """Unlink Telegram only when a password-based sign-in remains available."""
+    from fastapi import HTTPException
+
+    if not current_user.password_hash:
+        raise HTTPException(
+            status_code=409,
+            detail="Set a password before unlinking Telegram so you do not lose account access.",
+        )
+
+    result = await uow.session.execute(
+        select(ExternalIdentity).where(
+            ExternalIdentity.user_id == current_user.id,
+            ExternalIdentity.provider == "telegram",
+        )
+    )
+    identity = result.scalar_one_or_none()
+    if identity is None:
+        raise HTTPException(status_code=404, detail="Telegram identity is not linked.")
+
+    now = datetime.now(timezone.utc)
+    await uow.session.execute(
+        delete(ExternalIdentity).where(ExternalIdentity.id == identity.id)
+    )
+    current_user.telegram_user_id = None
+    uow.session.add(
+        AuditLog(
+            actor_id=current_user.id,
+            action="user.identity_unlinked",
+            resource_type="user",
+            resource_id=current_user.id,
+            description="User unlinked their Telegram identity.",
+            event_metadata={"provider": "telegram"},
+            created_at=now,
+        )
+    )
+    await uow.session.commit()
