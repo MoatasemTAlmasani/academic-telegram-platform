@@ -84,11 +84,14 @@ async def list_admin_users(
 
     query = (
         select(User)
+        .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
         .order_by(User.created_at.desc())
     )
 
-    count_query = select(func.count(func.distinct(User.id)))
+    count_query = select(func.count(func.distinct(User.id))).where(
+        User.deleted_at.is_(None)
+    )
 
     if search:
         pattern = f"%{search.strip()}%"
@@ -285,7 +288,7 @@ async def create_admin_user(
         phone=payload.phone,
         language=payload.language,
         timezone=payload.timezone,
-        status=payload.status,
+        status=payload.status.upper(),
     )
 
     user.roles.append(role)
