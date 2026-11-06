@@ -43,13 +43,13 @@ This file records implementation evidence and remaining work. It does not mark t
 
 ## Remaining work before Module 01 can be VERIFIED
 
-1. Run backend test suite in the repository's supported isolated test environment and record the exact result.
+1. Run backend test suite in the repository's supported isolated test environment and record the exact result. The current GitHub commit has no Actions run; Vercel reports a build-rate-limit failure, and a new preview deployment request was blocked by the Vercel 100-deployments-per-day API quota.
 2. Add authenticated integration tests that seed isolated users, requests, services, quotations, and audit events; verify aggregate counts and date-window boundaries. The current tests verify the OpenAPI contract, authentication, and static asset delivery only.
 3. Verify date/time behavior across the configured platform timezone and UTC storage conventions.
 4. Add drill-down links from KPI cards, charts, service rows, and operational alerts to permission-protected filtered lists.
 5. Add global dashboard filters for service and supported organization scope only after authoritative scope data and policies exist.
-6. Add an actual recent-activity filter/search and pagination contract; do not treat the current ten-event preview as a full activity center.
-7. Implement persisted per-user dashboard preferences and a complete notification center only after the required durable preference/read/delivery models and permission contracts are confirmed.
+6. Audit Trail now has bounded text search and 25-record pagination; the dashboard's ten-event recent-activity preview still needs its own filtering/drill-down behavior and browser verification.
+7. Implement persisted per-user dashboard preferences and a complete notification center only after the required durable preference/read/delivery models and permission contracts are confirmed. The current User model has no dashboard-preference fields; Notification has no read timestamp or delivery-attempt model, so these workflows remain blocked on a reviewed schema/migration design.
 8. Add loading, empty, retry, and permission-denied states for each dashboard panel, including the new analytics extension.
 9. Review dashboard access permission granularity and ensure the backend permission is distinct from general admin-console access where the permission catalog supports it.
 10. Run browser-level checks for desktop/tablet/mobile, Arabic/English, RTL/LTR, light/dark, keyboard access, and chart text alternatives.
