@@ -27,7 +27,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - Safe account response schema excludes password hashes and credentials.
 - Login creates a persistent server-side session before issuing a session-bound JWT. Protected requests reject missing, expired, or revoked session records.
 - Administrators can inspect the latest 100 sessions, revoke one session, or revoke all active sessions. Revocations are audited; account deactivation/suspension and archival revoke sessions in the same transaction.
-- Administrators can preview and execute bounded bulk lifecycle actions (up to 100 accounts) with per-record outcomes, reasoned audit records, self-protection, and last-active-admin safeguards. A credential-free CSV directory export is available with a 5,000-row cap and a workspace export control.
+- Administrators can preview and execute bounded bulk lifecycle actions (up to 100 accounts) with per-record outcomes, reasoned audit records, self-protection, and last-active-admin safeguards. The bilingual admin workspace now supports selecting accounts across directory pages, reviewing a server-generated preview, confirming execution, and viewing per-account outcomes. Preview eligibility also checks self-protection and last-active-admin safeguards. A credential-free CSV directory export is available with a 5,000-row cap and a workspace export control.
 - Administrators can inspect verified external identities linked to an account; the view excludes challenge tokens and is read-only. Self-service Telegram linking uses a short-lived, single-use challenge in the authentication API.
 - Administrators can inspect the latest 50 account-linked login attempts with timestamp, outcome, and IP address; the endpoint never exposes username hashes or credentials.
 - Users with `audit:read` can inspect the latest 100 redacted audit events related to the account or performed by it. The endpoint deliberately omits arbitrary metadata, tokens, and credential fields.
@@ -61,6 +61,8 @@ This document records implementation evidence. The approved roadmap remains the 
 - Python tests passed on commit `d9bdddeace4f1a43542a3a181a8685396573a75e` (run 42282611667), including the isolated SQLite upgrade/downgrade test for all three Module 02 migration revisions.
 - Phase 01 verification passed on the same commit (run 42282611644).
 - Python tests passed on current functional commit `e6ba5191ff7881c7309cfe9b715d51de006695b8` (run 42283109343): **73 passed, 2 warnings**.
+- Bulk-operation UI increment passed Python tests on commit `4b02e24923016edb2d8a78dd9503bf12716d9180` (run 42287250581): **79 passed, 2 warnings**.
+- Phase 01 verification passed on that same UI increment (run 42287250584). A follow-up commit adds self/last-admin eligibility checks to preview and preserves the execution result panel; its checks are pending.
 - Phase 01 verification passed on the same commit (run 42283109349).
 - The automated suite also checks JavaScript syntax with Node when Node is available in the runner.
 - These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
@@ -68,13 +70,13 @@ This document records implementation evidence. The approved roadmap remains the 
 
 ## Not yet implemented — remains in Module 02 scope
 
-1. Complete profile workspace tabs, a user activity timeline distinct from the audit log, and a bilingual preference UI. Preference APIs are implemented.
-2. Add a dedicated admin UI for lock/unlock and expiry, plus deletion-request states; lock and expiry API enforcement is implemented.
+1. Complete profile workspace tabs and a user activity timeline distinct from the audit log. Preference API and bilingual self-service preference UI are implemented.
+2. Implement deletion-request and approved deletion/anonymization states. Account lock/expiry API enforcement and bilingual admin policy controls are implemented.
 3. Password reset/recovery for accounts that cannot authenticate, email/phone verification, and recovery rate limiting.
 4. Additional identity providers, broader identity-link recovery, and end-to-end verification of Telegram linking/unlinking.
 5. Full effective-access integration with Module 03, including actor authority checks and role/permission administration; this increment provides a read-only role/permission summary only.
 6. A unified security-event workflow and a user activity timeline distinct from the authoritative audit log; login-attempt history and throttling are implemented.
-7. A bilingual bulk-operation UI and a separate CSV import preview/commit flow; the bounded preview/execute APIs and CSV export are implemented.
+7. A separate CSV import preview/validation/commit flow; bounded bulk preview/execute APIs and the bilingual bulk-operation UI are implemented.
 8. Validated CSV import, field-level authorization, and expiring protected downloads.
 9. End-to-end API authorization, IDOR, lifecycle, concurrency, and browser acceptance coverage.
 10. Full operational documentation, retention policy, and acceptance evidence.
