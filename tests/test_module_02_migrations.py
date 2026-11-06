@@ -28,6 +28,7 @@ def test_module_02_migrations_upgrade_and_downgrade_in_isolated_database() -> No
         _load_migration("aa11bb22cc33_add_user_sessions.py"),
         _load_migration("bb22cc33dd44_add_login_attempts.py"),
         _load_migration("cc33dd44ee55_external_identity_linking.py"),
+        _load_migration("dd44ee55ff66_user_preferences_and_account_controls.py"),
     ]
 
     try:
@@ -49,6 +50,8 @@ def test_module_02_migrations_upgrade_and_downgrade_in_isolated_database() -> No
                 "identity_link_challenges",
             }
             assert expected_tables.issubset(set(inspector.get_table_names()))
+            user_columns = {column["name"] for column in inspector.get_columns("users")}
+            assert {"locked_until", "account_expires_at", "preferences"}.issubset(user_columns)
 
             assert {
                 index["name"] for index in inspector.get_indexes("user_sessions")
