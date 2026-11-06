@@ -14,6 +14,7 @@ from uuid import UUID
 import httpx
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
@@ -1795,7 +1796,11 @@ class TelegramBotRunner:
                     created_at=now,
                 )
             )
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                return "حساب Telegram مرتبط بحساب آخر. لم يتم دمج الحسابات تلقائياً."
             return "تم ربط حساب Telegram بنجاح بحسابك في المنصة."
 
     async def _get_or_create_user(
