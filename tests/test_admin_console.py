@@ -224,7 +224,13 @@ def test_suspended_users_cannot_authenticate(monkeypatch) -> None:
         AuthenticationService,
     )
 
-    monkeypatch.setattr(auth_module, "_get_secret_key", lambda: "test-application-secret")
+    from backend.app.modules.authentication import jwt as jwt_module
+    from pydantic import SecretStr
+    monkeypatch.setattr(
+        jwt_module,
+        "get_settings",
+        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret")),
+    )
     suspended_user = SimpleNamespace(
         id=uuid4(),
         status="SUSPENDED",
@@ -427,7 +433,13 @@ def test_authentication_creates_persistent_session_before_issuing_token(monkeypa
         users = FakeUsers()
         session = fake_session
 
-    monkeypatch.setattr(auth_module, "_get_secret_key", lambda: "test-application-secret")
+    from backend.app.modules.authentication import jwt as jwt_module
+    from pydantic import SecretStr
+    monkeypatch.setattr(
+        jwt_module,
+        "get_settings",
+        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret")),
+    )
     monkeypatch.setattr(auth_module, "verify_password", lambda password, password_hash: True)
     monkeypatch.setattr(
         auth_module,
@@ -603,7 +615,13 @@ def test_login_throttling_blocks_after_five_failed_username_ip_attempts(monkeypa
     )
     from database.models.security import LoginAttempt
 
-    monkeypatch.setattr(auth_module, "_get_secret_key", lambda: "test-application-secret")
+    from backend.app.modules.authentication import jwt as jwt_module
+    from pydantic import SecretStr
+    monkeypatch.setattr(
+        jwt_module,
+        "get_settings",
+        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret")),
+    )
 
     class FakeResult:
         def scalar_one(self):
