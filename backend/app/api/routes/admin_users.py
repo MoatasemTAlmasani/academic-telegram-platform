@@ -759,6 +759,51 @@ async def delete_admin_user(
     await session.commit()
 
 
+class AdminUserAccessSummaryResponse(BaseModel):
+    """Read-only summary of roles and effective permission codes."""
+
+    roles: list[AdminUserRoleResponse]
+    permissions: list[str]
+
+
+@router.get(
+    "/{user_id}/access-summary",
+    response_model=AdminUserAccessSummaryResponse,
+    dependencies=[Depends(require_permission(Permission.USERS_READ))],
+)
+async def get_admin_user_access_summary(
+    user_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminUserAccessSummaryResponse:
+    """Display assigned roles and effective permission codes without mutating RBAC."""
+    from fastapi import HTTPException
+
+    result = await session.execute(
+        select(User)
+        .options(selectinload(User.roles).selectinload(Role.permissions))
+        .where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    roles = [
+        AdminUserRoleResponse(
+            id=role.id,
+            name=role.name,
+            description=role.description,
+        )
+        for role in user.roles
+    ]
+    permissions = sorted({
+        permission.code
+        for role in user.roles
+        for permission in role.permissions
+    })
+    return AdminUserAccessSummaryResponse(roles=roles, permissions=permissions)
+
+
 class AdminUserAuditEntryResponse(BaseModel):
     """Redacted audit event associated with an account."""
 
