@@ -90,6 +90,8 @@ class AuthenticationService:
             user is not None
             and str(user.status).upper() == "ACTIVE"
             and getattr(user, "deleted_at", None) is None
+            and (getattr(user, "locked_until", None) is None or user.locked_until <= now)
+            and (getattr(user, "account_expires_at", None) is None or user.account_expires_at > now)
         )
 
         if (
