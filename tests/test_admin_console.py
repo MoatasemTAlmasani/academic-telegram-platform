@@ -516,3 +516,22 @@ def test_user_lifecycle_route_and_ui_are_exposed() -> None:
     assert '"/lifecycle"' in script.text
     assert "reason:$(" in script.text
     assert "دورة حياة الحساب" in script.text
+
+
+def test_account_archive_requires_reason_and_permission_aware_ui_action() -> None:
+    operation = app.openapi()["paths"]["/api/v1/admin/users/{user_id}"]["delete"]
+    reason_parameter = next(
+        parameter for parameter in operation["parameters"]
+        if parameter["name"] == "reason"
+    )
+    assert reason_parameter["required"] is True
+    assert reason_parameter["schema"]["minLength"] == 5
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="archiveUserAccount"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert 'has("users:delete")' in script.text
+    assert 'method:"DELETE"' in script.text
