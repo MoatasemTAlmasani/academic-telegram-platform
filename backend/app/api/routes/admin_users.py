@@ -20,7 +20,7 @@ from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.permissions import Permission
 from database.models.identity import Role, User, UserSession
 from database.models.audit import AuditLog
-from database.models.security import ExternalIdentity
+from database.models.security import ExternalIdentity, LoginAttempt
 from backend.app.modules.authentication.jwt import decode_access_token_with_session
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -757,6 +757,51 @@ async def delete_admin_user(
 
     session.add(audit_log)
     await session.commit()
+
+
+class AdminUserLoginAttemptResponse(BaseModel):
+    """Privacy-safe login attempt details for an account."""
+
+    id: UUID
+    attempted_at: datetime
+    succeeded: bool
+    ip_address: str | None = None
+
+
+@router.get(
+    "/{user_id}/login-attempts",
+    response_model=list[AdminUserLoginAttemptResponse],
+    dependencies=[Depends(require_permission(Permission.USERS_READ))],
+)
+async def list_admin_user_login_attempts(
+    user_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[AdminUserLoginAttemptResponse]:
+    """List recent login attempts without exposing username hashes or secrets."""
+    from fastapi import HTTPException
+
+    user_result = await session.execute(
+        select(User.id).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    if user_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    result = await session.execute(
+        select(LoginAttempt)
+        .where(LoginAttempt.user_id == user_id)
+        .order_by(LoginAttempt.attempted_at.desc())
+        .limit(50)
+    )
+    return [
+        AdminUserLoginAttemptResponse(
+            id=item.id,
+            attempted_at=item.attempted_at,
+            succeeded=item.succeeded,
+            ip_address=item.ip_address,
+        )
+        for item in result.scalars().all()
+    ]
 
 
 class AdminUserExternalIdentityResponse(BaseModel):
