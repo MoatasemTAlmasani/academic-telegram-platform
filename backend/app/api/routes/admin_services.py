@@ -283,24 +283,6 @@ async def create_admin_service(
         },
         created_at=now,
     ))
-    now = datetime.now(timezone.utc)
-    after = {
-        "category_id": str(service.category_id),
-        "name": service.name,
-        "description": service.description,
-        "short_description": service.short_description,
-        "is_active": service.is_active,
-        "sort_order": service.sort_order,
-    }
-    session.add(AuditLog(
-        actor_id=current_user.id,
-        action="service.updated",
-        resource_type="service",
-        resource_id=service.id,
-        description=f"Admin updated service '{service.name}'.",
-        event_metadata={"before": before, "after": after},
-        created_at=now,
-    ))
     await session.commit()
 
     result = await session.execute(
@@ -374,6 +356,24 @@ async def update_admin_service(
     if payload.sort_order is not None:
         service.sort_order = payload.sort_order
 
+    after = {
+        "category_id": str(service.category_id),
+        "name": service.name,
+        "description": service.description,
+        "short_description": service.short_description,
+        "is_active": service.is_active,
+        "sort_order": service.sort_order,
+    }
+    now = datetime.now(timezone.utc)
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="service.updated",
+        resource_type="service",
+        resource_id=service.id,
+        description=f"Admin updated service '{service.name}'.",
+        event_metadata={"before": before, "after": after},
+        created_at=now,
+    ))
     await session.commit()
 
     result = await session.execute(
