@@ -7,10 +7,11 @@ import os
 """Admin service requests management API."""
 
 
+from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -20,6 +21,9 @@ from backend.app.api.rbac_dependencies import require_permission
 from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.permissions import Permission
 from database.models.enums import RequestPriority, ServiceRequestStatus
+from database.models.audit import AuditLog
+from database.models.catalog import Service
+from database.models.identity import User
 from database.models.requests import ServiceRequest
 
 
@@ -48,6 +52,23 @@ class RequestListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+
+class AdminRequestCreate(BaseModel):
+    customer_id: UUID
+    service_id: UUID
+    title: str = Field(min_length=1, max_length=300)
+    description: str | None = None
+    specialization: str | None = Field(default=None, max_length=255)
+    priority: RequestPriority = RequestPriority.NORMAL
+
+class AdminRequestUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: ServiceRequestStatus | None = None
+    priority: RequestPriority | None = None
+    notes: str | None = Field(default=None, max_length=10000)
 
 
 @router.get(
@@ -163,49 +184,44 @@ async def get_admin_request_details(
 )
 async def update_admin_request(
     request_id: UUID,
-    payload: dict,
+    payload: AdminRequestUpdate,
+    current_user=Depends(get_current_user),
     session=Depends(get_session),
 ):
-    from fastapi import HTTPException
-    from database.models.requests import ServiceRequest, ServiceRequestStatus, RequestPriority
-
     request = await session.get(ServiceRequest, request_id)
 
-    if request is None or getattr(request, "deleted_at", None) is not None:
+    if request is None or request.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    original_status = (
-        request.status.value
-        if hasattr(request.status, "value")
-        else str(request.status)
-    )
+    before = {
+        "status": request.status.value,
+        "priority": request.priority.value,
+        "notes": request.notes,
+    }
+    changes = payload.model_dump(exclude_unset=True)
+    if "status" in changes and changes["status"] is not None:
+        request.status = changes["status"]
+    if "priority" in changes and changes["priority"] is not None:
+        request.priority = changes["priority"]
+    if "notes" in changes:
+        request.notes = changes["notes"] or None
 
-    if "status" in payload and payload["status"]:
-        try:
-            request.status = ServiceRequestStatus(payload["status"])
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid status")
-
-    if "priority" in payload and payload["priority"]:
-        try:
-            request.priority = RequestPriority(payload["priority"])
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid priority")
-
-    if "notes" in payload:
-        request.notes = payload["notes"] or None
-
-    new_status = (
-        request.status.value
-        if hasattr(request.status, "value")
-        else str(request.status)
-    )
-    status_changed = original_status != new_status
-
-
-    # Detect status change and notify customer after successful update
-    # The original status is captured from the request object before mutation.
-    # This variable is populated below when the endpoint is patched.
+    after = {
+        "status": request.status.value,
+        "priority": request.priority.value,
+        "notes": request.notes,
+    }
+    status_changed = before["status"] != after["status"]
+    now = datetime.now(timezone.utc)
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="request.updated",
+        resource_type="service_request",
+        resource_id=request.id,
+        description=f"Admin updated request '{request.title}'.",
+        event_metadata={"before": before, "after": after},
+        created_at=now,
+    ))
     await session.commit()
     await session.refresh(request)
 
@@ -315,3 +331,92 @@ async def update_admin_request(
         "priority": request.priority.value if hasattr(request.priority, "value") else str(request.priority),
         "notes": request.notes,
     }
+
+
+
+@router.post(
+    "",
+    status_code=201,
+    dependencies=[Depends(require_permission(Permission.REQUESTS_CREATE))],
+)
+async def create_admin_request(
+    payload: AdminRequestCreate,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    customer = await session.scalar(
+        select(User).where(User.id == payload.customer_id, User.deleted_at.is_(None))
+    )
+    if customer is None:
+        raise HTTPException(status_code=404, detail="Customer not found.")
+    service = await session.scalar(
+        select(Service).where(Service.id == payload.service_id, Service.deleted_at.is_(None))
+    )
+    if service is None or not service.is_active:
+        raise HTTPException(status_code=422, detail="An active service is required.")
+    request = ServiceRequest(
+        customer_id=customer.id,
+        service_id=service.id,
+        title=payload.title.strip(),
+        description=payload.description,
+        specialization=payload.specialization,
+        priority=payload.priority,
+    )
+    session.add(request)
+    await session.flush()
+    now = datetime.now(timezone.utc)
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="request.created",
+        resource_type="service_request",
+        resource_id=request.id,
+        description=f"Admin created request '{request.title}'.",
+        event_metadata={"customer_id": str(customer.id), "service_id": str(service.id)},
+        created_at=now,
+    ))
+    await session.commit()
+    await session.refresh(request)
+    return {
+        "id": str(request.id),
+        "title": request.title,
+        "description": request.description,
+        "specialization": request.specialization,
+        "status": request.status.value if hasattr(request.status, "value") else str(request.status),
+        "priority": request.priority.value if hasattr(request.priority, "value") else str(request.priority),
+        "customer_id": str(request.customer_id),
+        "service_id": str(request.service_id),
+        "created_at": request.created_at.isoformat(),
+    }
+
+
+@router.delete(
+    "/{request_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission(Permission.REQUESTS_UPDATE))],
+)
+async def archive_admin_request(
+    request_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    request = await session.scalar(
+        select(ServiceRequest).where(
+            ServiceRequest.id == request_id,
+            ServiceRequest.deleted_at.is_(None),
+        )
+    )
+    if request is None:
+        raise HTTPException(status_code=404, detail="Request not found.")
+    now = datetime.now(timezone.utc)
+    request.deleted_at = now
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="request.archived",
+        resource_type="service_request",
+        resource_id=request.id,
+        description=f"Admin archived request '{request.title}'.",
+        event_metadata={"request_id": str(request.id)},
+        created_at=now,
+    ))
+    await session.commit()
+    return Response(status_code=204)

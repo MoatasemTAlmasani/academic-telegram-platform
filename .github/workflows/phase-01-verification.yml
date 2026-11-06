@@ -1,0 +1,55 @@
+name: Phase 01 verification
+
+on:
+  push:
+    branches:
+      - feature/admin-system-delivery
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ehteraf_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ehteraf_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: testing
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ehteraf_test
+      SECRET_KEY: ci-only-secret-key-not-for-production-0000000000000000
+      TELEGRAM_MODE: webhook
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install locked project and test dependencies
+        run: uv sync --locked --all-groups --all-extras
+      - name: Compile Python sources
+        run: uv run --no-sync python -m compileall -q backend database tests
+      - name: Run test suite
+        run: uv run --no-sync pytest -q --tb=short

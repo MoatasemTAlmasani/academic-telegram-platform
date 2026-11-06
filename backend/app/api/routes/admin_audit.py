@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.auth_dependencies import get_current_user
@@ -51,6 +51,7 @@ class AuditLogListResponse(BaseModel):
 )
 async def list_audit_logs(
     action: str | None = Query(default=None, max_length=150),
+    search: str | None = Query(default=None, max_length=200),
     resource_type: str | None = Query(default=None, max_length=100),
     actor_id: UUID | None = None,
     limit: int = Query(default=50, ge=1, le=200),
@@ -63,6 +64,16 @@ async def list_audit_logs(
     if action:
         filters.append(AuditLog.action == action.strip())
 
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        filters.append(
+            or_(
+                AuditLog.action.ilike(pattern),
+                AuditLog.resource_type.ilike(pattern),
+                AuditLog.description.ilike(pattern),
+            )
+        )
+
     if resource_type:
         filters.append(
             AuditLog.resource_type == resource_type.strip()
@@ -71,13 +82,13 @@ async def list_audit_logs(
     if actor_id:
         filters.append(AuditLog.actor_id == actor_id)
 
-    count_query = select(AuditLog.id)
+    count_query = select(func.count(AuditLog.id))
 
     if filters:
         count_query = count_query.where(*filters)
 
     count_result = await session.execute(count_query)
-    total = len(count_result.scalars().all())
+    total = int(count_result.scalar_one() or 0)
 
     query = (
         select(AuditLog)
