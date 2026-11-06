@@ -6,7 +6,7 @@ from io import StringIO
 from datetime import datetime, timezone
 
 from uuid import UUID
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -1010,8 +1010,8 @@ async def list_admin_user_activity(
     user_id: UUID,
     offset: int = Query(default=0, ge=0, le=1000000),
     limit: int = Query(default=20, ge=1, le=50),
-    source: Literal["all", "audit", "security"] = Query(default="all"),
-    event_type: str | None = Query(default=None, min_length=1, max_length=100),
+    source: Annotated[Literal["all", "audit", "security"], Query()] = "all",
+    event_type: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
     session: AsyncSession = Depends(get_session),
 ) -> AdminUserActivityResponse:
     """Return a filtered, paginated timeline combining audit and sign-in events."""
