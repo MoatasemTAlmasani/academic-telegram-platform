@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from sqlalchemy import func, or_, select
@@ -16,6 +17,7 @@ from backend.app.api.rbac_dependencies import require_permission
 from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.passwords import hash_password
 from backend.app.modules.authentication.permissions import Permission
+from database.models.audit import AuditLog
 from database.models.identity import Role, StaffProfile, User
 
 
@@ -126,7 +128,7 @@ async def _get_staff_user(
             selectinload(User.roles),
             selectinload(User.staff_profile),
         )
-        .where(User.id == user_id)
+        .where(User.id == user_id, User.deleted_at.is_(None))
     )
 
     user = result.scalar_one_or_none()
@@ -166,7 +168,7 @@ async def list_staff(
             selectinload(User.roles),
             selectinload(User.staff_profile),
         )
-        .where(Role.id == staff_role.id)
+        .where(Role.id == staff_role.id, User.deleted_at.is_(None))
         .order_by(User.created_at.desc())
     )
 
@@ -174,7 +176,7 @@ async def list_staff(
         select(func.count(func.distinct(User.id)))
         .select_from(User)
         .join(User.roles)
-        .where(Role.id == staff_role.id)
+        .where(Role.id == staff_role.id, User.deleted_at.is_(None))
     )
 
     if search:
@@ -402,3 +404,44 @@ async def update_staff(
     updated_user = result.scalar_one()
 
     return _to_response(updated_user)
+
+
+@router.delete(
+    "/{user_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission(Permission.USERS_DELETE))],
+)
+async def archive_staff(
+    user_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Soft-delete a staff identity and deactivate its profile."""
+    user = await _get_staff_user(session, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Staff member not found.")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot archive your own account.")
+
+    now = datetime.now(timezone.utc)
+    username = user.username or str(user.id)
+    user.deleted_at = now
+    user.status = "SUSPENDED"
+    if user.staff_profile is not None:
+        user.staff_profile.is_active = False
+
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="staff.archived",
+        resource_type="staff",
+        resource_id=user.id,
+        description=f"Admin archived staff member '{username}'.",
+        event_metadata={"user_id": str(user.id)},
+        created_at=now,
+    ))
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    return Response(status_code=204)
