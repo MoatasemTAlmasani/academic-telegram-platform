@@ -1,12 +1,14 @@
 """Admin users management API."""
 
 from __future__ import annotations
+import csv
+from io import StringIO
 from datetime import datetime, timezone
 
 from uuid import UUID
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -1025,6 +1027,158 @@ async def update_admin_user_access_policy(
     await session.commit()
     await session.refresh(user)
     return AdminUserResponse.model_validate(user)
+
+
+class AdminUsersBulkLifecycleRequest(BaseModel):
+    user_ids: list[UUID] = Field(min_length=1, max_length=100)
+    action: Literal["activate", "reactivate", "deactivate", "suspend"]
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@router.post(
+    "/bulk/preview",
+    dependencies=[Depends(require_permission(Permission.USERS_UPDATE))],
+)
+async def preview_admin_users_bulk_lifecycle(
+    payload: AdminUsersBulkLifecycleRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Preview a bounded bulk lifecycle request without mutating records."""
+    if len(set(payload.user_ids)) != len(payload.user_ids):
+        raise HTTPException(status_code=422, detail="Duplicate user IDs are not allowed.")
+    result = await session.execute(
+        select(User.id, User.username, User.status).where(
+            User.id.in_(payload.user_ids),
+            User.deleted_at.is_(None),
+        )
+    )
+    found = {row.id: row for row in result.all()}
+    allowed = {
+        "activate": {"INACTIVE"},
+        "reactivate": {"INACTIVE", "SUSPENDED"},
+        "deactivate": {"ACTIVE"},
+        "suspend": {"ACTIVE"},
+    }[payload.action]
+    items = []
+    for user_id in payload.user_ids:
+        row = found.get(user_id)
+        if row is None:
+            items.append({"user_id": str(user_id), "eligible": False, "reason": "not_found"})
+        else:
+            current = str(row.status).upper()
+            items.append({
+                "user_id": str(user_id),
+                "username": row.username,
+                "current_status": current,
+                "eligible": current in allowed,
+                "reason": None if current in allowed else "invalid_transition",
+            })
+    return {"total": len(items), "eligible": sum(item["eligible"] for item in items), "items": items}
+
+
+@router.post(
+    "/bulk/lifecycle",
+    dependencies=[Depends(require_permission(Permission.USERS_UPDATE))],
+)
+async def apply_admin_users_bulk_lifecycle(
+    payload: AdminUsersBulkLifecycleRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Apply an explicitly requested bounded lifecycle batch with per-record outcomes."""
+    from fastapi import HTTPException
+
+    if len(set(payload.user_ids)) != len(payload.user_ids):
+        raise HTTPException(status_code=422, detail="Duplicate user IDs are not allowed.")
+    transitions = {
+        "activate": ({"INACTIVE"}, "ACTIVE"),
+        "reactivate": ({"INACTIVE", "SUSPENDED"}, "ACTIVE"),
+        "deactivate": ({"ACTIVE"}, "INACTIVE"),
+        "suspend": ({"ACTIVE"}, "SUSPENDED"),
+    }
+    allowed_from, next_status = transitions[payload.action]
+    now = datetime.now(timezone.utc)
+    outcomes = []
+    for user_id in payload.user_ids:
+        result = await session.execute(
+            select(User).where(User.id == user_id, User.deleted_at.is_(None)).with_for_update()
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            outcomes.append({"user_id": str(user_id), "success": False, "reason": "not_found"})
+            continue
+        previous = str(user.status).upper()
+        if previous not in allowed_from:
+            outcomes.append({"user_id": str(user_id), "success": False, "reason": "invalid_transition"})
+            continue
+        if user.id == current_user.id and next_status != "ACTIVE":
+            outcomes.append({"user_id": str(user_id), "success": False, "reason": "cannot_change_own_access"})
+            continue
+        try:
+            if next_status != "ACTIVE":
+                await _protect_last_active_admin(session, user.id)
+        except HTTPException as exc:
+            outcomes.append({"user_id": str(user_id), "success": False, "reason": "last_admin_protection"})
+            continue
+        user.status = next_status
+        revoked = 0
+        if next_status != "ACTIVE":
+            revoked_result = await session.execute(
+                update(UserSession).where(
+                    UserSession.user_id == user.id,
+                    UserSession.revoked_at.is_(None),
+                ).values(revoked_at=now, revoked_reason=f"bulk_account_{payload.action}")
+            )
+            revoked = revoked_result.rowcount or 0
+        session.add(AuditLog(
+            actor_id=current_user.id,
+            action="user.bulk_lifecycle_changed",
+            resource_type="user",
+            resource_id=user.id,
+            description=f"Bulk lifecycle action '{payload.action}' applied to '{user.username}'.",
+            event_metadata={
+                "action": payload.action,
+                "reason": payload.reason.strip(),
+                "before": {"status": previous},
+                "after": {"status": next_status},
+                "revoked_sessions": revoked,
+            },
+            created_at=now,
+        ))
+        outcomes.append({"user_id": str(user_id), "success": True, "status": next_status})
+    await session.commit()
+    return {
+        "total": len(outcomes),
+        "succeeded": sum(item["success"] for item in outcomes),
+        "failed": sum(not item["success"] for item in outcomes),
+        "items": outcomes,
+    }
+
+
+@router.get(
+    "/export.csv",
+    dependencies=[Depends(require_permission(Permission.USERS_READ))],
+)
+async def export_admin_users_csv(
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Export a bounded, credential-free CSV snapshot of the user directory."""
+    result = await session.execute(
+        select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc()).limit(5000)
+    )
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "username", "email", "first_name", "last_name", "phone", "language", "timezone", "status", "created_at"])
+    for user in result.scalars().all():
+        writer.writerow([
+            user.id, user.username, user.email, user.first_name, user.last_name,
+            user.phone, user.language, user.timezone, user.status, user.created_at,
+        ])
+    return Response(
+        content="\ufeff" + output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="users-export.csv"'},
+    )
 
 
 class AdminUserSessionResponse(BaseModel):
