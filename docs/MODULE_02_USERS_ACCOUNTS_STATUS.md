@@ -28,6 +28,8 @@ This document records implementation evidence. The approved roadmap remains the 
 - Login creates a persistent server-side session before issuing a session-bound JWT. Protected requests reject missing, expired, or revoked session records.
 - Administrators can inspect the latest 100 sessions, revoke one session, or revoke all active sessions. Revocations are audited; account deactivation/suspension and archival revoke sessions in the same transaction.
 - The current administrator session is identified in the session list and preserved by revoke-all when an administrator operates on their own account.
+- Account lifecycle transitions (activate, reactivate, deactivate, suspend) require a reason, enforce allowed state transitions, and write before/after status plus the reason to the audit log. Deactivation and suspension revoke all active sessions in the same transaction; self-deactivation and self-suspension are blocked.
+- Generic profile PATCH can no longer change account status; status changes must use the reasoned lifecycle endpoint.
 
 ## Verification
 
@@ -47,9 +49,8 @@ This document records implementation evidence. The approved roadmap remains the 
 ## Not yet implemented — remains in Module 02 scope
 
 1. Full user create/edit/detail forms and profile workspace with the required tabs.
-2. Complete account lifecycle actions and reason capture, including lock/unlock, deactivate/reactivate, expiry, and deletion requests where policy supports them.
+2. Extend lifecycle policy with lock/unlock, expiry, deletion requests, and last active Super Admin protection.
 3. Password reset/change workflow, email/phone verification, attempt limits, and rate limiting.
-4. Password reset/change workflow, email/phone verification, attempt limits, and rate limiting.
 5. Verified external identity linking/unlinking, including Telegram proof validation and one-time linking challenges.
 6. Effective-access summary integrated with Module 03, including actor authority checks and last active Super Admin protection.
 7. Security events and a user activity timeline distinct from the authoritative audit log.
