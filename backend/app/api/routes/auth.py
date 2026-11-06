@@ -14,7 +14,7 @@ from backend.app.api.dependencies import get_unit_of_work
 from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 from backend.app.modules.authentication.passwords import hash_password, verify_password
 from database.models.audit import AuditLog
-from database.models.identity import UserSession
+from database.models.identity import User, UserSession
 from database.models.security import ExternalIdentity, IdentityLinkChallenge
 
 from backend.app.modules.authentication.authentication import (
@@ -205,7 +205,17 @@ async def create_telegram_link_challenge(
     uow: UnitOfWork = Depends(get_unit_of_work),
 ) -> TelegramLinkChallengeResponse:
     """Create a short-lived, single-use code to prove Telegram account ownership."""
-    if current_user.telegram_user_id is not None:
+    locked_user_result = await uow.session.execute(
+        select(User).where(User.id == current_user.id).with_for_update()
+    )
+    locked_user = locked_user_result.scalar_one_or_none()
+    if (
+        locked_user is None
+        or locked_user.deleted_at is not None
+        or str(locked_user.status).upper() != "ACTIVE"
+    ):
+        raise HTTPException(status_code=409, detail="This account cannot link identities.")
+    if locked_user.telegram_user_id is not None:
         raise HTTPException(
             status_code=409,
             detail="A Telegram account is already linked to this profile.",
@@ -224,10 +234,6 @@ async def create_telegram_link_challenge(
         )
 
     now = datetime.now(timezone.utc)
-    # Serialize challenge issuance on the owning user row to prevent parallel code creation.
-    await uow.session.execute(
-        select(type(current_user)).where(type(current_user).id == current_user.id).with_for_update()
-    )
     recent_challenge = await uow.session.execute(
         select(IdentityLinkChallenge.id).where(
             IdentityLinkChallenge.user_id == current_user.id,
