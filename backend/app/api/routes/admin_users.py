@@ -273,8 +273,11 @@ async def create_admin_user(
             detail=f"Role '{payload.role}' does not exist.",
         )
 
+    if payload.status.upper() not in {"ACTIVE", "INACTIVE", "SUSPENDED"}:
+        raise HTTPException(status_code=422, detail="Unsupported account status.")
+
     user = User(
-        username=payload.username,
+        username=payload.username.strip(),
         password_hash=hash_password(payload.password),
         email=payload.email,
         first_name=payload.first_name,
@@ -288,7 +291,7 @@ async def create_admin_user(
     user.roles.append(role)
 
     session.add(user)
-    await session.commit()
+    await session.flush()
 
     audit_log = AuditLog(
         actor_id=current_user.id,
