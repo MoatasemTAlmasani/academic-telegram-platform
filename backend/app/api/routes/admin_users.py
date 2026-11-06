@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -216,8 +216,8 @@ async def get_admin_user(
     )
 
 class AdminUserCreateRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=3, max_length=150)
+    password: str = Field(min_length=12, max_length=500)
     email: str | None = None
     first_name: str | None = None
     last_name: str | None = None
@@ -338,8 +338,8 @@ async def create_admin_user(
 
 
 class AdminUserUpdateRequest(BaseModel):
-    username: str | None = None
-    password: str | None = None
+    username: str | None = Field(default=None, min_length=3, max_length=150)
+    password: str | None = Field(default=None, min_length=12, max_length=500)
     email: str | None = None
     first_name: str | None = None
     last_name: str | None = None
@@ -433,7 +433,10 @@ async def update_admin_user(
         user.timezone = payload.timezone
 
     if payload.status is not None:
-        user.status = payload.status
+        normalized_status = payload.status.upper()
+        if normalized_status not in {"ACTIVE", "INACTIVE", "SUSPENDED"}:
+            raise HTTPException(status_code=422, detail="Unsupported account status.")
+        user.status = normalized_status
 
     if payload.role is not None:
         role_result = await session.execute(
