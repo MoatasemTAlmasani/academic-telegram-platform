@@ -648,6 +648,7 @@ async def transition_admin_user_lifecycle(
 )
 async def delete_admin_user(
     user_id: UUID,
+    reason: str = Query(min_length=5, max_length=500),
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> None:
@@ -674,6 +675,12 @@ async def delete_admin_user(
             detail="You cannot delete your own account.",
         )
 
+    if len(reason.strip()) < 5:
+        raise HTTPException(
+            status_code=422,
+            detail="A meaningful archive reason is required.",
+        )
+
     archived_username = user.username
 
     # Preserve business references and audit history using the existing soft-delete marker.
@@ -697,7 +704,7 @@ async def delete_admin_user(
         resource_type="user",
         resource_id=user.id,
         description=f"Admin archived user '{archived_username}'.",
-        event_metadata={"user_id": str(user.id), "status": "INACTIVE"},
+        event_metadata={"user_id": str(user.id), "status": "INACTIVE", "reason": reason.strip()},
         created_at=datetime.now(timezone.utc),
     )
 
