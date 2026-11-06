@@ -1004,10 +1004,12 @@ async def update_admin_user_access_policy(
     from fastapi import HTTPException
 
     now = datetime.now(timezone.utc)
-    if payload.locked_until is not None and payload.locked_until <= now:
-        raise HTTPException(status_code=422, detail="Lock expiry must be in the future.")
-    if payload.account_expires_at is not None and payload.account_expires_at <= now:
-        raise HTTPException(status_code=422, detail="Account expiry must be in the future.")
+    for field_name, value in (("locked_until", payload.locked_until), ("account_expires_at", payload.account_expires_at)):
+        if value is not None:
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise HTTPException(status_code=422, detail=f"{field_name} must include a timezone.")
+            if value <= now:
+                raise HTTPException(status_code=422, detail=f"{field_name} must be in the future.")
     result = await session.execute(
         select(User).where(User.id == user_id, User.deleted_at.is_(None)).options(selectinload(User.roles)).with_for_update()
     )
@@ -1016,17 +1018,19 @@ async def update_admin_user_access_policy(
         raise HTTPException(status_code=404, detail="User not found.")
     if user.id == current_user.id and payload.locked_until is not None:
         raise HTTPException(status_code=400, detail="You cannot lock your own current account.")
-    if user.status == "ACTIVE" and (payload.locked_until is not None or payload.account_expires_at is not None):
+    next_locked_until = payload.locked_until if "locked_until" in payload.model_fields_set else user.locked_until
+    next_account_expires_at = payload.account_expires_at if "account_expires_at" in payload.model_fields_set else user.account_expires_at
+    if user.status == "ACTIVE" and (next_locked_until is not None or next_account_expires_at is not None):
         await _protect_last_active_admin(session, user.id)
 
     before = {
         "locked_until": user.locked_until.isoformat() if user.locked_until else None,
         "account_expires_at": user.account_expires_at.isoformat() if user.account_expires_at else None,
     }
-    user.locked_until = payload.locked_until
-    user.account_expires_at = payload.account_expires_at
+    user.locked_until = next_locked_until
+    user.account_expires_at = next_account_expires_at
     revoked = 0
-    if payload.locked_until is not None:
+    if next_locked_until is not None and next_locked_until > now:
         revoke_result = await session.execute(
             update(UserSession).where(
                 UserSession.user_id == user.id,
@@ -1044,8 +1048,8 @@ async def update_admin_user_access_policy(
             "reason": payload.reason.strip(),
             "before": before,
             "after": {
-                "locked_until": payload.locked_until.isoformat() if payload.locked_until else None,
-                "account_expires_at": payload.account_expires_at.isoformat() if payload.account_expires_at else None,
+                "locked_until": next_locked_until.isoformat() if next_locked_until else None,
+                "account_expires_at": next_account_expires_at.isoformat() if next_account_expires_at else None,
             },
             "revoked_sessions": revoked,
         },
