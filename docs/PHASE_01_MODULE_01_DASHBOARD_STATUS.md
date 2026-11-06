@@ -75,6 +75,15 @@ This file records implementation evidence and remaining work. It does not mark t
 - Loading, no-result, insufficient-permission, keyboard Escape/Enter, and responsive dropdown behavior are implemented.
 - Status: `IMPLEMENTED`; automated tests and browser-level behavior are not yet executed, so this is not `VERIFIED`.
 
+## Audit activity search and pagination slice
+
+- Extended the existing audit-log API with bounded text search across action, resource type, and description.
+- Replaced the total-count query that loaded every matching audit ID with a database-side count aggregate.
+- Added search input and 25-record previous/next pagination controls to the Audit Trail screen.
+- Existing `audit:read` backend authorization remains mandatory; search does not bypass it.
+- Added OpenAPI-bound and unauthenticated-access regression checks.
+- Status: `IMPLEMENTED`; the tests and browser interaction still need execution before `VERIFIED`.
+
 ## Validation status
 
 - The latest commit has no GitHub Actions workflow run attached, so no automated test result is available yet.
