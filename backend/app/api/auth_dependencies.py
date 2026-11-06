@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.dependencies import get_user_service
@@ -15,7 +15,7 @@ from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.jwt import (
     decode_access_token_with_session,
 )
-from database.models.identity import UserSession
+from database.models.identity import User, UserSession
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -73,5 +73,28 @@ async def get_current_user(
             detail="Account is unavailable.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Persist last-seen timestamps at most once every five minutes. This keeps
+    # session/account activity useful without writing on every API request.
+    now = datetime.now(timezone.utc)
+    touch_result = await session.execute(
+        update(UserSession)
+        .where(
+            UserSession.id == session_id,
+            UserSession.revoked_at.is_(None),
+            or_(
+                UserSession.last_seen_at.is_(None),
+                UserSession.last_seen_at < now - timedelta(minutes=5),
+            ),
+        )
+        .values(last_seen_at=now)
+    )
+    if touch_result.rowcount:
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(last_seen_at=now)
+        )
+        await session.commit()
 
     return user
