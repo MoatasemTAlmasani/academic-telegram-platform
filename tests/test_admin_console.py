@@ -900,3 +900,18 @@ def test_admin_user_login_attempt_history_is_exposed_without_hashes() -> None:
     assert '"/login-attempts"' in script.text
     assert "loginSecurityHistory" in script.text
     assert "username_key" not in script.text
+
+
+def test_admin_user_audit_history_is_permission_scoped_and_redacted() -> None:
+    paths = app.openapi()["paths"]
+    operation = paths["/api/v1/admin/users/{user_id}/audit-history"]["get"]
+    assert operation is not None
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userAuditHistoryBody"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/audit-history"' in script.text
+    assert 'has("audit:read")' in script.text
