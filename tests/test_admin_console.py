@@ -224,6 +224,7 @@ def test_suspended_users_cannot_authenticate() -> None:
     )
 
     suspended_user = SimpleNamespace(
+        id=uuid4(),
         status="SUSPENDED",
         deleted_at=None,
         password_hash="not-used",
@@ -387,6 +388,7 @@ def test_authentication_creates_persistent_session_before_issuing_token(monkeypa
     from backend.app.modules.authentication import authentication as auth_module
     from backend.app.modules.authentication.authentication import AuthenticationService
     from database.models.identity import UserSession
+    from database.models.security import LoginAttempt
 
     user = SimpleNamespace(
         id=uuid4(),
@@ -441,13 +443,14 @@ def test_authentication_creates_persistent_session_before_issuing_token(monkeypa
 
     assert token.startswith(f"token:{user.id}:")
     assert fake_session.committed is True
-    assert len(fake_session.added) == 1
-    stored = fake_session.added[0]
-    assert isinstance(stored, UserSession)
+    assert len(fake_session.added) == 2
+    stored = next(item for item in fake_session.added if isinstance(item, UserSession))
+    successful_attempt = next(item for item in fake_session.added if isinstance(item, LoginAttempt))
     assert stored.user_id == user.id
     assert stored.ip_address == "192.0.2.10"
     assert stored.user_agent == "Test Browser"
     assert stored.expires_at > datetime.now(timezone.utc)
+    assert successful_attempt.succeeded is True
 
 
 def test_access_tokens_require_a_server_side_session_identifier(monkeypatch) -> None:
