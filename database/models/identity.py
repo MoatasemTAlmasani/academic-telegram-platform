@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    JSON,
     String,
     Table,
     Text,
@@ -115,6 +116,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         default=UserStatus.ACTIVE,
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    account_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    preferences: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     roles: Mapped[list[Role]] = relationship(
         secondary=user_roles,
