@@ -930,3 +930,29 @@ def test_admin_user_effective_access_summary_is_read_only() -> None:
     assert script.status_code == 200
     assert '"/access-summary"' in script.text
     assert "effectivePermissions" in script.text
+
+
+def test_admin_console_javascript_parses_with_node_when_available() -> None:
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "app"
+        / "static"
+        / "admin"
+        / "console.js"
+    )
+    result = subprocess.run(
+        [node, "--check", str(script)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
