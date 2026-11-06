@@ -451,3 +451,34 @@ def test_access_tokens_require_a_server_side_session_identifier(monkeypatch) -> 
         pass
     else:
         raise AssertionError("Tokens without a server-side session ID must be rejected.")
+
+
+def test_admin_user_details_exposes_bilingual_session_controls() -> None:
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userSessionsBody"' in page.text
+    assert 'id="revokeAllUserSessions"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/sessions/revoke-all"' in script.text
+    assert 'data-revoke-session' in script.text
+    assert 's.is_current' in script.text
+    assert "جلسات الحساب" in script.text
+
+
+def test_account_deactivation_and_archival_revoke_sessions_in_transaction() -> None:
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "app"
+        / "api"
+        / "routes"
+        / "admin_users.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'revoked_reason="account_status_changed"' in source
+    assert 'revoked_reason="account_archived"' in source
+    assert "UserSession.revoked_at.is_(None)" in source
