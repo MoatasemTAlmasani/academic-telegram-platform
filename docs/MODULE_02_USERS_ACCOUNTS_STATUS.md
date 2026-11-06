@@ -47,24 +47,24 @@ This document records implementation evidence. The approved roadmap remains the 
 - New tests cover:
   - bounded pagination and credential-free response contracts,
   - safe audit snapshots,
-  - bilingual user/customer directories, account creation, profile editing, session controls, lifecycle and archive forms,
-  - persistent session creation, session-bound JWTs, lifecycle API contracts, and password-change validation.
+  - bilingual user/customer directories, account creation, profile editing, session controls, lifecycle/archive forms, linked-identity and login-history panels,
+  - persistent session creation, session-bound JWTs, lifecycle API contracts, password-change validation, and last-active-admin protection.
 - Python tests passed on commit `6c3b709d04eeca079da30e17464e8d572fca242b` (run 42271376772).
 - Phase 01 verification passed on the same commit (run 42271376792).
-- Python tests passed on commit `ac55663aec601c03edd4f9c5f2c527eb11b0296d` (run 42278697363).
-- Phase 01 verification passed on the same commit (run 42278697376).
-- The current branch includes a later documentation-only update; the passing runs cover the latest functional code.
+- Python tests passed on commit `5c03071a3e9e906841ceb02e424f298511999021` (run 42281708050).
+- Phase 01 verification passed on the same commit (run 42281707996).
+- These runs include the current functional changes: sessions, lifecycle, last-admin guard, verified identity view, and login-attempt history.
 - These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
 - No browser/device acceptance has been claimed.
 
 ## Not yet implemented — remains in Module 02 scope
 
-1. Complete profile workspace tabs, user activity timeline, and user preferences.
-2. Extend lifecycle policy with lock/unlock, expiry, deletion requests, and last active Super Admin protection.
-3. Password reset/recovery for accounts that cannot authenticate, email/phone verification, attempt limits, and rate limiting.
+1. Complete profile workspace tabs, a user activity timeline distinct from the audit log, and user preferences.
+2. Extend lifecycle policy with lock/unlock, expiry, and deletion-request states; last-active-admin protection for current deactivate/suspend/archive actions is implemented.
+3. Password reset/recovery for accounts that cannot authenticate, email/phone verification, and recovery rate limiting.
 4. Additional identity providers, broader identity-link recovery, and end-to-end verification of Telegram linking/unlinking.
 5. Effective-access summary integrated with Module 03, including actor authority checks and role/permission administration.
-6. Security events and a user activity timeline distinct from the authoritative audit log.
+6. A unified security-event workflow and a user activity timeline distinct from the authoritative audit log; login-attempt history and throttling are implemented.
 7. Previewed, bounded bulk operations with per-record outcomes.
 8. Validated CSV import/export, field-level authorization, and expiring protected downloads.
 9. End-to-end API authorization, IDOR, lifecycle, concurrency, and browser acceptance coverage.
@@ -72,7 +72,7 @@ This document records implementation evidence. The approved roadmap remains the 
 
 ## Database and production safety
 
-- The increment reuses existing user, role, and audit tables and adds reviewed Alembic migrations for `user_sessions` and `login_attempts`.
+- The increment reuses existing user, role, and audit tables and adds reviewed Alembic migrations for `user_sessions`, `login_attempts`, `external_identities`, and `identity_link_challenges`.
 - The migrations are chained after `f4a29d806c12` (`aa11bb22cc33` sessions, `bb22cc33dd44` login attempts, `cc33dd44ee55` external identities/challenges); none has been applied to Supabase or production.
 - The live database previously showed RLS disabled on public tables and broad grants that require a deliberate access-control review. Do not enable RLS blindly or revoke grants until the deployed backend connection path, service role usage, and required policies are verified.
 - All new migration revisions still require isolated upgrade/downgrade tests against supported database engines and a documented rollback plan before deployment.
