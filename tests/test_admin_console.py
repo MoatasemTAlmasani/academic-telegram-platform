@@ -60,6 +60,12 @@ def test_dashboard_period_analytics_asset_is_served() -> None:
     assert "periodServiceChart" in response.text
 
 
+def test_service_management_exposes_full_crud_routes() -> None:
+    paths = app.openapi()["paths"]
+    assert {"get", "post"}.issubset(paths["/api/v1/admin/services"].keys())
+    assert {"get", "patch", "delete"}.issubset(paths["/api/v1/admin/services/{service_id}"].keys())
+
+
 def test_dashboard_detail_permissions_are_granular() -> None:
     permissions = {
         Permission.ADMIN_ACCESS.value,
