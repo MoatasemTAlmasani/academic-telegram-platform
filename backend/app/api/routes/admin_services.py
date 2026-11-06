@@ -269,6 +269,38 @@ async def create_admin_service(
     )
 
     session.add(service)
+    await session.flush()
+    now = datetime.now(timezone.utc)
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="service.created",
+        resource_type="service",
+        resource_id=service.id,
+        description=f"Admin created service '{service.name}'.",
+        event_metadata={
+            "category_id": str(service.category_id),
+            "is_active": service.is_active,
+        },
+        created_at=now,
+    ))
+    now = datetime.now(timezone.utc)
+    after = {
+        "category_id": str(service.category_id),
+        "name": service.name,
+        "description": service.description,
+        "short_description": service.short_description,
+        "is_active": service.is_active,
+        "sort_order": service.sort_order,
+    }
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="service.updated",
+        resource_type="service",
+        resource_id=service.id,
+        description=f"Admin updated service '{service.name}'.",
+        event_metadata={"before": before, "after": after},
+        created_at=now,
+    ))
     await session.commit()
 
     result = await session.execute(
@@ -306,6 +338,15 @@ async def update_admin_service(
             status_code=404,
             detail="Service not found.",
         )
+
+    before = {
+        "category_id": str(service.category_id),
+        "name": service.name,
+        "description": service.description,
+        "short_description": service.short_description,
+        "is_active": service.is_active,
+        "sort_order": service.sort_order,
+    }
 
     if payload.category_id is not None:
         category = await session.get(Category, payload.category_id)
