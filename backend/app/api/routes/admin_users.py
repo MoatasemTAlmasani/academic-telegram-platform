@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,7 +16,7 @@ from backend.app.api.auth_dependencies import get_current_user
 from backend.app.api.rbac_dependencies import require_permission
 from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.permissions import Permission
-from database.models.identity import Role, User
+from database.models.identity import Role, User, UserSession
 from database.models.audit import AuditLog
 
 
@@ -490,6 +490,18 @@ async def update_admin_user(
         if normalized_status not in {"ACTIVE", "INACTIVE", "SUSPENDED"}:
             raise HTTPException(status_code=422, detail="Unsupported account status.")
         user.status = normalized_status
+        if normalized_status != "ACTIVE":
+            await session.execute(
+                update(UserSession)
+                .where(
+                    UserSession.user_id == user.id,
+                    UserSession.revoked_at.is_(None),
+                )
+                .values(
+                    revoked_at=datetime.now(timezone.utc),
+                    revoked_reason="account_status_changed",
+                )
+            )
 
     audit_log = AuditLog(
         actor_id=current_user.id,
@@ -579,6 +591,17 @@ async def delete_admin_user(
     # Preserve business references and audit history using the existing soft-delete marker.
     user.status = "INACTIVE"
     user.deleted_at = datetime.now(timezone.utc)
+    await session.execute(
+        update(UserSession)
+        .where(
+            UserSession.user_id == user.id,
+            UserSession.revoked_at.is_(None),
+        )
+        .values(
+            revoked_at=datetime.now(timezone.utc),
+            revoked_reason="account_archived",
+        )
+    )
 
     audit_log = AuditLog(
         actor_id=current_user.id,
@@ -592,3 +615,148 @@ async def delete_admin_user(
 
     session.add(audit_log)
     await session.commit()
+
+
+class AdminUserSessionResponse(BaseModel):
+    """Safe representation of a user session."""
+
+    id: UUID
+    created_at: datetime
+    expires_at: datetime
+    last_seen_at: datetime | None = None
+    revoked_at: datetime | None = None
+    revoked_reason: str | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
+    is_current: bool = False
+
+
+@router.get(
+    "/{user_id}/sessions",
+    response_model=list[AdminUserSessionResponse],
+    dependencies=[Depends(require_permission(Permission.USERS_READ))],
+)
+async def list_admin_user_sessions(
+    user_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[AdminUserSessionResponse]:
+    """List recent sessions for an account without exposing token material."""
+    from fastapi import HTTPException
+
+    user_result = await session.execute(
+        select(User.id).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    if user_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    result = await session.execute(
+        select(UserSession)
+        .where(UserSession.user_id == user_id)
+        .order_by(UserSession.created_at.desc())
+        .limit(100)
+    )
+    sessions = result.scalars().all()
+    return [
+        AdminUserSessionResponse(
+            id=item.id,
+            created_at=item.created_at,
+            expires_at=item.expires_at,
+            last_seen_at=item.last_seen_at,
+            revoked_at=item.revoked_at,
+            revoked_reason=item.revoked_reason,
+            ip_address=item.ip_address,
+            user_agent=item.user_agent,
+            is_current=False,
+        )
+        for item in sessions
+    ]
+
+
+@router.delete(
+    "/{user_id}/sessions/{session_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission(Permission.USERS_UPDATE))],
+)
+async def revoke_admin_user_session(
+    user_id: UUID,
+    session_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """Revoke one session belonging to the specified account."""
+    from fastapi import HTTPException
+
+    result = await session.execute(
+        select(UserSession).where(
+            UserSession.id == session_id,
+            UserSession.user_id == user_id,
+        )
+    )
+    target = result.scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    if target.revoked_at is not None:
+        return
+
+    now = datetime.now(timezone.utc)
+    target.revoked_at = now
+    target.revoked_reason = "revoked_by_admin"
+    session.add(
+        AuditLog(
+            actor_id=current_user.id,
+            action="user.session_revoked",
+            resource_type="user_session",
+            resource_id=target.id,
+            description=f"Admin revoked a session for user '{user_id}'.",
+            event_metadata={"user_id": str(user_id), "session_id": str(target.id)},
+            created_at=now,
+        )
+    )
+    await session.commit()
+
+
+@router.post(
+    "/{user_id}/sessions/revoke-all",
+    response_model=dict[str, int],
+    dependencies=[Depends(require_permission(Permission.USERS_UPDATE))],
+)
+async def revoke_all_admin_user_sessions(
+    user_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, int]:
+    """Revoke every active session belonging to the specified account."""
+    from fastapi import HTTPException
+
+    user_result = await session.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    now = datetime.now(timezone.utc)
+    result = await session.execute(
+        update(UserSession)
+        .where(
+            UserSession.user_id == user_id,
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > now,
+        )
+        .values(revoked_at=now, revoked_reason="revoked_all_by_admin")
+    )
+    revoked_count = result.rowcount or 0
+    session.add(
+        AuditLog(
+            actor_id=current_user.id,
+            action="user.sessions_revoked_all",
+            resource_type="user",
+            resource_id=user_id,
+            description=f"Admin revoked all active sessions for user '{user_id}'.",
+            event_metadata={"user_id": str(user_id), "revoked_count": revoked_count},
+            created_at=now,
+        )
+    )
+    await session.commit()
+    return {"revoked_count": revoked_count}
