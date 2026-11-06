@@ -20,6 +20,7 @@ def test_admin_console_entrypoint_is_served() -> None:
     assert "EHTERAF" in response.text
     assert "console.js" in response.text
     assert "dashboard-period-analytics.js" in response.text
+    assert 'id="globalSearch"' in response.text
     assert "loginForm" in response.text
 
 
@@ -52,6 +53,8 @@ def test_dashboard_period_analytics_asset_is_served() -> None:
     response = asyncio.run(get("/admin/static/dashboard-period-analytics.js"))
     assert response.status_code == 200
     assert "refreshDashboardPeriodAnalytics" in response.text
+    assert "bindGlobalSearch" in response.text
+    assert 'has("requests:read")' in response.text
     assert "periodServiceChart" in response.text
 
 
