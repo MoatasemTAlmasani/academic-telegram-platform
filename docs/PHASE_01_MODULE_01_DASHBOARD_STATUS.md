@@ -66,6 +66,15 @@ This file records implementation evidence and remaining work. It does not mark t
 - Aggregate dashboard metrics remain under the dashboard's existing `admin:access` gate; the detail collections above are separately permission-scoped.
 - Status: `IMPLEMENTED`; automated behavior tests and browser verification are still required before this can be marked `VERIFIED`.
 
+## Global search delivery slice
+
+- Added a global search control to the administration top bar.
+- Search reuses the existing users, services, and requests list APIs; it does not create a parallel search data source.
+- Each result category is queried only when the current session's effective permissions include the corresponding `users:read`, `services:read`, or `requests:read` permission.
+- Selecting a result opens the corresponding existing management page with its search field populated.
+- Loading, no-result, insufficient-permission, keyboard Escape/Enter, and responsive dropdown behavior are implemented.
+- Status: `IMPLEMENTED`; automated tests and browser-level behavior are not yet executed, so this is not `VERIFIED`.
+
 ## Validation status
 
 - The latest commit has no GitHub Actions workflow run attached, so no automated test result is available yet.
