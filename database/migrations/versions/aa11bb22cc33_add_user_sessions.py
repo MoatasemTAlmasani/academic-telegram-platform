@@ -16,7 +16,7 @@ def upgrade() -> None:
     op.create_table(
         "user_sessions",
         sa.Column("id", sa.Uuid(as_uuid=True), nullable=False),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", sa.Uuid(as_uuid=True), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
