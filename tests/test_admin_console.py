@@ -1019,3 +1019,10 @@ def test_users_bulk_preview_execute_and_csv_export_contracts() -> None:
         pass
     else:
         raise AssertionError("Bulk lifecycle requests must be bounded to 100 users.")
+
+
+def test_account_policy_partial_updates_can_distinguish_omitted_fields() -> None:
+    from backend.app.api.routes.admin_users import AdminUserAccessPolicyRequest
+    payload = AdminUserAccessPolicyRequest(reason="Clear temporary lock", locked_until=None)
+    assert "locked_until" in payload.model_fields_set
+    assert "account_expires_at" not in payload.model_fields_set
