@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from uuid import UUID
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -490,22 +491,10 @@ async def update_admin_user(
         user.timezone = payload.timezone.strip() or None if payload.timezone else None
 
     if payload.status is not None:
-        normalized_status = payload.status.upper()
-        if normalized_status not in {"ACTIVE", "INACTIVE", "SUSPENDED"}:
-            raise HTTPException(status_code=422, detail="Unsupported account status.")
-        user.status = normalized_status
-        if normalized_status != "ACTIVE":
-            await session.execute(
-                update(UserSession)
-                .where(
-                    UserSession.user_id == user.id,
-                    UserSession.revoked_at.is_(None),
-                )
-                .values(
-                    revoked_at=datetime.now(timezone.utc),
-                    revoked_reason="account_status_changed",
-                )
-            )
+        raise HTTPException(
+            status_code=409,
+            detail="Account status changes must use the lifecycle action with a reason.",
+        )
 
     audit_log = AuditLog(
         actor_id=current_user.id,
@@ -552,6 +541,102 @@ async def update_admin_user(
         ],
         created_at=updated_user.created_at,
         updated_at=updated_user.updated_at,
+    )
+
+
+class AdminUserLifecycleRequest(BaseModel):
+    action: Literal["activate", "reactivate", "deactivate", "suspend"]
+    reason: str = Field(min_length=5, max_length=500)
+
+
+class AdminUserLifecycleResponse(BaseModel):
+    user_id: UUID
+    previous_status: str
+    status: str
+    revoked_sessions: int
+
+
+@router.post(
+    "/{user_id}/lifecycle",
+    response_model=AdminUserLifecycleResponse,
+    dependencies=[Depends(require_permission(Permission.USERS_UPDATE))],
+)
+async def transition_admin_user_lifecycle(
+    user_id: UUID,
+    payload: AdminUserLifecycleRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminUserLifecycleResponse:
+    """Apply an audited account lifecycle transition and revoke sessions when needed."""
+    from fastapi import HTTPException
+
+    result = await session.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    previous_status = str(user.status).upper()
+    transitions = {
+        "activate": ({"INACTIVE"}, "ACTIVE"),
+        "reactivate": ({"INACTIVE", "SUSPENDED"}, "ACTIVE"),
+        "deactivate": ({"ACTIVE"}, "INACTIVE"),
+        "suspend": ({"ACTIVE"}, "SUSPENDED"),
+    }
+    allowed_from, next_status = transitions[payload.action]
+    if previous_status not in allowed_from:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot {payload.action} an account in status {previous_status}.",
+        )
+    if user.id == current_user.id and next_status != "ACTIVE":
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot deactivate or suspend your own current account.",
+        )
+
+    now = datetime.now(timezone.utc)
+    user.status = next_status
+    revoked_sessions = 0
+    if next_status != "ACTIVE":
+        revoke_result = await session.execute(
+            update(UserSession)
+            .where(
+                UserSession.user_id == user.id,
+                UserSession.revoked_at.is_(None),
+            )
+            .values(
+                revoked_at=now,
+                revoked_reason=f"account_{payload.action}",
+            )
+        )
+        revoked_sessions = revoke_result.rowcount or 0
+
+    session.add(
+        AuditLog(
+            actor_id=current_user.id,
+            action="user.lifecycle_changed",
+            resource_type="user",
+            resource_id=user.id,
+            description=f"Admin changed account lifecycle for '{user.username}'.",
+            event_metadata={
+                "user_id": str(user.id),
+                "action": payload.action,
+                "reason": payload.reason.strip(),
+                "before": {"status": previous_status},
+                "after": {"status": next_status},
+                "revoked_sessions": revoked_sessions,
+            },
+            created_at=now,
+        )
+    )
+    await session.commit()
+    return AdminUserLifecycleResponse(
+        user_id=user.id,
+        previous_status=previous_status,
+        status=next_status,
+        revoked_sessions=revoked_sessions,
     )
 
 
