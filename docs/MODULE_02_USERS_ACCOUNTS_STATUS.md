@@ -50,14 +50,16 @@ This document records implementation evidence. The approved roadmap remains the 
   - bounded pagination and credential-free response contracts,
   - safe audit snapshots,
   - bilingual user/customer directories, account creation, profile editing, session controls, lifecycle/archive forms, linked-identity, login-history, permission-gated audit-history, and effective-access panels,
-  - persistent session creation, session-bound JWTs, lifecycle API contracts, password-change validation, last-active-admin protection, and isolated migration upgrade/downgrade behavior.
+  - persistent session creation, session-bound JWTs, lifecycle API contracts, password-change validation, last-active-admin protection (including inactive-admin behavior), and isolated migration upgrade/downgrade behavior.
 - Python tests passed on commit `6c3b709d04eeca079da30e17464e8d572fca242b` (run 42271376772).
 - Phase 01 verification passed on the same commit (run 42271376792).
 - Python tests passed on commit `5c03071a3e9e906841ceb02e424f298511999021` (run 42281708050).
 - Phase 01 verification passed on the same commit (run 42281707996).
 - Python tests passed on commit `d9bdddeace4f1a43542a3a181a8685396573a75e` (run 42282611667), including the isolated SQLite upgrade/downgrade test for all three Module 02 migration revisions.
 - Phase 01 verification passed on the same commit (run 42282611644).
-- The later read-only effective-access panel and its test are on the current branch head; their CI checks are pending.
+- Python tests passed on current functional commit `e6ba5191ff7881c7309cfe9b715d51de006695b8` (run 42283109343): **73 passed, 2 warnings**.
+- Phase 01 verification passed on the same commit (run 42283109349).
+- The automated suite also checks JavaScript syntax with Node when Node is available in the runner.
 - These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
 - No browser/device acceptance has been claimed.
 
