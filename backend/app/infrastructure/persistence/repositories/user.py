@@ -1,6 +1,6 @@
 """User repository."""
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,7 +52,7 @@ class UserRepository(BaseRepository[User]):
     async def get_by_username(self, username: str) -> User | None:
         result = await self.session.execute(
             self._with_rbac(
-                select(User).where(func.lower(User.username) == username.strip().lower())
+                select(User).where(User.username == username)
             )
         )
         return result.scalar_one_or_none()

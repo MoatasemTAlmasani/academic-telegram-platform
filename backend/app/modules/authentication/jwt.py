@@ -27,7 +27,6 @@ def _get_secret_key() -> str:
 
 def create_access_token(
     user_id: UUID,
-    session_id: UUID,
     expires_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES,
 ) -> str:
     """Create a signed JWT access token."""
@@ -39,7 +38,6 @@ def create_access_token(
         "iat": now,
         "exp": expires_at,
         "type": "access",
-        "sid": str(session_id),
     }
 
     return jwt.encode(
@@ -69,24 +67,3 @@ def decode_access_token(token: str) -> UUID:
         return UUID(subject)
     except ValueError as exc:
         raise ValueError("Invalid token subject.") from exc
-
-
-def decode_access_token_with_session(token: str) -> tuple[UUID, UUID]:
-    """Decode an access token and require its server-side session identifier."""
-    payload = jwt.decode(
-        token,
-        _get_secret_key(),
-        algorithms=[ALGORITHM],
-    )
-    if payload.get("type") != "access":
-        raise ValueError("Invalid token type.")
-
-    subject = payload.get("sub")
-    session_id = payload.get("sid")
-    if not subject or not session_id:
-        raise ValueError("Token subject or session identifier is missing.")
-
-    try:
-        return UUID(subject), UUID(session_id)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Invalid token subject or session identifier.") from exc

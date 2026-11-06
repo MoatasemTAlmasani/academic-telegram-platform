@@ -5,28 +5,10 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import (
-    BigInteger,
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    Index,
-    JSON,
-    String,
-    Table,
-    Text,
-    Uuid,
-    func,
-)
+from sqlalchemy import BigInteger, Boolean, Column, ForeignKey, String, Table, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from database.models.base import (
-    Base,
-    SoftDeleteMixin,
-    TimestampMixin,
-    UUIDPrimaryKeyMixin,
-)
+from database.models.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
 from database.models.enums import UserStatus
 
 
@@ -65,33 +47,6 @@ role_permissions = Table(
 )
 
 
-class UserSession(UUIDPrimaryKeyMixin, Base):
-    """Server-side session used for access-token revocation."""
-
-    __tablename__ = "user_sessions"
-
-    __table_args__ = (
-        Index("ix_user_sessions_user_id", "user_id"),
-        Index("ix_user_sessions_expires_at", "expires_at"),
-        Index("ix_user_sessions_revoked_at", "revoked_at"),
-    )
-
-    user_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
-    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
-
-
 class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     """Platform identity with optional password authentication."""
 
@@ -116,9 +71,6 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         default=UserStatus.ACTIVE,
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    account_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    preferences: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     roles: Mapped[list[Role]] = relationship(
         secondary=user_roles,

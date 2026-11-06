@@ -279,7 +279,6 @@ This roadmap defines the approved target scope; it does not assert that the scop
 For the current implementation state, use:
 - `docs/ADMIN_SYSTEM_DELIVERY_BLUEPRINT.md` for the 23-module delivery contract and acceptance criteria.
 - `docs/PHASE_01_MODULE_01_DASHBOARD_STATUS.md` for the Dashboard's recorded status.
-- `docs/MODULE_02_USERS_ACCOUNTS_STATUS.md` for Module 02 implementation status and remaining acceptance scope.
 - GitHub pull requests, CI runs, and deployment records for verifiable delivery evidence.
 
 Update module status only when evidence exists. Keep planned, implemented, and verified work clearly separated.

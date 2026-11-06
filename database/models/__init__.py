@@ -11,7 +11,6 @@ from database.models.identity import (
     Role,
     StaffProfile,
     User,
-    UserSession,
     role_permissions,
     user_roles,
 )
@@ -19,13 +18,6 @@ from database.models.notifications import Notification
 from database.models.publishing import PublishingJob, PublishingLog
 from database.models.quotes import Quote
 from database.models.requests import ServiceRequest
-from database.models.security import (
-    ExternalIdentity,
-    IdentityLinkChallenge,
-    LoginAttempt,
-    PasswordRecoveryAttempt,
-    PasswordRecoveryChallenge,
-)
 from database.models.settings import AppSettings
 from database.models.telegram import TelegramDestination, TelegramValidationLog
 from database.models.telegram_runtime import (
@@ -43,11 +35,6 @@ __all__ = [
     "ContentTemplate",
     "FileRecord",
     "Notification",
-    "ExternalIdentity",
-    "IdentityLinkChallenge",
-    "LoginAttempt",
-    "PasswordRecoveryAttempt",
-    "PasswordRecoveryChallenge",
     "Permission",
     "PublishingJob",
     "PublishingLog",
@@ -61,7 +48,6 @@ __all__ = [
     "TelegramProcessedUpdate",
     "TelegramValidationLog",
     "User",
-    "UserSession",
     "campaign_destinations",
     "role_permissions",
     "user_roles",
