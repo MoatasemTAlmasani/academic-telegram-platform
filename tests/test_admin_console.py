@@ -979,3 +979,27 @@ def test_admin_console_javascript_parses_with_node_when_available() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_user_access_policy_endpoint_requires_reason_and_exposes_lock_expiry() -> None:
+    from backend.app.api.routes.admin_users import AdminUserAccessPolicyRequest
+    from pydantic import ValidationError
+
+    valid = AdminUserAccessPolicyRequest(reason="Temporary access restriction")
+    assert valid.reason.startswith("Temporary")
+    try:
+        AdminUserAccessPolicyRequest(reason="no")
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("Access-policy changes must require a meaningful reason.")
+
+    operation = app.openapi()["paths"]["/api/v1/admin/users/{user_id}/access-policy"]["patch"]
+    assert operation["responses"].get("200")
+
+
+def test_authentication_rejects_locked_or_expired_accounts() -> None:
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "backend" / "app" / "modules" / "authentication" / "authentication.py").read_text(encoding="utf-8")
+    assert "user.locked_until <= now" in source
+    assert "user.account_expires_at > now" in source
