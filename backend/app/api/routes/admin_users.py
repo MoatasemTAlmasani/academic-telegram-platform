@@ -678,7 +678,6 @@ async def list_admin_user_sessions(
             is_current=item.id == current_session_id,
             ip_address=item.ip_address,
             user_agent=item.user_agent,
-            is_current=False,
         )
         for item in sessions
     ]
