@@ -91,6 +91,14 @@ This file records implementation evidence and remaining work. It does not mark t
 - Cards support pointer and keyboard activation and do not invent filters or expose inaccessible pages.
 - Status: `IMPLEMENTED`; browser and permission-matrix verification remain outstanding.
 
+## Dashboard quick actions slice
+
+- Added a compact quick-action row below the welcome panel.
+- Actions link to existing Requests, Services, Users, Audit Trail, and Settings pages.
+- Each action is rendered only when the session has the corresponding backend permission.
+- The actions reuse existing routes and do not create fake create/edit workflows.
+- Status: `IMPLEMENTED`; responsive browser and permission-matrix verification remain outstanding.
+
 ## Validation status
 
 - The latest commit has no GitHub Actions workflow run attached, so no automated test result is available yet.
