@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
+import hmac
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -13,7 +13,7 @@ from database.models.security import LoginAttempt
 
 from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 
-from .jwt import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
+from .jwt import ACCESS_TOKEN_EXPIRE_MINUTES, _get_secret_key, create_access_token
 from .passwords import verify_password
 
 
@@ -42,7 +42,11 @@ class AuthenticationService:
         """Authenticate a user and return a session-bound access token."""
         now = datetime.now(timezone.utc)
         normalized_username = username.strip().lower()
-        username_key = sha256(normalized_username.encode("utf-8")).hexdigest()
+        username_key = hmac.new(
+            _get_secret_key().encode("utf-8"),
+            normalized_username.encode("utf-8"),
+            "sha256",
+        ).hexdigest()
         window_start = now - timedelta(minutes=LOGIN_WINDOW_MINUTES)
 
         pair_count_result = await self.uow.session.execute(
