@@ -419,6 +419,12 @@ async def update_admin_user(
 
     before_values = _safe_user_audit_snapshot(user)
 
+    if payload.password is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Password changes must use the secure account recovery workflow.",
+        )
+
     if payload.role is not None:
         raise HTTPException(
             status_code=403,
@@ -444,8 +450,8 @@ async def update_admin_user(
 
         user.username = normalized_username
 
-    if payload.email is not None:
-        normalized_email = payload.email.strip().lower() or None
+    if "email" in payload.model_fields_set:
+        normalized_email = payload.email.strip().lower() or None if payload.email else None
         duplicate = await session.execute(
             select(User).where(
                 func.lower(User.email) == normalized_email,
@@ -464,20 +470,20 @@ async def update_admin_user(
     if payload.password is not None:
         user.password_hash = hash_password(payload.password)
 
-    if payload.first_name is not None:
-        user.first_name = payload.first_name
+    if "first_name" in payload.model_fields_set:
+        user.first_name = payload.first_name.strip() or None if payload.first_name else None
 
-    if payload.last_name is not None:
-        user.last_name = payload.last_name
+    if "last_name" in payload.model_fields_set:
+        user.last_name = payload.last_name.strip() or None if payload.last_name else None
 
-    if payload.phone is not None:
-        user.phone = payload.phone
+    if "phone" in payload.model_fields_set:
+        user.phone = payload.phone.strip() or None if payload.phone else None
 
-    if payload.language is not None:
-        user.language = payload.language
+    if "language" in payload.model_fields_set:
+        user.language = payload.language.strip() or None if payload.language else None
 
-    if payload.timezone is not None:
-        user.timezone = payload.timezone
+    if "timezone" in payload.model_fields_set:
+        user.timezone = payload.timezone.strip() or None if payload.timezone else None
 
     if payload.status is not None:
         normalized_status = payload.status.upper()
@@ -495,7 +501,6 @@ async def update_admin_user(
             "user_id": str(user.id),
             "before": before_values,
             "after": _safe_user_audit_snapshot(user),
-            "password_changed": payload.password is not None,
         },
         created_at=datetime.now(timezone.utc),
     )
