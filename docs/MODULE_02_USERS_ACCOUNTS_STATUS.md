@@ -62,7 +62,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - Phase 01 verification passed on the same commit (run 42282611644).
 - Python tests passed on current functional commit `e6ba5191ff7881c7309cfe9b715d51de006695b8` (run 42283109343): **73 passed, 2 warnings**.
 - Bulk-operation UI increment passed Python tests on commit `4b02e24923016edb2d8a78dd9503bf12716d9180` (run 42287250581): **79 passed, 2 warnings**.
-- Phase 01 verification passed on that same UI increment (run 42287250584). A follow-up commit adds self/last-admin eligibility checks to preview and preserves the execution result panel; its checks are pending.
+- Phase 01 verification passed on that same UI increment (run 42287250584). The current code commit `bf7f00ef4f56229afe9efabf206a51d74b0b91e3` was verified in an isolated Vercel sandbox cloned at that exact SHA: `python -m compileall -q backend database tests` passed; `node --check` passed for `console.js` and `app.js`; the full pytest suite passed: **80 passed, 2 warnings**. The sandbox used only loopback test DATABASE_URL values; no production credentials or database were mounted, and no migration was applied. This verifies automated tests and syntax, not browser/device acceptance or a live PostgreSQL integration run.
 - Phase 01 verification passed on the same commit (run 42283109349).
 - The automated suite also checks JavaScript syntax with Node when Node is available in the runner.
 - These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
