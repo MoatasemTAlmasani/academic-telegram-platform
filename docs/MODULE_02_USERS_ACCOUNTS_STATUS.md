@@ -33,6 +33,8 @@ This document records implementation evidence. The approved roadmap remains the 
 - Account archival requires a meaningful reason, records it in the audit log, preserves linked business records, and revokes all sessions. The UI exposes the archive action only with the delete permission.
 - Authenticated users can change their own password only after supplying the current password; new passwords require at least 12 characters, password changes are audited without credential data, and all active sessions are revoked to require reauthentication.
 - Login attempts are stored using a SHA-256 username key rather than raw usernames. Database-backed rolling-window throttling rejects further attempts after 5 failures for a username/IP pair or 10 for a username across IPs within 15 minutes; failed and successful attempts are recorded.
+- Telegram identity linking uses a short-lived, single-use challenge: an authenticated account requests a code, then sends `/link CODE` to the official bot. The bot validates the Telegram sender from the Bot API update, stores a verified external identity, and records an audit event. Raw challenge codes are not stored; only SHA-256 hashes are persisted.
+- Telegram identity unlinking is available only when the account has a password-based sign-in method. Existing Telegram-linked users are not automatically merged; conflicting legacy identities are rejected.
 
 ## Verification
 
@@ -57,7 +59,7 @@ This document records implementation evidence. The approved roadmap remains the 
 1. Complete profile workspace tabs, user activity timeline, and user preferences.
 2. Extend lifecycle policy with lock/unlock, expiry, deletion requests, and last active Super Admin protection.
 3. Password reset/recovery for accounts that cannot authenticate, email/phone verification, attempt limits, and rate limiting.
-4. Verified external identity linking/unlinking, including Telegram proof validation and one-time linking challenges.
+4. Additional identity providers, broader identity-link recovery, and end-to-end verification of Telegram linking/unlinking.
 5. Effective-access summary integrated with Module 03, including actor authority checks and role/permission administration.
 6. Security events and a user activity timeline distinct from the authoritative audit log.
 7. Previewed, bounded bulk operations with per-record outcomes.
@@ -68,7 +70,7 @@ This document records implementation evidence. The approved roadmap remains the 
 ## Database and production safety
 
 - The increment reuses existing user, role, and audit tables and adds reviewed Alembic migrations for `user_sessions` and `login_attempts`.
-- The migrations are chained after `f4a29d806c12` (`aa11bb22cc33`, then `bb22cc33dd44`); neither has been applied to Supabase or production.
+- The migrations are chained after `f4a29d806c12` (`aa11bb22cc33` sessions, `bb22cc33dd44` login attempts, `cc33dd44ee55` external identities/challenges); none has been applied to Supabase or production.
 - The live database previously showed RLS disabled on public tables and broad grants that require a deliberate access-control review. Do not enable RLS blindly or revoke grants until the deployed backend connection path, service role usage, and required policies are verified.
 - Future identity-link, reset-challenge, and security-event tables require reviewed Alembic migrations, isolated upgrade/downgrade tests, and documented rollback plans.
 - No production deployment is part of this increment.
