@@ -1170,7 +1170,11 @@ def test_admin_user_workspace_exposes_personal_preferences_access_policy_and_exp
     assert 'id="exportUsersCsv"' in page
     assert 'id="bulkUsersPanel"' in page
     assert 'id="userActivityPanel"' in page
-    assert 'userActivitySourceFilter' in page\n    assert 'userActivityTypeFilter' in page\n    assert 'exportUserActivityCsv' in page\n    assert '/activity"+query' in script\n    assert '/activity.csv' in script
+    assert 'userActivitySourceFilter' in page
+    assert 'userActivityTypeFilter' in page
+    assert 'exportUserActivityCsv' in page
+    assert '/activity"+query' in script
+    assert '/activity.csv' in script
     assert 'id="selectAllUsersPage"' in page
     assert 'id="previewBulkUsers"' in page
     assert 'id="applyBulkUsers"' in page
