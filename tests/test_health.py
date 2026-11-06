@@ -26,7 +26,7 @@ def test_health_check() -> None:
         "success": True,
         "status": "ok",
         "service": "academic-services-platform-api",
-        "environment": get_settings().environment,
+        "environment": get_settings().app_env,
     }
 
 
