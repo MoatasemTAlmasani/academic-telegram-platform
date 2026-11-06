@@ -21,6 +21,9 @@ def test_admin_console_entrypoint_is_served() -> None:
     assert "console.js" in response.text
     assert "dashboard-period-analytics.js" in response.text
     assert 'id="globalSearch"' in response.text
+    assert 'id="auditSearch"' in response.text
+    assert 'id="auditPrev"' in response.text
+    assert 'id="auditNext"' in response.text
     assert "loginForm" in response.text
 
 
