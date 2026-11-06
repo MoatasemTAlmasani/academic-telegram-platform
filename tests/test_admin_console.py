@@ -871,3 +871,17 @@ def test_last_admin_protection_is_used_for_lifecycle_and_archive() -> None:
 
     assert source.count("await _protect_last_active_admin(session, user.id)") == 2
     assert 'User.roles.any(Role.name == "admin")' in source
+
+
+def test_admin_user_linked_identity_endpoint_and_workspace() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/admin/users/{user_id}/identities"]
+
+    page = asyncio.run(get("/admin"))
+    assert page.status_code == 200
+    assert 'id="userIdentitiesBody"' in page.text
+
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert '"/identities"' in script.text
+    assert "الحسابات المرتبطة" in script.text
