@@ -59,3 +59,5 @@
 .audit-controls .btn{min-width:34px;height:34px;padding:0 9px}
 .audit-controls .btn:disabled{opacity:.35;cursor:not-allowed}
 @media(max-width:620px){.audit-controls{width:100%}.audit-controls input{flex:1;min-width:120px}.list-toolbar{align-items:flex-start;flex-direction:column}}
+
+.metric-card-link{cursor:pointer;transition:border-color .16s ease,transform .16s ease}.metric-card-link:hover{border-color:var(--accent);transform:translateY(-2px)}.metric-card-link:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
