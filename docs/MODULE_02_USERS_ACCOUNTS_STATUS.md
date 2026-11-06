@@ -33,9 +33,12 @@ This document records implementation evidence. The approved roadmap remains the 
   - Phase 01 verification: run 42265113438.
 - New tests cover:
   - bounded pagination contract,
-  - safe user response schema,
-  - separate bilingual admin directory pagination controls.
-- Latest changes are awaiting their corresponding CI runs. Do not mark this increment verified until both Python tests and Phase 01 verification complete successfully on the latest commit.
+  - safe user response schema and audit snapshots,
+  - separate bilingual admin directory pagination controls,
+  - account creation and profile detail/edit workspaces.
+- Python tests passed on commit `6c3b709d04eeca079da30e17464e8d572fca242b` (run 42271376772).
+- Phase 01 verification passed on the same commit (run 42271376792).
+- These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
 - No browser/device acceptance has been claimed.
 
 ## Not yet implemented — remains in Module 02 scope
