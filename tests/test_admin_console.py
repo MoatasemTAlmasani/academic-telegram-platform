@@ -190,3 +190,14 @@ def test_staff_schemas_reject_unknown_fields_and_empty_credentials() -> None:
         pass
     else:
         raise AssertionError("Staff updates must reject unknown privilege fields.")
+
+
+def test_admin_console_stylesheet_includes_mobile_and_tablet_layouts() -> None:
+    response = asyncio.run(get("/admin/static/console.css"))
+    assert response.status_code == 200
+    assert "@media (max-width: 760px)" in response.text
+    assert "@media (max-width: 440px)" in response.text
+    assert ".sidebar.open" in response.text
+    assert ".sidebar-scrim.show" in response.text
+    assert ".main-area" in response.text
+    assert ".table-scroll" in response.text
