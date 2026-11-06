@@ -3,7 +3,7 @@ name: Materialize verified Module 02 source
 on:
   push:
     branches:
-      - release/module-02-verified
+      - "release/module-02-verified*"
     paths:
       - ".module02-transfer/**"
       - ".github/workflows/materialize-module02.yml"
