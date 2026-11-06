@@ -365,7 +365,6 @@ async def update_admin_service(
             Service.category_id == service.category_id,
             Service.name == service.name,
             Service.id != service.id,
-            Service.deleted_at.is_(None),
         )
     )
     if duplicate is not None:
