@@ -1003,3 +1003,19 @@ def test_authentication_rejects_locked_or_expired_accounts() -> None:
     source = (Path(__file__).resolve().parents[1] / "backend" / "app" / "modules" / "authentication" / "authentication.py").read_text(encoding="utf-8")
     assert "user.locked_until <= now" in source
     assert "user.account_expires_at > now" in source
+
+
+def test_users_bulk_preview_execute_and_csv_export_contracts() -> None:
+    paths = app.openapi()["paths"]
+    assert "post" in paths["/api/v1/admin/users/bulk/preview"]
+    assert "post" in paths["/api/v1/admin/users/bulk/lifecycle"]
+    assert "get" in paths["/api/v1/admin/users/export.csv"]
+    from backend.app.api.routes.admin_users import AdminUsersBulkLifecycleRequest
+    payload = AdminUsersBulkLifecycleRequest(user_ids=[uuid4()], action="suspend", reason="Security review")
+    assert len(payload.user_ids) == 1
+    try:
+        AdminUsersBulkLifecycleRequest(user_ids=[uuid4(), uuid4()] * 51, action="suspend", reason="Security review")
+    except Exception:
+        pass
+    else:
+        raise AssertionError("Bulk lifecycle requests must be bounded to 100 users.")
