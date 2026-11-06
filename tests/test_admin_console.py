@@ -535,3 +535,32 @@ def test_account_archive_requires_reason_and_permission_aware_ui_action() -> Non
     assert script.status_code == 200
     assert 'has("users:delete")' in script.text
     assert 'method:"DELETE"' in script.text
+
+
+def test_authenticated_password_change_requires_current_password_and_revokes_sessions() -> None:
+    from backend.app.api.routes.auth import ChangePasswordRequest
+
+    valid = ChangePasswordRequest(
+        current_password="old-password",
+        new_password="a-new-password-with-12-chars",
+    )
+    assert len(valid.new_password) >= 12
+
+    try:
+        ChangePasswordRequest(
+            current_password="old-password",
+            new_password="short",
+        )
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("New passwords shorter than 12 characters must be rejected.")
+
+    operation = app.openapi()["paths"]["/api/v1/auth/change-password"]["post"]
+    assert operation["responses"]["200"]["content"]["application/json"]
+
+    page = asyncio.run(get("/admin"))
+    assert 'id="selfPasswordManagement"' in page.text
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert 'api("/auth/change-password"' in script.text
+    assert "selectedUserId!==tokenSubject()" in script.text
