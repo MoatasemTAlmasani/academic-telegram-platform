@@ -15,6 +15,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - User and customer directory pages now use independent server-side pagination controls.
 - The admin workspace includes a bilingual, validated account-creation form; it submits through the existing protected API and creates a customer account without accepting a privileged role from the browser.
 - The admin workspace includes a user detail panel and profile edit form; profile reads/updates use existing protected APIs, and the edit form is hidden without the update permission.
+- Profile edits support clearing optional contact/profile fields and record safe before/after values. Generic profile editing rejects password changes until the secure recovery/session-revocation workflow is implemented.
 - Usernames are trimmed and compared case-insensitively during account creation/update; email addresses are normalized to lowercase and conflict-checked case-insensitively.
 - Unsupported account status filters and mutations are rejected.
 - Archived users are excluded from directory/detail retrieval.
