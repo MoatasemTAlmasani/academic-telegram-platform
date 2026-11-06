@@ -360,6 +360,20 @@ async def update_admin_service(
     if payload.sort_order is not None:
         service.sort_order = payload.sort_order
 
+    duplicate = await session.scalar(
+        select(Service.id).where(
+            Service.category_id == service.category_id,
+            Service.name == service.name,
+            Service.id != service.id,
+            Service.deleted_at.is_(None),
+        )
+    )
+    if duplicate is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Service with this name already exists in the category.",
+        )
+
     after = {
         "category_id": str(service.category_id),
         "name": service.name,
