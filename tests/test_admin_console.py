@@ -838,7 +838,7 @@ def test_last_active_admin_is_protected_from_deactivation_and_archive() -> None:
 
     class FakeSession:
         def __init__(self, active_admin_count):
-            self.results = [Result(uuid4()), Result(SimpleNamespace(name="admin")), Result(active_admin_count)]
+            self.results = [Result("ACTIVE"), Result(SimpleNamespace(name="admin")), Result(active_admin_count)]
 
         async def execute(self, statement):
             return self.results.pop(0)
@@ -853,6 +853,11 @@ def test_last_active_admin_is_protected_from_deactivation_and_archive() -> None:
             raise AssertionError("The last active admin must be protected.")
 
         await _protect_last_active_admin(FakeSession(2), uuid4())
+
+        inactive_session = FakeSession(0)
+        inactive_session.results = [Result("INACTIVE")]
+        await _protect_last_active_admin(inactive_session, uuid4())
+        assert inactive_session.results == []
 
     asyncio.run(run())
 
