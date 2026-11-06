@@ -5,14 +5,16 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.app.api.dependencies import get_user_service
-from backend.app.infrastructure.persistence.database import get_session
 from backend.app.application.services.user import UserService
-from backend.app.modules.authentication.jwt import decode_access_token_with_session
+from backend.app.infrastructure.persistence.database import get_session
+from backend.app.modules.authentication.jwt import (
+    decode_access_token_with_session,
+)
 from database.models.identity import UserSession
 
 
