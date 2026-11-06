@@ -69,6 +69,7 @@ class AuthenticationService:
             user_agent=(user_agent[:500] if user_agent else None),
         )
         self.uow.session.add(session)
+        token = create_access_token(user.id, session_id)
         await self.uow.session.commit()
 
-        return create_access_token(user.id, session_id)
+        return token
