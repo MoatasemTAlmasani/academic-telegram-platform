@@ -51,3 +51,11 @@
 .global-search-state{padding:16px 12px;color:var(--muted);font-size:11px;text-align:center}
 @media(max-width:900px){.global-search-wrap{width:190px;min-width:140px}.topbar{padding-inline:18px}}
 @media(max-width:620px){.global-search-wrap{width:clamp(120px,34vw,170px);min-width:0}.topbar-right{gap:7px}.user-meta{display:none}.environment-pill{display:none}.topbar{padding-inline:12px}}
+
+
+.audit-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.audit-controls input{height:35px;min-width:190px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);padding:0 10px;font:11px Cairo,Inter,sans-serif}
+.audit-controls input:focus{outline:1px solid var(--accent);border-color:var(--accent)}
+.audit-controls .btn{min-width:34px;height:34px;padding:0 9px}
+.audit-controls .btn:disabled{opacity:.35;cursor:not-allowed}
+@media(max-width:620px){.audit-controls{width:100%}.audit-controls input{flex:1;min-width:120px}.list-toolbar{align-items:flex-start;flex-direction:column}}
