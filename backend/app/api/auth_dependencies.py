@@ -38,10 +38,14 @@ async def get_current_user(
 
     user = await user_service.get_by_id(user_id)
 
-    if user is None:
+    if (
+        user is None
+        or str(user.status).upper() != "ACTIVE"
+        or getattr(user, "deleted_at", None) is not None
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found.",
+            detail="Account is unavailable.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
