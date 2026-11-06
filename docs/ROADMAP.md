@@ -282,3 +282,669 @@ For the current implementation state, use:
 - GitHub pull requests, CI runs, and deployment records for verifiable delivery evidence.
 
 Update module status only when evidence exists. Keep planned, implemented, and verified work clearly separated.
+
+
+---
+
+# Detailed implementation specification — Module 02: Users & Accounts
+
+**Module:** 02 of the 23 Administration modules in Phase 1  
+**Status:** Approved target specification; implementation status must be evidenced separately  
+**Primary domain:** Identity and account lifecycle management  
+**Architecture:** Existing FastAPI modular monolith, shared identity, shared database, existing frontend architecture  
+**Related modules:** 01 Dashboard; 03 Roles & Permissions; 04 Platform Settings; 05 Organizations & Branches; 07 Customer Management; 08 Request Management; 12 Staff Management; 14 Communication & Notifications; 15 Telegram; 21 Audit & Governance; 22 Security & Risk; 23 System Operations & QA.
+
+This specification expands the short Module 02 scope above. It is the implementation reference for Module 02 and must be read together with the five-system architecture and Phase 1 shared acceptance contract. It does not claim that any listed capability is already implemented.
+
+## 11. Module purpose and boundaries
+
+Deliver a secure, centralized system for managing platform user identities and accounts from creation through activation, suspension, recovery, session revocation, identity linking, deactivation, archival, and legally permitted deletion.
+
+This is not merely a user table with create/edit buttons. It is an identity and access lifecycle capability integrated with the rest of EHTERAF.
+
+The module owns user-account administration and its lifecycle. It integrates with, but does not replace:
+- Module 03 for role catalog, permission catalog, role-permission rules, and privileged RBAC governance.
+- Module 07 for the customer business profile and customer-specific lifecycle.
+- Module 12 for the employee/staff business profile and employment/assignment information.
+- Module 14 for notification creation, delivery, retry, and delivery evidence.
+- Module 15 for Telegram bot/channel configuration and delivery operations.
+- Module 21 for authoritative audit history and governance.
+- Module 22 for security-event triage, risk policy, and incident management.
+
+A user account, a customer profile, a staff profile, a role, and an external channel identity are distinct concepts. They may be related, but must not be collapsed into one record or duplicated as independent login identities without an approved design.
+
+## 12. Functional domains
+
+The module must cover these twelve domains, with explicit implementation status for each:
+1. User Directory.
+2. Account Lifecycle.
+3. User Profiles.
+4. Authentication integration.
+5. Session Management.
+6. External Identity Linking.
+7. Access Control integration.
+8. Account Security Monitoring.
+9. Audit and Activity History.
+10. Bulk Operations.
+11. Import and Export.
+12. Account Preferences.
+
+## 13. User Directory
+
+### 13.1 Directory fields
+
+Provide a permission-filtered, paginated directory with safe fields:
+- Internal User ID.
+- Username.
+- First and last name / display name.
+- Email and verification state.
+- Phone and verification state.
+- Profile image reference where supported.
+- Account type/category.
+- Assigned roles (only where the viewer may inspect them).
+- Account status.
+- Created and updated timestamps.
+- Last successful login and last activity when reliably recorded.
+- Linked channel/provider indicators without exposing tokens or secrets.
+- Organization and branch scope only after the corresponding scope model is approved and implemented.
+
+Never expose password hashes, reset tokens, verification codes, access/refresh tokens, secret credentials, or private provider payloads in directory responses.
+
+### 13.2 Search, filters, sorting, and pagination
+
+Support server-side:
+- Search by user ID, username, name, email, and phone, with safe normalization.
+- Filters for status, account type, role, creation date, last-login date, and verified contact state.
+- Filters for linked identity/provider state.
+- Organization/branch filters only when approved scope enforcement exists.
+- Sorting by supported fields using an allowlist.
+- Stable pagination with bounded page size and database-side count.
+- Empty, loading, error, and permission-denied states.
+
+Do not load the full user population into the browser. Escape or safely parameterize search terms; do not construct unsafe SQL from user input. Define whether email/username matching is case-insensitive and enforce the same policy in validation and database constraints.
+
+### 13.3 Directory actions
+
+Per-row actions must be permission-aware and include view, edit, activate, suspend, reactivate, deactivate, lock/unlock, session management, identity management, and archive where applicable. Each action must also be enforced server-side. Destructive or security-sensitive actions require a confirmation step and a recorded reason where policy requires it.
+
+## 14. Create Account
+
+The creation workflow must support:
+- Username and required identity fields.
+- First name, last name, email, phone, profile image reference, language, and timezone as applicable.
+- Account type/category.
+- Initial status subject to approved invitation/activation policy.
+- Optional initial role only when the actor is authorized to assign that role.
+- Organization/branch association only under an approved scope model.
+- Optional account expiry for temporary accounts.
+- Invitation or secure password-setup flow where supported.
+
+Validation requirements:
+- Required-field and length validation.
+- Email and phone normalization/format validation.
+- Username/email uniqueness consistent with the canonical identity policy.
+- Reject duplicate external identity ownership.
+- Validate requested role and ensure the actor cannot grant privileges they do not possess.
+- Validate account type and status against supported enumerations.
+- Prevent self-privilege escalation and unauthorized creation of privileged accounts.
+- Return field-level validation errors without leaking whether sensitive accounts exist beyond the permitted response policy.
+
+Password requirements:
+- Never store or log plaintext passwords.
+- Use the project's reviewed password hashing implementation; Argon2id is an acceptable target where compatible with the current security baseline.
+- Apply configured password policy.
+- Prefer single-use, time-limited password setup links over transmitting passwords.
+- Never send a password in email, Telegram, logs, or audit records.
+- Do not silently assign a weak default password.
+
+## 15. Update Account and Profile
+
+Support partial updates without resetting omitted fields. Separate account/security fields from personal profile/preferences where that improves ownership and validation.
+
+Editable fields may include:
+- Display and legal names as applicable.
+- Username under the approved rename policy.
+- Email and phone, with re-verification when changed.
+- Profile image reference.
+- Language and timezone.
+- Account type and supported status.
+- Approved organization/branch associations.
+- Expiry and activation metadata.
+- Role assignments only through authorized RBAC integration.
+
+Every mutation must validate current state, actor permissions, target scope, and concurrency. Record safe before/after values for sensitive changes. Never include secrets, hashes, raw tokens, or unnecessary personal data in audit payloads. Trigger session invalidation or re-authentication when the security policy requires it.
+
+## 16. Account lifecycle and status model
+
+The lifecycle must support explicit, documented states. Proposed states are:
+- `PENDING`: awaiting invitation acceptance or verification.
+- `ACTIVE`: allowed to authenticate, subject to policy.
+- `SUSPENDED`: administratively paused for a defined reason/period.
+- `LOCKED`: security lock due to policy or authorized intervention.
+- `DEACTIVATED`: administratively disabled.
+- `EXPIRED`: account validity period has ended.
+- `DELETION_REQUESTED`: a privacy/deletion request is being reviewed.
+- `ARCHIVED`: retained but no longer operational, according to retention policy.
+
+The final enum must be reconciled with existing model values and migrations before implementation. Do not introduce incompatible status strings or silently reinterpret existing records.
+
+Supported lifecycle actions:
+- Activate.
+- Suspend.
+- Reactivate.
+- Lock and unlock.
+- Deactivate.
+- Expire.
+- Archive and restore where policy allows.
+- Request deletion and execute approved deletion/anonymization where legally permitted.
+
+Lifecycle invariants:
+- Suspended, locked, deactivated, expired, and archived accounts must not authenticate.
+- Existing sessions and tokens must be revoked or rendered unusable according to the security policy when an account is disabled or locked.
+- Reactivation must not restore roles that were previously removed.
+- Every sensitive transition records actor, timestamp, reason, prior state, resulting state, and outcome.
+- Protect the last active Super Admin and other break-glass accounts defined by policy.
+- Do not hard-delete users referenced by requests, invoices, payments, audit records, or other retained business records.
+- Use archive, anonymization, or compensating workflows when physical deletion would violate integrity or retention obligations.
+
+## 17. Authentication integration
+
+Module 02 integrates with the existing authentication module; it must not create a parallel login system.
+
+Required capabilities and acceptance checks:
+- Username/email login according to the canonical identity policy.
+- Verify account status and expiry before issuing a usable session/token.
+- Generic authentication failure responses that do not disclose account existence.
+- Brute-force controls and rate limiting.
+- Secure password-reset request and completion.
+- Single-use, time-limited reset tokens stored safely (prefer hashed token material).
+- Invalidate prior reset tokens when a new reset is issued.
+- Avoid account enumeration in reset responses.
+- Email and phone verification with expiring, single-use codes and attempt limits.
+- Record authentication events without recording credentials.
+- Password change/recovery must apply session revocation policy.
+- MFA architecture and policy must be documented; supported options may include TOTP and recovery codes. Do not show MFA as enabled unless the complete enrollment, verification, recovery, and enforcement flow exists.
+- Privileged users should be subject to an approved MFA policy.
+
+## 18. Session management
+
+Provide a session inventory and real revocation capability.
+
+Session metadata, where available and privacy-approved:
+- Session identifier.
+- User identifier.
+- Created/issued time and expiry.
+- Last activity.
+- Device/browser/OS summary.
+- IP address or privacy-preserving representation according to policy.
+- Session status.
+- Revocation timestamp, actor, and reason.
+
+Operations:
+- List active sessions and permitted historical sessions.
+- Revoke one session.
+- Revoke all sessions for an account.
+- Revoke sessions after password reset/change, account suspension/deactivation/lock, or security incident according to policy.
+- Notify the user of important security events where supported.
+- Prevent revoked sessions from continuing to access protected endpoints.
+
+JWT note: deleting a token from browser storage is not server-side revocation. If JWTs are used, implement a real session registry, token-version/revocation mechanism, or another reviewed design; use bounded token lifetimes and safe refresh-token rotation if refresh tokens exist. Do not invent a sessions API that merely returns fabricated or inferred sessions.
+
+## 19. External identity linking
+
+Support a central user identity linked to verified external identities, especially Telegram, without creating duplicate customers when channels change.
+
+Identity record should contain only necessary data:
+- Internal identity record ID.
+- Internal user ID.
+- Provider name.
+- Provider subject/user ID.
+- Verification/link status.
+- Created/linked and last-used timestamps.
+- Revocation/unlink timestamp and actor where relevant.
+- Minimal provider metadata required for operation.
+
+Linking workflow:
+1. Authenticated user initiates linking.
+2. Backend creates a cryptographically random, single-use, short-lived challenge.
+3. User proves control of the external account through the provider's supported flow.
+4. Backend validates provider proof server-side.
+5. Backend atomically verifies that the provider identity is not already linked to another account.
+6. Link is committed and audited.
+7. Unlinking requires re-authentication or an equivalent approved proof and must not orphan the user from all recovery methods.
+
+Telegram-specific requirements:
+- Validate Telegram Mini App `initData` on the backend using the official verification algorithm and freshness checks.
+- Never trust client-submitted Telegram user fields without cryptographic verification.
+- Protect bot webhooks with the configured secret mechanism and replay controls.
+- Do not accept a Telegram numeric ID supplied by the browser as proof of ownership.
+- Do not expose bot tokens or provider secrets in the UI/API.
+- Define safe account recovery if Telegram is the only linked channel.
+
+Identity invariants:
+- One provider subject cannot belong to multiple internal users.
+- Similar names or matching unverified contact fields are not sufficient proof to merge accounts.
+- Account merge is a separate privileged, reviewable operation with explicit evidence, collision handling, reference migration plan, and immutable audit.
+- Prevent duplicate customer profiles when the same verified person uses website and Telegram channels.
+
+## 20. RBAC integration and privilege safety
+
+Module 02 consumes Module 03's role and permission services. It may display assigned/effective roles and offer permitted assignment actions, but does not own the role/permission catalog.
+
+Proposed permission families (reconcile with existing permission constants before adding anything):
+- `users.read`
+- `users.create`
+- `users.update`
+- `users.activate`
+- `users.suspend`
+- `users.deactivate`
+- `users.archive`
+- `users.delete` (only if policy permits)
+- `users.assign_roles`
+- `users.manage_sessions`
+- `users.link_identity`
+- `users.unlink_identity`
+- `users.view_security`
+- `users.manage_security`
+- `users.import`
+- `users.export)
+
+Security rules:
+- Enforce permissions in every backend route/service, not only by hiding UI controls.
+- Deny by default.
+- Prevent actors from granting roles or permissions above their authority.
+- Prevent self-elevation and unsafe changes to the acting account.
+- Protect the last active Super Admin and designated break-glass accounts.
+- Re-evaluate permissions after role changes and revoke/refresh sessions or authorization cache according to policy.
+- Audit all role assignment changes.
+- Test cross-user IDOR, cross-organization access, and privilege escalation.
+
+## 21. Account security monitoring
+
+Capture genuine security events, such as:
+- Successful and failed login attempts.
+- Account lock/unlock and suspension.
+- Password reset/change completion (never password values).
+- Email/phone changes and verification.
+- Role/privilege changes.
+- New session and session revocation.
+- External identity link/unlink.
+- Unusual or policy-violating access where a reliable detection rule exists.
+- Administrative actions affecting accounts.
+
+Provide authorized operators with relevant event history and safe response actions:
+- Lock account.
+- Revoke sessions.
+- Require password reset/re-authentication.
+- Revoke recovery challenges/tokens.
+- Escalate an incident to Module 22.
+
+Automated high-impact responses require an approved policy, clear thresholds, audit, false-positive handling, and recovery path. Do not claim anomaly detection without a real signal and implemented detection logic.
+
+## 22. Activity timeline and audit
+
+Keep three concepts distinct:
+- Audit Log: authoritative record of administrative/business mutations.
+- Activity Timeline: user-centered presentation of relevant events.
+- Security Events: security-significant events routed to Module 22.
+
+Show authorized events such as account creation, profile updates, lifecycle transitions, authentication outcomes, role changes, identity linking, and session revocation.
+
+Audit requirements:
+- Actor, target user/resource, action, timestamp, outcome, correlation/request ID, and safe metadata.
+- Before/after values only for approved non-secret fields.
+- Reason/comment for sensitive administrative actions.
+- Transactional or reliable-outbox behavior so a successful mutation cannot silently lose its audit event.
+- Search/filter/pagination at database level.
+- Export permission and access logging.
+- Retention and integrity policy.
+- Never store plaintext passwords, password hashes, tokens, verification codes, bot tokens, private keys, or full sensitive provider payloads.
+
+## 23. Bulk operations
+
+Support permission-controlled bulk actions where operationally justified:
+- Activate.
+- Suspend.
+- Deactivate.
+- Assign/remove an allowed role.
+- Archive.
+- Export.
+
+Requirements:
+- Bounded batch size and rate.
+- Preview target count and expected action.
+- Confirm sensitive actions.
+- Re-check each target's scope and permissions at execution time.
+- Protect the last active Super Admin and protected accounts.
+- Use transaction boundaries appropriate to the operation; report per-item success/failure.
+- Use idempotency or duplicate-submission protection.
+- Record a parent operation and per-item outcomes.
+- Never report total success when some rows failed.
+- Avoid long synchronous requests; use a durable job for large imports/batches if needed and already supported by the architecture.
+
+## 24. Import and export
+
+Import:
+- Provide a versioned CSV template; XLSX may be added if justified by current dependencies and architecture.
+- Validate file type, size, encoding, headers, row count, and every field.
+- Normalize identifiers and detect duplicate rows and existing accounts.
+- Preview valid/invalid rows before committing.
+- Never grant privileged roles automatically from untrusted import data.
+- Produce a downloadable result report with row-level errors.
+- Audit the actor, file metadata, counts, and outcome without storing unnecessary personal data in logs.
+
+Export:
+- CSV and, if approved, XLSX.
+- Server-side filtering and pagination/streaming for large datasets.
+- Field-level permission checks and data minimization.
+- Protect generated files and download URLs; apply expiry and access control.
+- Audit who exported what scope and when.
+- Exclude hashes, tokens, secret values, and fields the actor cannot view.
+
+## 25. Account preferences
+
+Support user-level preferences where relevant:
+- Arabic/English language.
+- Correct RTL/LTR rendering.
+- Timezone.
+- Date and number formatting where user-overridable.
+- Notification preferences by supported channel.
+- Light/dark theme if this preference is shared by the existing frontend.
+- Privacy choices allowed by platform policy.
+
+Keep user preferences distinct from global settings in Module 04 and organization/branch policy in Module 05. Server-side defaults must remain authoritative where preferences cannot override security or legal policy.
+
+## 26. Required administration UI
+
+Required screens/workspaces:
+1. Users Directory.
+2. Create User.
+3. User Profile / Details.
+4. Edit User.
+5. Account & Status Management.
+6. Account Security.
+7. Active and historical Sessions.
+8. Linked Identities.
+9. Roles & Effective Access summary.
+10. Activity Timeline and Audit History.
+11. Bulk Operations review.
+12. Import / Export.
+
+User profile detail should use tabs/sections:
+- Overview.
+- Personal Information.
+- Account & Status.
+- Roles & Access.
+- Sessions.
+- Linked Identities.
+- Security.
+- Activity.
+- Audit History.
+
+UI/UX acceptance:
+- Match the approved EHTERAF premium enterprise/SaaS visual system and existing admin shell.
+- Full Arabic and English copy, not partial translation.
+- Correct RTL/LTR layout, forms, tables, icons, breadcrumbs, and drawers.
+- Responsive desktop, laptop, tablet, and mobile behavior.
+- Light and dark themes consistent with the application.
+- Loading, empty, error, success, validation, and permission-denied states.
+- Confirmation for sensitive actions and clear reason capture where required.
+- Preserve search/filter/page context after mutations where practical.
+- No decorative controls that do not perform real actions.
+- No fake metrics, fake last-login/session data, or placeholder success.
+
+## 27. Backend architecture and API contract
+
+Preserve the existing FastAPI modular monolith and current application boundaries:
+- API routes: request parsing, response mapping, dependencies.
+- Pydantic schemas: input/output validation.
+- Application services: lifecycle and use-case rules.
+- Repositories: database access and query composition.
+- Existing SQLAlchemy models: canonical persistence entities.
+- Authorization dependencies/services: backend enforcement.
+- Audit service: safe, reliable event recording.
+- Notification application service: delivery decoupled from account routes.
+- Provider adapters: verified external identity operations.
+
+The existing `/api/v1/admin/users` routes and existing authentication APIs must be inspected and extended. Do not create duplicate endpoints or parallel user services without a documented reason.
+
+Candidate API contract (adapt to existing conventions and avoid duplicate routes):
+| Method | Candidate endpoint | Purpose |
+|---|---|---|
+| GET | `/api/v1/admin/users` | Search/filter/paginate users |
+| POST | `/api/v1/admin/users` | Create account |
+| GET | `/api/v1/admin/users/{id}` | Read account |
+| PATCH | `/api/v1/admin/users/{id}` | Partial update |
+| POST | `/api/v1/admin/users/{id}/activate` | Activate |
+| POST | `/api/v1/admin/users/{id}/suspend` | Suspend |
+| POST | `/api/v1/admin/users/{id}/deactivate` | Deactivate |
+| POST | `/api/v1/admin/users/{id}/reactivate` | Reactivate |
+| POST | `/api/v1/admin/users/{id}/lock` | Security lock |
+| POST | `/api/v1/admin/users/{id}/unlock` | Unlock |
+| GET | `/api/v1/admin/users/{id}/sessions` | List sessions |
+| DELETE | `/api/v1/admin/users/{id}/sessions/{session_id}` | Revoke one session |
+| POST | `/api/v1/admin/users/{id}/sessions/revoke-all` | Revoke all sessions |
+| GET | `/api/v1/admin/users/{id}/identities` | List linked identities |
+| POST | `/api/v1/admin/users/{id}/identities` | Link verified identity |
+| DELETE | `/api/v1/admin/users/{id}/identities/{identity_id}` | Unlink identity |
+| GET | `/api/v1/admin/users/{id}/activity` | Activity timeline |
+| GET | `/api/v1/admin/users/{id}/audit` | Authorized audit history |
+| POST | `/api/v1/admin/users/bulk-actions` | Bounded bulk action |
+| POST | `/api/v1/admin/users/import` | Validated import |
+| GET | `/api/v1/admin/users/export` | Authorized export |
+
+These are candidate contracts, not an instruction to implement every route mechanically. Use appropriate HTTP semantics, schemas, status codes, error formats, idempotency, and existing API conventions. A successful create/update response must contain only safe fields. A conflict should return a stable conflict response (for example HTTP 409) without disclosing protected information.
+
+Every route must have authentication, explicit permission checks, scope checks where applicable, validation, safe error handling, and tests. Hiding a UI control is never a substitute for backend authorization.
+
+## 28. Data model and persistence requirements
+
+First inspect and reuse current models/tables. The following are conceptual entities, not an instruction to create all of them if equivalent structures already exist:
+- Users (canonical account identity).
+- User Profiles (only if personal profile separation is justified).
+- Roles and User Roles (owned by/integrated with Module 03).
+- External Identities.
+- User Sessions / token revocation records.
+- Password Reset Tokens.
+- Email Verification Tokens.
+- Phone Verification Tokens.
+- Login Attempts.
+- Security Events.
+- User Preferences.
+- Account Lifecycle Events.
+- Audit Logs (shared with Module 21).
+
+Conceptual relationships:
+- One user may have zero or one profile record depending on the existing model.
+- One user may have multiple sessions over time.
+- One user may have multiple verified external identities, subject to provider-specific uniqueness.
+- One user may have multiple roles under RBAC policy.
+- One user may have preferences and security/audit events.
+- Audit actor and audit target are separate concepts; an event may be performed by one user against another.
+
+Persistence rules:
+- Preserve existing primary-key conventions (UUID if already canonical).
+- Use foreign keys and uniqueness constraints for identity invariants.
+- Add indexes based on measured search/filter queries.
+- Store timestamps consistently in UTC and render in user timezone.
+- Use transactions for multi-step lifecycle/linking changes.
+- Handle concurrent updates and uniqueness races safely.
+- Avoid N+1 queries and materializing all rows for counts/pagination.
+- Never persist plaintext passwords, reset tokens, verification codes, or provider secrets.
+- Define retention/deletion/anonymization behavior before destructive migrations.
+- Any schema change requires a reviewed, reversible Alembic migration and isolated-database upgrade/downgrade tests.
+- Never run development migrations or test suites against production databases.
+
+## 29. Security and privacy requirements
+
+Security acceptance must include:
+- Secure password hashing using the project's approved implementation (Argon2id target where compatible).
+- Brute-force protection and rate limits for login, reset, verification, and linking.
+- Single-use, expiring reset/verification/link challenges.
+- Secure session and refresh-token lifecycle, revocation, and cookie settings where applicable.
+- CSRF protection where cookie-based authentication requires it.
+- Correct CORS and trusted-origin configuration.
+- Input validation and safe output encoding.
+- Deny-by-default authorization on every protected API.
+- Protection against IDOR and cross-scope data access.
+- Privilege-escalation and last-Super-Admin protections.
+- Secret redaction in logs, traces, errors, and audit metadata.
+- Privacy minimization for IP/device metadata and defined retention.
+- Safe account recovery when external identity providers are unavailable.
+- Dependency/security scanning and documented threat review.
+- No Firebase.
+
+## 30. Notifications and integration behavior
+
+Account-related notifications must be created through Module 14's application service, not sent directly from user route handlers.
+
+Potential events:
+- Account invitation/creation.
+- Activation and suspension/deactivation.
+- Password reset/change confirmation.
+- Email/phone verification.
+- New login/session security notice.
+- Session revocation.
+- External identity linking/unlinking.
+
+Track states only when backed by delivery evidence:
+- Created.
+- Queued.
+- Sent.
+- Delivered.
+- Failed.
+- Retried.
+
+Enqueueing is not delivery. Provider failure must not corrupt the account transaction. Use durable outbox/queue patterns already supported by the architecture, idempotency, bounded retry, and safe failure visibility.
+
+## 31. Performance, reliability, and operational behavior
+
+- Database-side search, sorting, and pagination.
+- Appropriate indexes verified against actual query patterns.
+- Avoid N+1 queries and unnecessary eager loading.
+- Bound page sizes, batch sizes, file sizes, and request durations.
+- Use durable background jobs only where the current architecture supports them and the operation warrants it.
+- Apply idempotency or duplicate-submission protection to sensitive operations.
+- Use transaction boundaries and reliable audit/outbox behavior.
+- Return consistent error responses and correlation IDs.
+- Do not expose stack traces or secrets to clients.
+- Distinguish unavailable provider/service state from successful operation.
+- Record operational failures without leaking personal or authentication data.
+
+## 32. Test strategy and mandatory scenarios
+
+### Unit tests
+- Valid account creation.
+- Duplicate username/email rejection.
+- Identity normalization and uniqueness.
+- Partial update preserves omitted fields.
+- Lifecycle transition policy.
+- Invalid transition rejection.
+- Role assignment constraints.
+- Last active Super Admin protection.
+- Reset/verification/link challenge expiry and one-time use.
+- External identity uniqueness.
+- Session revocation policy.
+- Safe audit payload generation.
+
+### API/integration tests
+- List, search, filter, sort, paginate.
+- Create, read, update.
+- Activate, suspend, reactivate, deactivate, lock, unlock, archive.
+- Sessions list/revoke/revoke-all.
+- Identity link/unlink and duplicate ownership.
+- Activity and audit access control.
+- Bulk action partial success/failure.
+- Import validation and export permissions.
+- Notification failure does not corrupt account lifecycle.
+- All routes reject unauthenticated and unauthorized actors appropriately.
+
+### Security tests
+- Ordinary user cannot access admin endpoints.
+- Actor cannot assign a role above their authority.
+- Actor cannot elevate themselves.
+- Cross-user IDOR is denied.
+- Cross-organization/branch access is denied where scope applies.
+- Last Super Admin cannot be disabled or stripped of required protection.
+- Expired, used, or revoked reset tokens are rejected.
+- Revoked sessions cannot continue to access protected endpoints.
+- Locked/deactivated/expired accounts cannot authenticate.
+- Telegram identity proof is verified server-side.
+- Duplicate provider identity cannot link to another account.
+- Secrets/hashes/tokens never appear in responses or logs.
+
+### Frontend and end-to-end tests
+- Directory navigation and responsive layout.
+- Search, filters, sort, pagination.
+- Create/edit and field validation.
+- Lifecycle confirmation and resulting access behavior.
+- Sessions and identity views.
+- Role visibility and permission-denied behavior.
+- Arabic/English and RTL/LTR.
+- Light/dark themes.
+- Loading/empty/error/success states.
+- Complete scenario: authorized admin creates a user; user appears in directory; profile is updated; account is suspended; login is rejected; account is reactivated; permitted login succeeds; a session is revoked; audit history shows each mutation.
+
+Test databases must be isolated and synthetic. Do not run tests against production data or apply migrations to production as part of development verification.
+
+## 33. Definition of Done and verification status
+
+Module 02 can be marked `VERIFIED` only when evidence proves all applicable requirements below:
+- Directory, search, filtering, sorting, and server-side pagination.
+- Complete create/read/update and safe lifecycle operations.
+- Profile and preference management.
+- Authentication/recovery/verification integration.
+- Real session inventory and server-enforced revocation.
+- Verified external identity linking/unlinking.
+- Backend RBAC and privilege safety.
+- Security events and account protections.
+- Complete audit trail for sensitive mutations.
+- Safe bulk operations.
+- Validated import/export with permission controls.
+- Notification integration and honest delivery states.
+- Arabic/English, RTL/LTR, responsive and theme acceptance.
+- Unit, integration, authorization, security, and relevant frontend/E2E tests.
+- API and operational documentation.
+- CI checks pass and evidence is attached to the implementation PR.
+- Browser/device acceptance is claimed only after it has actually been performed.
+
+Use the roadmap status vocabulary:
+- `NOT_STARTED`
+- `IN_PROGRESS`
+- `PARTIAL`
+- `IMPLEMENTED`
+- `VERIFIED`
+- `BLOCKED`
+
+A route, model, screen, or passing isolated test alone does not establish module completion. Planned, implemented, and verified capabilities must be reported separately.
+
+## 34. Delivery plan for Module 02
+
+Deliver in small, reviewable increments, reusing existing code:
+1. **Inventory and gap analysis:** inspect existing admin user routes, authentication, models, schemas, permissions, frontend, migrations, and tests; create a file/API/table/evidence matrix.
+2. **Core account workflows:** finish directory, create/read/update, validation, and lifecycle transitions.
+3. **Authentication and sessions:** recovery/verification integration, session registry/revocation, and security policies.
+4. **External identities:** verified Telegram and future provider linking, uniqueness, unlinking, and recovery.
+5. **RBAC and audit:** align existing permission names, enforce privilege boundaries, and record sensitive changes.
+6. **Administration UX and data operations:** profile tabs, bulk operations, import/export, localization, responsive and theme behavior.
+7. **Verification and release:** isolated tests, security tests, frontend/E2E checks, CI, reviewable PR, deployment, and post-deployment smoke checks.
+
+Do not rebuild the project, reset branches, discard existing changes, duplicate existing models/routes, or change frameworks/dependencies without a reviewed ADR. Preserve all existing functionality and data. Keep production database schema/data/config untouched unless separately and explicitly approved. Merge and deploy only after review and verification; deployment success does not itself prove functional acceptance.
+
+## 35. Required implementation evidence record
+
+For each requirement, maintain a traceable record with:
+- Requirement ID and description.
+- Status from the approved status vocabulary.
+- Frontend file/route/component.
+- API route and permission.
+- Application service/use case.
+- Model/table/migration (or explanation why no schema change is needed).
+- Validation and lifecycle rules.
+- Audit/security behavior.
+- Unit/integration/security/frontend test references.
+- CI run and PR reference.
+- Manual browser/device acceptance evidence, if performed.
+- Known limitations, dependencies, and next action.
+
+The initial inventory is not to be guessed from this specification. It must be derived from the current `main` code and test evidence. The current repository already contains an admin users route and authentication foundations; those are starting points to inspect and extend, not proof of full Module 02 completion.
