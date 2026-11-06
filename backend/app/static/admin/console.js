@@ -68,7 +68,7 @@ function bindGlobalSearch(){
   if(!rows.length){box.innerHTML='<div class="global-search-state">'+(lang==="ar"?"لا توجد نتائج متاحة":"No accessible results")+'</div>';return;}
   box.innerHTML=rows.map(function(row){return '<button type="button" class="global-search-result" role="option" data-search-type="'+esc(row.type)+'" data-search-query="'+esc(row.query)+'"><span class="global-search-result-main"><b>'+esc(row.title)+'</b><small>'+esc(row.subtitle)+'</small></span><span class="global-search-result-type">'+esc(row.label)+'</span></button>';}).join("");
  }
- input.addEventListener("input",function(){clearTimeout(timer);timer=setTimeout(function(){search(input.value);},280);});
+ input.addEventListener("input",function(){sequence++;clearTimeout(timer);timer=setTimeout(function(){search(input.value);},280);});
  input.addEventListener("keydown",function(event){if(event.key==="Escape"){close();input.blur();}if(event.key==="Enter"){var first=box.querySelector("[data-search-type]");if(first)first.click();}});
  box.addEventListener("click",function(event){
   var result=event.target.closest&&event.target.closest("[data-search-type]");if(!result)return;
