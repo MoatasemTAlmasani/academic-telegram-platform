@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,32 +54,36 @@ class StaffListResponse(BaseModel):
 
 
 class StaffCreateRequest(BaseModel):
-    username: str
-    password: str
-    email: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    phone: str | None = None
-    language: str | None = None
-    timezone: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=1, max_length=1024)
+    email: str | None = Field(default=None, max_length=320)
+    first_name: str | None = Field(default=None, max_length=120)
+    last_name: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=40)
+    language: str | None = Field(default=None, max_length=16)
+    timezone: str | None = Field(default=None, max_length=64)
     status: UserStatus = UserStatus.ACTIVE
-    specialization: str | None = None
-    availability: str | None = None
+    specialization: str | None = Field(default=None, max_length=255)
+    availability: str | None = Field(default=None, max_length=2000)
     is_active: bool = True
 
 
 class StaffUpdateRequest(BaseModel):
-    email: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    phone: str | None = None
-    language: str | None = None
-    timezone: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    email: str | None = Field(default=None, max_length=320)
+    first_name: str | None = Field(default=None, max_length=120)
+    last_name: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=40)
+    language: str | None = Field(default=None, max_length=16)
+    timezone: str | None = Field(default=None, max_length=64)
     status: UserStatus | None = None
-    specialization: str | None = None
-    availability: str | None = None
+    specialization: str | None = Field(default=None, max_length=255)
+    availability: str | None = Field(default=None, max_length=2000)
     is_active: bool | None = None
-    password: str | None = None
+    password: str | None = Field(default=None, min_length=1, max_length=1024)
 
 
 def _to_response(user: User) -> StaffResponse:
