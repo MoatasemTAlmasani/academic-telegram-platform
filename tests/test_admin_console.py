@@ -338,3 +338,104 @@ def test_user_profile_detail_and_edit_workspace_is_permission_aware() -> None:
     assert 'api("/admin/users/"+encodeURIComponent(userId))' in script.text
     assert 'method:"PATCH"' in script.text
     assert 'has("users:update")' in script.text
+
+
+def test_user_session_api_contract_and_session_migration_head() -> None:
+    paths = app.openapi()["paths"]
+    assert "get" in paths["/api/v1/admin/users/{user_id}/sessions"]
+    assert "delete" in paths["/api/v1/admin/users/{user_id}/sessions/{session_id}"]
+    assert "post" in paths["/api/v1/admin/users/{user_id}/sessions/revoke-all"]
+
+    from database.migrations.versions import aa11bb22cc33_add_user_sessions as migration
+
+    assert migration.revision == "aa11bb22cc33"
+    assert migration.down_revision == "f4a29d806c12"
+
+
+def test_authentication_creates_persistent_session_before_issuing_token(monkeypatch) -> None:
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from backend.app.modules.authentication import authentication as auth_module
+    from backend.app.modules.authentication.authentication import AuthenticationService
+    from database.models.identity import UserSession
+
+    user = SimpleNamespace(
+        id=uuid4(),
+        status="ACTIVE",
+        deleted_at=None,
+        password_hash="stored-hash",
+    )
+
+    class FakeUsers:
+        async def get_by_username(self, username):
+            return user
+
+    class FakeSession:
+        def __init__(self):
+            self.added = []
+            self.committed = False
+
+        def add(self, item):
+            self.added.append(item)
+
+        async def commit(self):
+            self.committed = True
+
+    fake_session = FakeSession()
+
+    class FakeUnitOfWork:
+        users = FakeUsers()
+        session = fake_session
+
+    monkeypatch.setattr(auth_module, "verify_password", lambda password, password_hash: True)
+    monkeypatch.setattr(
+        auth_module,
+        "create_access_token",
+        lambda user_id, session_id: f"token:{user_id}:{session_id}",
+    )
+
+    token = asyncio.run(
+        AuthenticationService(FakeUnitOfWork()).authenticate(
+            "operator",
+            "correct-password",
+            ip_address="192.0.2.10",
+            user_agent="Test Browser",
+        )
+    )
+
+    assert token.startswith(f"token:{user.id}:")
+    assert fake_session.committed is True
+    assert len(fake_session.added) == 1
+    stored = fake_session.added[0]
+    assert isinstance(stored, UserSession)
+    assert stored.user_id == user.id
+    assert stored.ip_address == "192.0.2.10"
+    assert stored.user_agent == "Test Browser"
+    assert stored.expires_at > datetime.now(timezone.utc)
+
+
+def test_access_tokens_require_a_server_side_session_identifier(monkeypatch) -> None:
+    from uuid import uuid4
+    import jwt as jwt_library
+    from backend.app.modules.authentication import jwt as token_module
+
+    user_id = uuid4()
+    session_id = uuid4()
+    monkeypatch.setattr(token_module, "_get_secret_key", lambda: "test-secret-key")
+
+    token = token_module.create_access_token(user_id, session_id)
+    assert token_module.decode_access_token_with_session(token) == (user_id, session_id)
+
+    legacy_token = jwt_library.encode(
+        {"sub": str(user_id), "type": "access", "exp": 4102444800},
+        "test-secret-key",
+        algorithm=token_module.ALGORITHM,
+    )
+    try:
+        token_module.decode_access_token_with_session(legacy_token)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Tokens without a server-side session ID must be rejected.")
