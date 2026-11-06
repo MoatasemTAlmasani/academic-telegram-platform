@@ -61,21 +61,19 @@ This document records implementation evidence. The approved roadmap remains the 
 
 ## Database and production safety
 
-- The current increment reuses existing user, role, and audit tables.
-- No Supabase schema mutation or production migration has been applied.
+- The increment reuses existing user, role, and audit tables and adds a reviewed Alembic migration for `user_sessions`.
+- The new migration is chained after `f4a29d806c12`; it has **not** been applied to Supabase or production.
 - The live database previously showed RLS disabled on public tables and broad grants that require a deliberate access-control review. Do not enable RLS blindly or revoke grants until the deployed backend connection path, service role usage, and required policies are verified.
-- New tables/columns, if needed for sessions, identity links, reset challenges, or security events, require a reviewed Alembic migration, isolated upgrade/downgrade tests, and a documented rollback plan.
+- Future identity-link, reset-challenge, and security-event tables require reviewed Alembic migrations, isolated upgrade/downgrade tests, and documented rollback plans.
 - No production deployment is part of this increment.
 
 ## Next implementation order
 
-1. Finish and verify the current directory/account API increment.
-2. Implement account detail and editable profile workflows with safe before/after audit metadata.
-3. Design and implement a real server-side session/revocation model.
-4. Implement secure recovery/verification and account lifecycle transitions.
-5. Implement verified external identity linking.
-6. Integrate effective-access display/actions with Module 03 without duplicating RBAC ownership.
-7. Deliver bulk/import/export and preferences.
-8. Complete security review, full E2E coverage, and acceptance evidence.
+1. Complete and verify the new session migration and end-to-end revocation behavior in isolated test databases.
+2. Implement secure recovery/verification and account lifecycle transitions, including lock/expiry policies.
+3. Implement verified external identity linking.
+4. Integrate effective-access display/actions with Module 03 without duplicating RBAC ownership.
+5. Deliver bulk/import/export and preferences.
+6. Complete security review, full E2E coverage, and browser acceptance evidence.
 
 **Status remains `PARTIAL` until all applicable Module 02 acceptance criteria in the roadmap are implemented and verified.**
