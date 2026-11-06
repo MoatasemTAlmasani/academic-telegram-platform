@@ -1,6 +1,6 @@
 """Authentication API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from backend.app.api.auth_dependencies import get_current_user
@@ -10,7 +10,6 @@ from backend.app.modules.authentication.authentication import (
     AuthenticationError,
     AuthenticationService,
 )
-from backend.app.modules.authentication.jwt import create_access_token
 
 
 router = APIRouter(
@@ -39,6 +38,7 @@ class TokenResponse(BaseModel):
 )
 async def login(
     payload: LoginRequest,
+    request: Request,
     uow: UnitOfWork = Depends(get_unit_of_work),
 ) -> TokenResponse:
     """Authenticate a user and return an access token."""
@@ -48,6 +48,8 @@ async def login(
         token = await service.authenticate(
             payload.username,
             payload.password,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
         )
     except AuthenticationError as exc:
         raise HTTPException(
