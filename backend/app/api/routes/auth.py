@@ -2,26 +2,38 @@
 
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+import hmac
+import logging
 import secrets
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, or_, select, update
 from pydantic import BaseModel, Field
 
 from backend.app.api.auth_dependencies import get_current_user
+from backend.app.core.config import get_settings
 from backend.app.api.dependencies import get_unit_of_work
 from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 from backend.app.modules.authentication.passwords import hash_password, verify_password
+from backend.app.modules.authentication.jwt import _get_secret_key
+from backend.app.infrastructure.telegram.client import TelegramClient
 from database.models.audit import AuditLog
 from database.models.identity import User, UserSession
-from database.models.security import ExternalIdentity, IdentityLinkChallenge
+from database.models.security import (
+    ExternalIdentity,
+    IdentityLinkChallenge,
+    PasswordRecoveryAttempt,
+    PasswordRecoveryChallenge,
+)
 
 from backend.app.modules.authentication.authentication import (
     AuthenticationError,
     AuthenticationService,
 )
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/auth",
@@ -36,139 +48,7 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=500)
 
 
-class TokenResponse(BaseModel):
-    """JWT token response."""
-
-    access_token: str
-    token_type: str = "bearer"
-
-
-@router.post(
-    "/login",
-    response_model=TokenResponse,
-)
-async def login(
-    payload: LoginRequest,
-    request: Request,
-    uow: UnitOfWork = Depends(get_unit_of_work),
-) -> TokenResponse:
-    """Authenticate a user and return an access token."""
-    service = AuthenticationService(uow)
-
-    try:
-        token = await service.authenticate(
-            payload.username,
-            payload.password,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-        )
-    except AuthenticationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
-
-    return TokenResponse(
-        access_token=token,
-    )
-
-
-@router.get("/me")
-async def me(
-    current_user=Depends(get_current_user),
-):
-    """Return the currently authenticated user."""
-    return {
-        "id": str(current_user.id),
-        "username": current_user.username,
-        "email": current_user.email,
-    }
-
-
-class UserPreferencesRequest(BaseModel):
-    language: Literal["ar", "en"] | None = None
-    timezone: str | None = Field(default=None, min_length=1, max_length=64)
-    theme: Literal["light", "dark", "system"] | None = None
-    date_format: Literal["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"] | None = None
-    notifications_email: bool | None = None
-    notifications_telegram: bool | None = None
-
-
-@router.get("/preferences")
-async def get_my_preferences(current_user=Depends(get_current_user)):
-    return {
-        "language": current_user.language or "ar",
-        "timezone": current_user.timezone or "Asia/Aden",
-        **(current_user.preferences or {}),
-    }
-
-
-@router.patch("/preferences")
-async def update_my_preferences(
-    payload: UserPreferencesRequest,
-    current_user=Depends(get_current_user),
-    uow: UnitOfWork = Depends(get_unit_of_work),
-):
-    updates = payload.model_dump(exclude_unset=True)
-    if "language" in updates:
-        current_user.language = updates.pop("language")
-    if "timezone" in updates:
-        current_user.timezone = updates.pop("timezone")
-    preferences = dict(current_user.preferences or {})
-    preferences.update(updates)
-    current_user.preferences = preferences
-    now = datetime.now(timezone.utc)
-    uow.session.add(AuditLog(
-        actor_id=current_user.id,
-        action="user.preferences_updated",
-        resource_type="user",
-        resource_id=current_user.id,
-        description="User updated personal preferences.",
-        event_metadata={"fields": sorted(payload.model_fields_set)},
-        created_at=now,
-    ))
-    await uow.session.commit()
-    return {
-        "language": current_user.language,
-        "timezone": current_user.timezone,
-        **preferences,
-    }
-
-
-class ChangePasswordRequest(BaseModel):
-    """Authenticated password change requiring proof of the current password."""
-
-    current_password: str = Field(min_length=1, max_length=500)
-    new_password: str = Field(min_length=12, max_length=500)
-
-
-class ChangePasswordResponse(BaseModel):
-    status: str
-    revoked_sessions: int
-    reauthentication_required: bool
-
-
-@router.post(
-    "/change-password",
-    response_model=ChangePasswordResponse,
-)
-async def change_password(
-    payload: ChangePasswordRequest,
-    current_user=Depends(get_current_user),
-    uow: UnitOfWork = Depends(get_unit_of_work),
-) -> ChangePasswordResponse:
-    """Change the authenticated user's password and revoke every session."""
-    stored_hash = getattr(current_user, "password_hash", None)
-    if not stored_hash or not verify_password(payload.current_password, stored_hash):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current password is incorrect.",
-        )
-    if verify_password(payload.new_password, stored_hash):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="The new password must be different from the current password.",
+class TokenResponse(Bm���jםetail="The new password must be different from the current password.",
         )
 
     now = datetime.now(timezone.utc)
@@ -204,170 +84,57 @@ async def change_password(
     )
 
 
-class ExternalIdentityResponse(BaseModel):
-    provider: str
-    subject: str
-    display_name: str | None = None
-    linked_at: datetime
-    verified_at: datetime
+class PasswordRecoveryRequest(BaseModel):
+    """Request a recovery code without revealing whether an account exists."""
+
+    identifier: str = Field(min_length=1, max_length=320)
 
 
-class TelegramLinkChallengeResponse(BaseModel):
-    provider: Literal["telegram"] = "telegram"
-    link_code: str
-    bot_command: str
-    expires_at: datetime
+class PasswordRecoveryVerifyRequest(BaseModel):
+    """Verify a Telegram-delivered code and replace the account password."""
 
-
-@router.get(
-    "/identity-links",
-    response_model=list[ExternalIdentityResponse],
-)
-async def list_my_identity_links(
-    current_user=Depends(get_current_user),
-    uow: UnitOfWork = Depends(get_unit_of_work),
-) -> list[ExternalIdentityResponse]:
-    """List verified external identities linked to the authenticated account."""
-    result = await uow.session.execute(
-        select(ExternalIdentity)
-        .where(ExternalIdentity.user_id == current_user.id)
-        .order_by(ExternalIdentity.linked_at.desc())
+    identifier: str = Field(min_length=1, max_length=320)
+    code: str = Field(pattern=r"^[0-9]{8}$")
+    new_pam���jם     )
     )
-    return [
-        ExternalIdentityResponse(
-            provider=item.provider,
-            subject=item.subject,
-            display_name=item.display_name,
-            linked_at=item.linked_at,
-            verified_at=item.verified_at,
-        )
-        for item in result.scalars().all()
-    ]
-
-
-@router.post(
-    "/identity-links/telegram/challenge",
-    response_model=TelegramLinkChallengeResponse,
-    status_code=201,
-)
-async def create_telegram_link_challenge(
-    current_user=Depends(get_current_user),
-    uow: UnitOfWork = Depends(get_unit_of_work),
-) -> TelegramLinkChallengeResponse:
-    """Create a short-lived, single-use code to prove Telegram account ownership."""
-    locked_user_result = await uow.session.execute(
-        select(User).where(User.id == current_user.id).with_for_update()
-    )
-    locked_user = locked_user_result.scalar_one_or_none()
-    if (
-        locked_user is None
-        or locked_user.deleted_at is not None
-        or str(locked_user.status).upper() != "ACTIVE"
-    ):
-        raise HTTPException(status_code=409, detail="This account cannot link identities.")
-    if locked_user.telegram_user_id is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="A Telegram account is already linked to this profile.",
-        )
-
-    existing_identity = await uow.session.execute(
-        select(ExternalIdentity).where(
-            ExternalIdentity.user_id == current_user.id,
-            ExternalIdentity.provider == "telegram",
-        )
-    )
-    if existing_identity.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="A Telegram identity is already linked to this profile.",
-        )
-
-    now = datetime.now(timezone.utc)
-    recent_challenge = await uow.session.execute(
-        select(IdentityLinkChallenge.id).where(
-            IdentityLinkChallenge.user_id == current_user.id,
-            IdentityLinkChallenge.provider == "telegram",
-            IdentityLinkChallenge.consumed_at.is_(None),
-            IdentityLinkChallenge.expires_at > now,
-            IdentityLinkChallenge.created_at >= now - timedelta(minutes=1),
-        )
-    )
-    if recent_challenge.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=429,
-            detail="A link code was created recently. Wait before requesting another.",
-        )
+    identity = identity_result.scalar_one_or_none()
+    if identity is None:
+        await uow.session.commit()
+        return {
+            "status": "accepted",
+            "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
+        }
 
     await uow.session.execute(
-        update(IdentityLinkChallenge)
+        update(PasswordRecoveryChallenge)
         .where(
-            IdentityLinkChallenge.user_id == current_user.id,
-            IdentityLinkChallenge.provider == "telegram",
-            IdentityLinkChallenge.consumed_at.is_(None),
+            PasswordRecoveryChallenge.user_id == user.id,
+            PasswordRecoveryChallenge.consumed_at.is_(None),
         )
         .values(consumed_at=now)
     )
-    link_code = secrets.token_urlsafe(24)
-    expires_at = now + timedelta(minutes=10)
-    challenge = IdentityLinkChallenge(
-        user_id=current_user.id,
-        provider="telegram",
-        token_hash=sha256(link_code.encode("utf-8")).hexdigest(),
+    code = f"{secrets.randbelow(100_000_000):08d}"
+    challenge = PasswordRecoveryChallenge(
+        user_id=user.id,
+        token_hash=_recovery_digest("password-recovery-code", f"{user.id}:{code}"),
+        delivery_status="PENDING",
+        failed_attempts=0,
         created_at=now,
-        expires_at=expires_at,
+        expires_at=now + timedelta(minutes=10),
     )
     uow.session.add(challenge)
     await uow.session.commit()
 
-    return TelegramLinkChallengeResponse(
-        link_code=link_code,
-        bot_command=f"/link {link_code}",
-        expires_at=expires_at,
-    )
-
-
-@router.delete(
-    "/identity-links/telegram",
-    status_code=204,
-)
-async def unlink_my_telegram_identity(
-    current_user=Depends(get_current_user),
-    uow: UnitOfWork = Depends(get_unit_of_work),
-) -> None:
-    """Unlink Telegram only when a password-based sign-in remains available."""
-    from fastapi import HTTPException
-
-    if not current_user.password_hash:
-        raise HTTPException(
-            status_code=409,
-            detail="Set a password before unlinking Telegram so you do not lose account access.",
+    language = (user.language or "ar").lower()
+    if language == "en":
+        message = (
+            "Your EHTERAF password recovery code is:\n"
+            f"<code>{code}</code>\n\n"
+            "It expires in 10 minutes and can be used once. "
+            "Never share this code. If you did not request it, ignore this message."
         )
-
-    result = await uow.session.execute(
-        select(ExternalIdentity).where(
-            ExternalIdentity.user_id == current_user.id,
-            ExternalIdentity.provider == "telegram",
-        )
-    )
-    identity = result.scalar_one_or_none()
-    if identity is None:
-        raise HTTPException(status_code=404, detail="Telegram identity is not linked.")
-
-    now = datetime.now(timezone.utc)
-    await uow.session.execute(
-        delete(ExternalIdentity).where(ExternalIdentity.id == identity.id)
-    )
-    current_user.telegram_user_id = None
-    uow.session.add(
-        AuditLog(
-            actor_id=current_user.id,
-            action="user.identity_unlinked",
-            resource_type="user",
-            resource_id=current_user.id,
-            description="User unlinked their Telegram identity.",
-            event_metadata={"provider": "telegram"},
-            created_at=now,
-        )
-    )
-    await uow.session.commit()
+    else:
+        message = (
+            "رمز استعادة كلمة المرور لمنصة إحتراف هو:\n"
+            f"<code>{code}</code>\n\n"
+            "تنت٭���jם

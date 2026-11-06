@@ -23,6 +23,8 @@ from database.models.security import (
     ExternalIdentity,
     IdentityLinkChallenge,
     LoginAttempt,
+    PasswordRecoveryAttempt,
+    PasswordRecoveryChallenge,
 )
 from database.models.settings import AppSettings
 from database.models.telegram import TelegramDestination, TelegramValidationLog
@@ -44,6 +46,8 @@ __all__ = [
     "ExternalIdentity",
     "IdentityLinkChallenge",
     "LoginAttempt",
+    "PasswordRecoveryAttempt",
+    "PasswordRecoveryChallenge",
     "Permission",
     "PublishingJob",
     "PublishingLog",

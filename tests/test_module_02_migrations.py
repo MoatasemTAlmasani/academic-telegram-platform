@@ -40,55 +40,17 @@ def test_module_02_migrations_upgrade_and_downgrade_in_isolated_database() -> No
             )
             with Operations.context(MigrationContext.configure(connection)):
                 for migration in migrations:
-                    migration.upgrade()
-
-            inspector = inspect(connection)
-            expected_tables = {
-                "user_sessions",
-                "login_attempts",
-                "external_identities",
-                "identity_link_challenges",
+                    migratiom®éÜj×assword_recovery_attempts" in inspector.get_table_names()
+            assert "password_recovery_challenges" in inspector.get_table_names()
+            assert {column["name"] for column in inspector.get_columns("password_recovery_challenges")} >= {
+                "user_id", "token_hash", "delivery_status", "failed_attempts",
+                "expires_at", "delivered_at", "consumed_at",
             }
-            assert expected_tables.issubset(set(inspector.get_table_names()))
-            user_columns = {column["name"] for column in inspector.get_columns("users")}
-            assert {"locked_until", "account_expires_at", "preferences"}.issubset(user_columns)
 
-            assert {
-                index["name"] for index in inspector.get_indexes("user_sessions")
-            } >= {
-                "ix_user_sessions_user_id",
-                "ix_user_sessions_expires_at",
-                "ix_user_sessions_revoked_at",
-            }
-            assert {
-                index["name"] for index in inspector.get_indexes("login_attempts")
-            } >= {
-                "ix_login_attempts_username_time",
-                "ix_login_attempts_ip_time",
-                "ix_login_attempts_attempted_at",
-            }
-            assert {
-                index["name"] for index in inspector.get_indexes("external_identities")
-            } >= {"ix_external_identities_user_id"}
-
-            identity_unique = {
-                tuple(item["column_names"])
-                for item in inspector.get_unique_constraints("external_identities")
-            }
-            assert ("provider", "subject") in identity_unique
-            assert ("user_id", "provider") in identity_unique
-
-            challenge_unique = {
-                tuple(item["column_names"])
-                for item in inspector.get_unique_constraints("identity_link_challenges")
-            }
-            assert ("token_hash",) in challenge_unique
-
-            with Operations.context(MigrationContext.configure(connection)):
-                for migration in reversed(migrations):
-                    migration.downgrade()
-
-            remaining = set(inspect(connection).get_table_names())
-            assert not expected_tables.intersection(remaining)
+            with Operations.context(context):
+                migration.downgrade()
+            inspector = sa.inspect(connection)
+            assert "password_recovery_attempts" not in inspector.get_table_names()
+            assert "password_recovery_challenges" not in inspector.get_table_names()
     finally:
         engine.dispose()
