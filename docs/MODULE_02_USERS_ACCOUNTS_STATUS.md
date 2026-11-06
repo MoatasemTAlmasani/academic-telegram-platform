@@ -20,6 +20,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - Login and protected API requests reject inactive, suspended, or soft-deleted accounts.
 - Module 02 account creation/update cannot assign arbitrary roles. Role catalog and privileged role governance remain in Module 03; this prevents a generic user-management endpoint from becoming a privilege-escalation path.
 - Account creation and its audit record are committed together.
+- Profile update audit metadata records approved before/after fields and a boolean password-change indicator; it excludes password hashes, tokens, and credentials.
 - Safe account response schema excludes password hashes and credentials.
 
 ## Verification
