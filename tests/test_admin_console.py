@@ -124,3 +124,20 @@ def test_admin_request_update_schema_accepts_only_supported_fields() -> None:
         pass
     else:
         raise AssertionError("Unknown request fields and status values must be rejected.")
+
+
+
+def test_staff_status_schema_uses_supported_user_status_values() -> None:
+    from backend.app.api.routes.admin_staff import StaffCreateRequest, StaffUpdateRequest
+    from database.models.enums import UserStatus
+
+    payload = StaffCreateRequest(username="operator", password="strong-test-password")
+    assert payload.status is UserStatus.ACTIVE
+    assert StaffUpdateRequest(status=UserStatus.SUSPENDED).status is UserStatus.SUSPENDED
+
+    try:
+        StaffUpdateRequest(status="enabled")
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("Unknown staff account statuses must be rejected.")
