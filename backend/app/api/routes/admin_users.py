@@ -1072,6 +1072,7 @@ class AdminUsersBulkLifecycleRequest(BaseModel):
 )
 async def preview_admin_users_bulk_lifecycle(
     payload: AdminUsersBulkLifecycleRequest,
+    current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Preview a bounded bulk lifecycle request without mutating records."""
@@ -1097,12 +1098,24 @@ async def preview_admin_users_bulk_lifecycle(
             items.append({"user_id": str(user_id), "eligible": False, "reason": "not_found"})
         else:
             current = str(row.status).upper()
+            eligible = current in allowed
+            reason = None if eligible else "invalid_transition"
+            if eligible and payload.action in {"deactivate", "suspend"}:
+                if row.id == current_user.id:
+                    eligible = False
+                    reason = "cannot_change_own_access"
+                else:
+                    try:
+                        await _protect_last_active_admin(session, row.id)
+                    except HTTPException:
+                        eligible = False
+                        reason = "last_admin_protection"
             items.append({
                 "user_id": str(user_id),
                 "username": row.username,
                 "current_status": current,
-                "eligible": current in allowed,
-                "reason": None if current in allowed else "invalid_transition",
+                "eligible": eligible,
+                "reason": reason,
             })
     return {"total": len(items), "eligible": sum(item["eligible"] for item in items), "items": items}
 

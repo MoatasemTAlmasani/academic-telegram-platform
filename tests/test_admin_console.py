@@ -1021,6 +1021,18 @@ def test_users_bulk_preview_execute_and_csv_export_contracts() -> None:
         raise AssertionError("Bulk lifecycle requests must be bounded to 100 users.")
 
 
+def test_bulk_preview_checks_self_and_last_admin_protection() -> None:
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "backend" / "app" / "api" / "routes" / "admin_users.py").read_text(encoding="utf-8")
+    start = source.index("async def preview_admin_users_bulk_lifecycle")
+    end = source.index("@router.post(", start)
+    preview_source = source[start:end]
+    assert "current_user=Depends(get_current_user)" in preview_source
+    assert "cannot_change_own_access" in preview_source
+    assert "await _protect_last_active_admin(session, row.id)" in preview_source
+    assert "last_admin_protection" in preview_source
+
+
 def test_account_policy_partial_updates_can_distinguish_omitted_fields() -> None:
     from backend.app.api.routes.admin_users import AdminUserAccessPolicyRequest
     payload = AdminUserAccessPolicyRequest(reason="Clear temporary lock", locked_until=None)
