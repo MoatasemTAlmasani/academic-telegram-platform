@@ -493,6 +493,24 @@ def test_access_tokens_require_a_server_side_session_identifier(monkeypatch) -> 
         raise AssertionError("Tokens without a server-side session ID must be rejected.")
 
 
+def test_authenticated_requests_refresh_session_and_user_last_seen_at() -> None:
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "app"
+        / "api"
+        / "auth_dependencies.py"
+    ).read_text(encoding="utf-8")
+
+    assert "UserSession.last_seen_at.is_(None)" in source
+    assert "UserSession.last_seen_at < now - timedelta(minutes=5)" in source
+    assert '.values(last_seen_at=now)' in source
+    assert "update(User)" in source
+    assert "await session.commit()" in source
+
+
 def test_admin_user_details_exposes_bilingual_session_controls() -> None:
     page = asyncio.run(get("/admin"))
     assert page.status_code == 200
