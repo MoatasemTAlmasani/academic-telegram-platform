@@ -17,6 +17,7 @@ dependencies = [
 ]
 
 [dependency-groups]
+# aiosqlite supports isolated async SQLite tests; see the dev group below.
 dev = [
     "aiosqlite>=0.21.0",
     "pytest>=9.1.1",
