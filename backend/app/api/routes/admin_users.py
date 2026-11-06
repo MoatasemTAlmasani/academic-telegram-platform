@@ -20,6 +20,7 @@ from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.permissions import Permission
 from database.models.identity import Role, User, UserSession
 from database.models.audit import AuditLog
+from database.models.security import ExternalIdentity
 from backend.app.modules.authentication.jwt import decode_access_token_with_session
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -756,6 +757,54 @@ async def delete_admin_user(
 
     session.add(audit_log)
     await session.commit()
+
+
+class AdminUserExternalIdentityResponse(BaseModel):
+    """Verified external identity linked to an account."""
+
+    id: UUID
+    provider: str
+    subject: str
+    display_name: str | None = None
+    linked_at: datetime
+    verified_at: datetime
+
+
+@router.get(
+    "/{user_id}/identities",
+    response_model=list[AdminUserExternalIdentityResponse],
+    dependencies=[Depends(require_permission(Permission.USERS_READ))],
+)
+async def list_admin_user_identities(
+    user_id: UUID,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[AdminUserExternalIdentityResponse]:
+    """List verified external identities without exposing challenge tokens."""
+    from fastapi import HTTPException
+
+    user_result = await session.execute(
+        select(User.id).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    if user_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    result = await session.execute(
+        select(ExternalIdentity)
+        .where(ExternalIdentity.user_id == user_id)
+        .order_by(ExternalIdentity.linked_at.desc())
+    )
+    return [
+        AdminUserExternalIdentityResponse(
+            id=item.id,
+            provider=item.provider,
+            subject=item.subject,
+            display_name=item.display_name,
+            linked_at=item.linked_at,
+            verified_at=item.verified_at,
+        )
+        for item in result.scalars().all()
+    ]
 
 
 class AdminUserSessionResponse(BaseModel):
