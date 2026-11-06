@@ -32,7 +32,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - Generic profile PATCH can no longer change account status; status changes must use the reasoned lifecycle endpoint.
 - Account archival requires a meaningful reason, records it in the audit log, preserves linked business records, and revokes all sessions. The UI exposes the archive action only with the delete permission.
 - Authenticated users can change their own password only after supplying the current password; new passwords require at least 12 characters, password changes are audited without credential data, and all active sessions are revoked to require reauthentication.
-- Login attempts are stored using a SHA-256 username key rather than raw usernames. Database-backed rolling-window throttling rejects further attempts after 5 failures for a username/IP pair, 10 for a username across IPs, or 20 from one IP within 15 minutes; failed and successful attempts are recorded.
+- Login attempts are stored using a SHA-256 username key rather than raw usernames. Database-backed rolling-window throttling rejects further attempts after 5 failures for a username/IP pair or 10 for a username across IPs within 15 minutes; failed and successful attempts are recorded.
 
 ## Verification
 
@@ -68,7 +68,7 @@ This document records implementation evidence. The approved roadmap remains the 
 ## Database and production safety
 
 - The increment reuses existing user, role, and audit tables and adds reviewed Alembic migrations for `user_sessions` and `login_attempts`.
-- The migrations are chained after `f4a29d806c12` (`aa11bb22cc33`, then `bb22cc33dd44`); neither has **not** been applied to Supabase or production.
+- The migrations are chained after `f4a29d806c12` (`aa11bb22cc33`, then `bb22cc33dd44`); neither has been applied to Supabase or production.
 - The live database previously showed RLS disabled on public tables and broad grants that require a deliberate access-control review. Do not enable RLS blindly or revoke grants until the deployed backend connection path, service role usage, and required policies are verified.
 - Future identity-link, reset-challenge, and security-event tables require reviewed Alembic migrations, isolated upgrade/downgrade tests, and documented rollback plans.
 - No production deployment is part of this increment.
