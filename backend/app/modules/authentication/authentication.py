@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from database.models.identity import User
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
+from database.models.identity import User, UserSession
 
 from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 
-from .jwt import create_access_token
+from .jwt import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
 from .passwords import verify_password
 
 
@@ -24,6 +27,8 @@ class AuthenticationService:
         self,
         username: str,
         password: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> str:
         """Authenticate by username and return an access token."""
         user = await self.uow.users.get_by_username(username)
@@ -53,4 +58,17 @@ class AuthenticationService:
                 "Invalid username or password."
             )
 
-        return create_access_token(user.id)
+        now = datetime.now(timezone.utc)
+        session_id = uuid4()
+        session = UserSession(
+            id=session_id,
+            user_id=user.id,
+            created_at=now,
+            expires_at=now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+            ip_address=ip_address,
+            user_agent=(user_agent[:500] if user_agent else None),
+        )
+        self.uow.session.add(session)
+        await self.uow.session.commit()
+
+        return create_access_token(user.id, session_id)
