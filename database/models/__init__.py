@@ -11,6 +11,7 @@ from database.models.identity import (
     Role,
     StaffProfile,
     User,
+    UserSession,
     role_permissions,
     user_roles,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "TelegramProcessedUpdate",
     "TelegramValidationLog",
     "User",
+    "UserSession",
     "campaign_destinations",
     "role_permissions",
     "user_roles",
