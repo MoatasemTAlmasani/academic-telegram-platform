@@ -817,3 +817,57 @@ def test_telegram_bot_consumes_one_time_challenge_without_account_merging(monkey
     assert fake_session.committed is True
     assert any(isinstance(item, ExternalIdentity) for item in fake_session.added)
     assert any(isinstance(item, AuditLog) for item in fake_session.added)
+
+
+def test_last_active_admin_is_protected_from_deactivation_and_archive() -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from fastapi import HTTPException
+    from backend.app.api.routes.admin_users import _protect_last_active_admin
+
+    class Result:
+        def __init__(self, value):
+            self.value = value
+
+        def scalar_one_or_none(self):
+            return self.value
+
+        def scalar_one(self):
+            return self.value
+
+    class FakeSession:
+        def __init__(self, active_admin_count):
+            self.results = [Result(uuid4()), Result(SimpleNamespace(name="admin")), Result(active_admin_count)]
+
+        async def execute(self, statement):
+            return self.results.pop(0)
+
+    async def run():
+        try:
+            await _protect_last_active_admin(FakeSession(1), uuid4())
+        except HTTPException as exc:
+            assert exc.status_code == 409
+            assert "last active administrator" in exc.detail.lower()
+        else:
+            raise AssertionError("The last active admin must be protected.")
+
+        await _protect_last_active_admin(FakeSession(2), uuid4())
+
+    asyncio.run(run())
+
+
+def test_last_admin_protection_is_used_for_lifecycle_and_archive() -> None:
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "backend"
+        / "app"
+        / "api"
+        / "routes"
+        / "admin_users.py"
+    ).read_text(encoding="utf-8")
+
+    assert source.count("await _protect_last_active_admin(session, user.id)") == 2
+    assert 'User.roles.any(Role.name == "admin")' in source
