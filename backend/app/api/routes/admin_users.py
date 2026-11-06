@@ -956,29 +956,8 @@ class AdminUserActivityResponse(BaseModel):
     limit: int
 
 
-@router.get(
-    "/{user_id}/activity",
-    response_model=AdminUserActivityResponse,
-    dependencies=[
-        Depends(require_permission(Permission.USERS_READ)),
-        Depends(require_permission(Permission.AUDIT_READ)),
-    ],
-)
-async def list_admin_user_activity(
-    user_id: UUID,
-    offset: int = Query(default=0, ge=0, le=1000000),
-    limit: int = Query(default=20, ge=1, le=50),
-    session: AsyncSession = Depends(get_session),
-) -> AdminUserActivityResponse:
-    """Return a paginated timeline combining account audit events and sign-in events."""
-    from fastapi import HTTPException
-
-    user_result = await session.execute(
-        select(User.id).where(User.id == user_id, User.deleted_at.is_(None))
-    )
-    if user_result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="User not found.")
-
+def _build_user_activity_timeline(user_id: UUID):
+    """Build a normalized, secret-free union of account audit and login events."""
     audit_events = select(
         AuditLog.id.label("event_id"),
         AuditLog.created_at.label("occurred_at"),
@@ -1006,13 +985,50 @@ async def list_admin_user_activity(
         LoginAttempt.user_id.label("actor_id"),
         literal("authentication").label("resource_type"),
     ).where(LoginAttempt.user_id == user_id)
+    return union_all(audit_events, login_events).subquery()
 
-    timeline = union_all(audit_events, login_events).subquery()
-    total_result = await session.execute(select(func.count()).select_from(timeline))
+
+def _filter_user_activity_query(timeline, source: str, event_type: str | None):
+    """Apply allowlisted source and exact event filters to a timeline query."""
+    query = select(timeline)
+    if source != "all":
+        query = query.where(timeline.c.source == source)
+    if event_type:
+        query = query.where(timeline.c.event_type == event_type)
+    return query
+
+
+@router.get(
+    "/{user_id}/activity",
+    response_model=AdminUserActivityResponse,
+    dependencies=[
+        Depends(require_permission(Permission.USERS_READ)),
+        Depends(require_permission(Permission.AUDIT_READ)),
+    ],
+)
+async def list_admin_user_activity(
+    user_id: UUID,
+    offset: int = Query(default=0, ge=0, le=1000000),
+    limit: int = Query(default=20, ge=1, le=50),
+    source: Literal["all", "audit", "security"] = Query(default="all"),
+    event_type: str | None = Query(default=None, min_length=1, max_length=100),
+    session: AsyncSession = Depends(get_session),
+) -> AdminUserActivityResponse:
+    """Return a filtered, paginated timeline combining audit and sign-in events."""
+    user_result = await session.execute(
+        select(User.id).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    if user_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    timeline = _build_user_activity_timeline(user_id)
+    query = _filter_user_activity_query(timeline, source, event_type)
+    total_result = await session.execute(
+        select(func.count()).select_from(query.subquery())
+    )
     total = total_result.scalar_one()
     result = await session.execute(
-        select(timeline)
-        .order_by(timeline.c.occurred_at.desc(), timeline.c.event_id.desc())
+        query.order_by(timeline.c.occurred_at.desc(), timeline.c.event_id.desc())
         .offset(offset)
         .limit(limit)
     )
@@ -1029,6 +1045,47 @@ async def list_admin_user_activity(
         for row in result.all()
     ]
     return AdminUserActivityResponse(items=items, total=total, offset=offset, limit=limit)
+
+
+@router.get(
+    "/{user_id}/activity.csv",
+    dependencies=[
+        Depends(require_permission(Permission.USERS_READ)),
+        Depends(require_permission(Permission.AUDIT_READ)),
+    ],
+)
+async def export_admin_user_activity_csv(
+    user_id: UUID,
+    source: Literal["all", "audit", "security"] = Query(default="all"),
+    event_type: str | None = Query(default=None, min_length=1, max_length=100),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Export a bounded, filtered account timeline without IPs or raw metadata."""
+    user_result = await session.execute(
+        select(User.id).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    if user_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    timeline = _build_user_activity_timeline(user_id)
+    query = _filter_user_activity_query(timeline, source, event_type)
+    result = await session.execute(
+        query.order_by(timeline.c.occurred_at.desc(), timeline.c.event_id.desc())
+        .limit(5000)
+    )
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["event_id", "occurred_at", "event_type", "source", "actor_id", "resource_type", "description"])
+    for row in result.all():
+        writer.writerow([
+            row.event_id, row.occurred_at, row.event_type, row.source,
+            row.actor_id, row.resource_type, row.description,
+        ])
+    return Response(
+        content="\\ufeff" + output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="user-{user_id}-activity.csv"'},
+    )
 
 
 class AdminUserExternalIdentityResponse(BaseModel):

@@ -1083,6 +1083,62 @@ def test_admin_user_activity_timeline_merges_and_paginates_sqlite() -> None:
         assert earlier.items[0].description == "Profile updated"
 
 
+def test_admin_user_activity_filters_and_csv_export_are_bounded() -> None:
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from database.models.base import Base
+    from database.models.identity import User
+    from database.models.audit import AuditLog
+    from database.models.security import LoginAttempt
+    from backend.app.api.routes.admin_users import (
+        export_admin_user_activity_csv,
+        list_admin_user_activity,
+    )
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine, tables=[User.__table__, AuditLog.__table__, LoginAttempt.__table__])
+    user_id = uuid4()
+    now = datetime.now(timezone.utc)
+    with Session(engine) as sync:
+        sync.add(User(id=user_id, username="timeline-filter-test", status="ACTIVE"))
+        sync.flush()
+        sync.add(AuditLog(
+            actor_id=user_id, action="user.profile_updated", resource_type="user",
+            resource_id=user_id, description="Profile updated", created_at=now - timedelta(minutes=5),
+        ))
+        sync.add(LoginAttempt(
+            username_key="timeline-hmac", user_id=user_id, succeeded=False, attempted_at=now,
+        ))
+        sync.commit()
+
+        class AsyncSessionShim:
+            async def execute(self, statement):
+                return sync.execute(statement)
+
+        security = asyncio.run(list_admin_user_activity(
+            user_id=user_id, offset=0, limit=20, source="security", session=AsyncSessionShim()
+        ))
+        assert security.total == 1
+        assert security.items[0].event_type == "auth.login_failed"
+
+        audit = asyncio.run(list_admin_user_activity(
+            user_id=user_id, offset=0, limit=20, source="audit",
+            event_type="user.profile_updated", session=AsyncSessionShim()
+        ))
+        assert audit.total == 1
+        assert audit.items[0].description == "Profile updated"
+
+        exported = asyncio.run(export_admin_user_activity_csv(
+            user_id=user_id, source="security", event_type="auth.login_failed",
+            session=AsyncSessionShim(),
+        ))
+        assert exported.media_type == "text/csv"
+        assert "auth.login_failed" in exported.body.decode("utf-8-sig")
+        assert "timeline-hmac" not in exported.body.decode("utf-8-sig")
+        assert "ip_address" not in exported.body.decode("utf-8-sig")
+
+
 def test_admin_user_activity_timeline_is_paginated_and_permission_gated() -> None:
     operation = app.openapi()["paths"]["/api/v1/admin/users/{user_id}/activity"]["get"]
     parameters = {item["name"]: item for item in operation["parameters"]}
