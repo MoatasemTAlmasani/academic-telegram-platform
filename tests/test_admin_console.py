@@ -346,8 +346,20 @@ def test_user_session_api_contract_and_session_migration_head() -> None:
     assert "delete" in paths["/api/v1/admin/users/{user_id}/sessions/{session_id}"]
     assert "post" in paths["/api/v1/admin/users/{user_id}/sessions/revoke-all"]
 
-    from database.migrations.versions import aa11bb22cc33_add_user_sessions as migration
+    from importlib.util import module_from_spec, spec_from_file_location
+    from pathlib import Path
 
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "database"
+        / "migrations"
+        / "versions"
+        / "aa11bb22cc33_add_user_sessions.py"
+    )
+    spec = spec_from_file_location("user_sessions_migration", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
     assert migration.revision == "aa11bb22cc33"
     assert migration.down_revision == "f4a29d806c12"
 
