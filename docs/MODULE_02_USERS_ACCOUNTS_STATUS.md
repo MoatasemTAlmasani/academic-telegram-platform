@@ -29,6 +29,7 @@ This document records implementation evidence. The approved roadmap remains the 
 - Administrators can inspect the latest 100 sessions, revoke one session, or revoke all active sessions. Revocations are audited; account deactivation/suspension and archival revoke sessions in the same transaction.
 - Administrators can inspect verified external identities linked to an account; the view excludes challenge tokens and is read-only. Self-service Telegram linking uses a short-lived, single-use challenge in the authentication API.
 - Administrators can inspect the latest 50 account-linked login attempts with timestamp, outcome, and IP address; the endpoint never exposes username hashes or credentials.
+- Users with `audit:read` can inspect the latest 100 redacted audit events related to the account or performed by it. The endpoint deliberately omits arbitrary metadata, tokens, and credential fields.
 - The current administrator session is identified in the session list and preserved by revoke-all when an administrator operates on their own account.
 - Account lifecycle transitions (activate, reactivate, deactivate, suspend) require a reason, enforce allowed state transitions, and write before/after status plus the reason to the audit log. Deactivation and suspension revoke all active sessions in the same transaction; self-deactivation and self-suspension are blocked.
 - Deactivation, suspension, and archival protect the last active account assigned the existing `admin` role. The guard locks the admin role row before counting active administrators to serialize concurrent transitions on databases supporting row locks.
@@ -47,19 +48,19 @@ This document records implementation evidence. The approved roadmap remains the 
 - New tests cover:
   - bounded pagination and credential-free response contracts,
   - safe audit snapshots,
-  - bilingual user/customer directories, account creation, profile editing, session controls, lifecycle/archive forms, linked-identity and login-history panels,
+  - bilingual user/customer directories, account creation, profile editing, session controls, lifecycle/archive forms, linked-identity, login-history, and permission-gated audit-history panels,
   - persistent session creation, session-bound JWTs, lifecycle API contracts, password-change validation, and last-active-admin protection.
 - Python tests passed on commit `6c3b709d04eeca079da30e17464e8d572fca242b` (run 42271376772).
 - Phase 01 verification passed on the same commit (run 42271376792).
 - Python tests passed on commit `5c03071a3e9e906841ceb02e424f298511999021` (run 42281708050).
 - Phase 01 verification passed on the same commit (run 42281707996).
-- These runs include the current functional changes: sessions, lifecycle, last-admin guard, verified identity view, and login-attempt history.
+- The current increment adds permission-gated account audit history after those runs; its CI checks are pending and will be recorded after completion.
 - These results verify the automated checks for this increment; they do not verify browser/device acceptance or complete Module 02.
 - No browser/device acceptance has been claimed.
 
 ## Not yet implemented — remains in Module 02 scope
 
-1. Complete profile workspace tabs, a user activity timeline distinct from the audit log, and user preferences.
+1. Complete profile workspace tabs, a user activity timeline distinct from the audit log, and user preferences. Account-specific audit history is implemented.
 2. Extend lifecycle policy with lock/unlock, expiry, and deletion-request states; last-active-admin protection for current deactivate/suspend/archive actions is implemented.
 3. Password reset/recovery for accounts that cannot authenticate, email/phone verification, and recovery rate limiting.
 4. Additional identity providers, broader identity-link recovery, and end-to-end verification of Telegram linking/unlinking.
