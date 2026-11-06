@@ -406,7 +406,6 @@ async def update_admin_user(
     """Update a platform user from the admin dashboard."""
 
     from fastapi import HTTPException
-    from backend.app.modules.authentication.passwords import hash_password
 
     result = await session.execute(
         select(User)
@@ -471,9 +470,6 @@ async def update_admin_user(
             )
 
         user.email = normalized_email
-
-    if payload.password is not None:
-        user.password_hash = hash_password(payload.password)
 
     if "first_name" in payload.model_fields_set:
         user.first_name = payload.first_name.strip() or None if payload.first_name else None
@@ -576,6 +572,9 @@ async def transition_admin_user_lifecycle(
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found.")
+
+    if len(payload.reason.strip()) < 5:
+        raise HTTPException(status_code=422, detail="A meaningful lifecycle reason is required.")
 
     previous_status = str(user.status).upper()
     transitions = {
