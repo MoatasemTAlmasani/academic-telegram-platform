@@ -533,18 +533,21 @@ async def delete_admin_user(
             detail="You cannot delete your own account.",
         )
 
-    deleted_username = user.username
+    archived_username = user.username
+
+    # Preserve business references and audit history using the existing soft-delete marker.
+    user.status = "INACTIVE"
+    user.deleted_at = datetime.now(timezone.utc)
 
     audit_log = AuditLog(
         actor_id=current_user.id,
-        action="user.deleted",
+        action="user.archived",
         resource_type="user",
         resource_id=user.id,
-        description=f"Admin deleted user '{deleted_username}'.",
-        event_metadata={"user_id": str(user.id)},
+        description=f"Admin archived user '{archived_username}'.",
+        event_metadata={"user_id": str(user.id), "status": "INACTIVE"},
         created_at=datetime.now(timezone.utc),
     )
 
     session.add(audit_log)
-    await session.delete(user)
     await session.commit()
