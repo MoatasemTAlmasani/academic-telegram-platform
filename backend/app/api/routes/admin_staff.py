@@ -56,17 +56,17 @@ class StaffListResponse(BaseModel):
 class StaffCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    username: str = Field(min_length=1, max_length=80)
+    username: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=1024)
     email: str | None = Field(default=None, max_length=320)
-    first_name: str | None = Field(default=None, max_length=120)
-    last_name: str | None = Field(default=None, max_length=120)
-    phone: str | None = Field(default=None, max_length=40)
+    first_name: str | None = Field(default=None, max_length=255)
+    last_name: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=32)
     language: str | None = Field(default=None, max_length=16)
     timezone: str | None = Field(default=None, max_length=64)
     status: UserStatus = UserStatus.ACTIVE
     specialization: str | None = Field(default=None, max_length=255)
-    availability: str | None = Field(default=None, max_length=2000)
+    availability: str | None = Field(default=None, max_length=255)
     is_active: bool = True
 
 
