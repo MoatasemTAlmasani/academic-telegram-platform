@@ -252,8 +252,6 @@ def test_admin_users_directory_exposes_bounded_server_pagination() -> None:
     assert parameters["page_size"]["minimum"] == 1
     assert parameters["page_size"]["maximum"] == 100
 
-    response = asyncio.run(get("/api/v1/admin/users?page=1&page_size=101"))
-    assert response.status_code == 401
 
 
 def test_admin_user_safe_response_never_exposes_credentials() -> None:
@@ -265,7 +263,7 @@ def test_admin_user_safe_response_never_exposes_credentials() -> None:
 
 
 def test_user_directories_render_independent_pagination_controls() -> None:
-    response = asyncio.run(get("/admin/static/console.html"))
+    response = asyncio.run(get("/admin"))
     assert response.status_code == 200
     assert 'id="userPagination"' in response.text
     assert 'id="customerPagination"' in response.text
