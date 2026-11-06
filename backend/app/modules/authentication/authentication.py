@@ -33,6 +33,16 @@ class AuthenticationService:
                 "Invalid username or password."
             )
 
+        # Disabled, suspended, locked, expired, or soft-deleted accounts
+        # must never receive a fresh access token.
+        if (
+            str(user.status).upper() != "ACTIVE"
+            or getattr(user, "deleted_at", None) is not None
+        ):
+            raise AuthenticationError(
+                "Invalid username or password."
+            )
+
         password_hash = getattr(user, "password_hash", None)
 
         if not password_hash or not verify_password(
