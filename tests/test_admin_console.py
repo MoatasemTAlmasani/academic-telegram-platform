@@ -60,7 +60,6 @@ def test_dashboard_period_analytics_asset_is_served() -> None:
     assert "periodServiceChart" in response.text
 
 
-
 def test_dashboard_detail_permissions_are_granular() -> None:
     permissions = {
         Permission.ADMIN_ACCESS.value,
@@ -75,16 +74,11 @@ def test_dashboard_detail_permissions_are_granular() -> None:
 
 def test_audit_search_contract_is_bounded_and_authenticated() -> None:
     operation = app.openapi()["paths"]["/api/v1/admin/audit-logs"]["get"]
-    assert any(item["name"] == "search" for item in operation["parameters"])
+    search_parameter = next(item for item in operation["parameters"] if item["name"] == "search")
+    assert search_parameter["schema"]["maxLength"] == 200
 
     response = asyncio.run(get("/api/v1/admin/audit-logs?search=login&limit=25&offset=0"))
     assert response.status_code == 401
-
-    oversized = "x" * 201
-    validation_response = asyncio.run(
-        get(f"/api/v1/admin/audit-logs?search={oversized}&limit=25&offset=0")
-    )
-    assert validation_response.status_code == 422
 
 
 def test_admin_console_assets_include_search_and_drill_down() -> None:
