@@ -24,6 +24,7 @@ def test_admin_console_entrypoint_is_served() -> None:
     assert 'id="auditSearch"' in response.text
     assert 'id="auditPrev"' in response.text
     assert 'id="auditNext"' in response.text
+    assert 'id="dashboardQuickActions"' in response.text
     assert "loginForm" in response.text
 
 
@@ -58,6 +59,7 @@ def test_dashboard_period_analytics_asset_is_served() -> None:
     assert "refreshDashboardPeriodAnalytics" in response.text
     assert "bindGlobalSearch" in response.text
     assert "data-metric-page" in response.text
+    assert "renderDashboardQuickActions" in response.text
     assert 'has("requests:read")' in response.text
     assert "periodServiceChart" in response.text
 
