@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import case, func, literal, or_, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -933,6 +933,102 @@ async def list_admin_user_login_attempts(
         )
         for item in result.scalars().all()
     ]
+
+
+class AdminUserActivityEventResponse(BaseModel):
+    """Safe, normalized event in a user's chronological activity timeline."""
+
+    event_id: UUID
+    occurred_at: datetime
+    event_type: str
+    source: Literal["audit", "security"]
+    actor_id: UUID | None = None
+    resource_type: str | None = None
+    description: str | None = None
+
+
+class AdminUserActivityResponse(BaseModel):
+    """Paginated user activity timeline response."""
+
+    items: list[AdminUserActivityEventResponse]
+    total: int
+    offset: int
+    limit: int
+
+
+@router.get(
+    "/{user_id}/activity",
+    response_model=AdminUserActivityResponse,
+    dependencies=[
+        Depends(require_permission(Permission.USERS_READ)),
+        Depends(require_permission(Permission.AUDIT_READ)),
+    ],
+)
+async def list_admin_user_activity(
+    user_id: UUID,
+    offset: int = Query(default=0, ge=0, le=1000000),
+    limit: int = Query(default=20, ge=1, le=50),
+    session: AsyncSession = Depends(get_session),
+) -> AdminUserActivityResponse:
+    """Return a paginated timeline combining account audit events and sign-in events."""
+    from fastapi import HTTPException
+
+    user_result = await session.execute(
+        select(User.id).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    if user_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    audit_events = select(
+        AuditLog.id.label("event_id"),
+        AuditLog.created_at.label("occurred_at"),
+        AuditLog.action.label("event_type"),
+        AuditLog.description.label("description"),
+        literal("audit").label("source"),
+        AuditLog.actor_id.label("actor_id"),
+        AuditLog.resource_type.label("resource_type"),
+    ).where(
+        AuditLog.resource_type == "user",
+        AuditLog.resource_id == user_id,
+    )
+    login_events = select(
+        LoginAttempt.id.label("event_id"),
+        LoginAttempt.attempted_at.label("occurred_at"),
+        case(
+            (LoginAttempt.succeeded.is_(True), "auth.login_succeeded"),
+            else_="auth.login_failed",
+        ).label("event_type"),
+        case(
+            (LoginAttempt.succeeded.is_(True), "Successful sign-in"),
+            else_="Failed sign-in",
+        ).label("description"),
+        literal("security").label("source"),
+        LoginAttempt.user_id.label("actor_id"),
+        literal("authentication").label("resource_type"),
+    ).where(LoginAttempt.user_id == user_id)
+
+    timeline = union_all(audit_events, login_events).subquery()
+    total_result = await session.execute(select(func.count()).select_from(timeline))
+    total = total_result.scalar_one()
+    result = await session.execute(
+        select(timeline)
+        .order_by(timeline.c.occurred_at.desc(), timeline.c.event_id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    items = [
+        AdminUserActivityEventResponse(
+            event_id=row.event_id,
+            occurred_at=row.occurred_at,
+            event_type=row.event_type,
+            source=row.source,
+            actor_id=row.actor_id,
+            resource_type=row.resource_type,
+            description=row.description,
+        )
+        for row in result.all()
+    ]
+    return AdminUserActivityResponse(items=items, total=total, offset=offset, limit=limit)
 
 
 class AdminUserExternalIdentityResponse(BaseModel):

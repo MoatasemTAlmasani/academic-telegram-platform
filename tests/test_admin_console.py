@@ -1033,6 +1033,20 @@ def test_bulk_preview_checks_self_and_last_admin_protection() -> None:
     assert "last_admin_protection" in preview_source
 
 
+def test_admin_user_activity_timeline_is_paginated_and_permission_gated() -> None:
+    operation = app.openapi()["paths"]["/api/v1/admin/users/{user_id}/activity"]["get"]
+    parameters = {item["name"]: item for item in operation["parameters"]}
+    assert parameters["offset"]["schema"]["minimum"] == 0
+    assert parameters["limit"]["schema"]["minimum"] == 1
+    assert parameters["limit"]["schema"]["maximum"] == 50
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "backend" / "app" / "api" / "routes" / "admin_users.py").read_text(encoding="utf-8")
+    assert 'Depends(require_permission(Permission.USERS_READ))' in source
+    assert 'Depends(require_permission(Permission.AUDIT_READ))' in source
+    assert 'LoginAttempt.user_id == user_id' in source
+    assert 'AuditLog.resource_id == user_id' in source
+
+
 def test_account_policy_partial_updates_can_distinguish_omitted_fields() -> None:
     from backend.app.api.routes.admin_users import AdminUserAccessPolicyRequest
     payload = AdminUserAccessPolicyRequest(reason="Clear temporary lock", locked_until=None)
@@ -1049,6 +1063,8 @@ def test_admin_user_workspace_exposes_personal_preferences_access_policy_and_exp
     assert 'id="userAccessPolicyForm"' in page
     assert 'id="exportUsersCsv"' in page
     assert 'id="bulkUsersPanel"' in page
+    assert 'id="userActivityPanel"' in page
+    assert '/activity?offset=' in script
     assert 'id="selectAllUsersPage"' in page
     assert 'id="previewBulkUsers"' in page
     assert 'id="applyBulkUsers"' in page
