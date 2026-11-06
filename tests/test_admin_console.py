@@ -84,3 +84,11 @@ def test_audit_search_contract_is_bounded_and_authenticated() -> None:
 
     response = asyncio.run(get("/api/v1/admin/audit-logs?search=login&limit=25&offset=0"))
     assert response.status_code == 401
+
+
+def test_admin_console_assets_include_search_and_drill_down() -> None:
+    response = asyncio.run(get("/admin/static/console.js"))
+    assert response.status_code == 200
+    assert "bindGlobalSearch" in response.text
+    assert 'has("requests:read")' in response.text
+    assert "data-metric-page" in response.text
