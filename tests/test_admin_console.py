@@ -479,7 +479,7 @@ def test_account_deactivation_and_archival_revoke_sessions_in_transaction() -> N
         / "admin_users.py"
     ).read_text(encoding="utf-8")
 
-    assert 'revoked_reason="account_status_changed"' in source
+    assert 'revoked_reason=f"account_{payload.action}"' in source
     assert 'revoked_reason="account_archived"' in source
     assert "UserSession.revoked_at.is_(None)" in source
 
