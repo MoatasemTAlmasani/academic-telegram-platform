@@ -713,3 +713,83 @@ def test_external_identity_migration_follows_login_attempt_migration() -> None:
     spec.loader.exec_module(migration)
     assert migration.revision == "cc33dd44ee55"
     assert migration.down_revision == "bb22cc33dd44"
+
+
+def test_telegram_bot_consumes_one_time_challenge_without_account_merging(monkeypatch) -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from backend.app.infrastructure.telegram import bot_runner as bot_module
+    from database.models.audit import AuditLog
+    from database.models.security import ExternalIdentity
+
+    user_id = uuid4()
+    telegram_id = 99887766
+    challenge = SimpleNamespace(user_id=user_id, consumed_at=None)
+    user = SimpleNamespace(
+        id=user_id,
+        deleted_at=None,
+        status="ACTIVE",
+        telegram_user_id=None,
+        username="web-user",
+    )
+
+    class FakeResult:
+        def __init__(self, value):
+            self.value = value
+
+        def scalar_one_or_none(self):
+            return self.value
+
+    class FakeSession:
+        def __init__(self):
+            self.calls = 0
+            self.added = []
+            self.committed = False
+
+        async def execute(self, statement):
+            self.calls += 1
+            return FakeResult(
+                {
+                    1: challenge,
+                    2: user,
+                    3: None,
+                    4: None,
+                }[self.calls]
+            )
+
+        def add(self, item):
+            self.added.append(item)
+
+        async def commit(self):
+            self.committed = True
+
+    fake_session = FakeSession()
+
+    class FakeSessionContext:
+        async def __aenter__(self):
+            return fake_session
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+    monkeypatch.setattr(bot_module, "SessionLocal", lambda: FakeSessionContext())
+    runner = bot_module.TelegramBotRunner.__new__(bot_module.TelegramBotRunner)
+
+    result = asyncio.run(
+        runner._complete_telegram_identity_link(
+            "A" * 32,
+            {
+                "id": telegram_id,
+                "first_name": "Telegram",
+                "last_name": "Member",
+            },
+        )
+    )
+
+    assert "تم ربط" in result
+    assert user.telegram_user_id == telegram_id
+    assert challenge.consumed_at is not None
+    assert fake_session.committed is True
+    assert any(isinstance(item, ExternalIdentity) for item in fake_session.added)
+    assert any(isinstance(item, AuditLog) for item in fake_session.added)
