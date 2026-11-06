@@ -2,6 +2,7 @@
 
 import asyncio
 import httpx
+from uuid import uuid4
 
 from backend.app.main import app
 from backend.app.api.routes.admin_dashboard import has_dashboard_permission
@@ -141,3 +142,51 @@ def test_staff_status_schema_uses_supported_user_status_values() -> None:
         pass
     else:
         raise AssertionError("Unknown staff account statuses must be rejected.")
+
+
+
+def test_admin_service_schemas_reject_unknown_fields_and_invalid_bounds() -> None:
+    from backend.app.api.routes.admin_services import ServiceCreateRequest, ServiceUpdateRequest
+
+    valid = ServiceCreateRequest(category_id=uuid4(), name="Academic consultation")
+    assert valid.is_active is True
+
+    try:
+        ServiceCreateRequest(category_id=uuid4(), name="", unexpected=True)
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("Service names and unknown fields must be validated.")
+
+    try:
+        ServiceUpdateRequest(sort_order=-1)
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("Service sort order cannot be negative.")
+
+
+def test_staff_schemas_reject_unknown_fields_and_empty_credentials() -> None:
+    from backend.app.api.routes.admin_staff import StaffCreateRequest, StaffUpdateRequest
+
+    valid = StaffCreateRequest(username="operator", password="test-password")
+    assert valid.username == "operator"
+
+    for payload in (
+        {"username": "", "password": "test-password"},
+        {"username": "operator", "password": ""},
+        {"username": "operator", "password": "test-password", "is_superuser": True},
+    ):
+        try:
+            StaffCreateRequest(**payload)
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError("Invalid staff credentials or unknown privilege fields must be rejected.")
+
+    try:
+        StaffUpdateRequest(is_admin=True)
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("Staff updates must reject unknown privilege fields.")
