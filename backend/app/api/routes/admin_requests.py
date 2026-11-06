@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -22,6 +22,8 @@ from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.permissions import Permission
 from database.models.enums import RequestPriority, ServiceRequestStatus
 from database.models.audit import AuditLog
+from database.models.catalog import Service
+from database.models.identity import User
 from database.models.requests import ServiceRequest
 
 
@@ -50,6 +52,16 @@ class RequestListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+
+class AdminRequestCreate(BaseModel):
+    customer_id: UUID
+    service_id: UUID
+    title: str = Field(min_length=1, max_length=300)
+    description: str | None = None
+    specialization: str | None = Field(default=None, max_length=255)
+    priority: RequestPriority = RequestPriority.NORMAL
 
 
 @router.get(
@@ -316,6 +328,62 @@ async def update_admin_request(
         "status": request.status.value if hasattr(request.status, "value") else str(request.status),
         "priority": request.priority.value if hasattr(request.priority, "value") else str(request.priority),
         "notes": request.notes,
+    }
+
+
+
+@router.post(
+    "",
+    status_code=201,
+    dependencies=[Depends(require_permission(Permission.REQUESTS_CREATE))],
+)
+async def create_admin_request(
+    payload: AdminRequestCreate,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    customer = await session.scalar(
+        select(User).where(User.id == payload.customer_id, User.deleted_at.is_(None))
+    )
+    if customer is None:
+        raise HTTPException(status_code=404, detail="Customer not found.")
+    service = await session.scalar(
+        select(Service).where(Service.id == payload.service_id, Service.deleted_at.is_(None))
+    )
+    if service is None or not service.is_active:
+        raise HTTPException(status_code=422, detail="An active service is required.")
+    request = ServiceRequest(
+        customer_id=customer.id,
+        service_id=service.id,
+        title=payload.title.strip(),
+        description=payload.description,
+        specialization=payload.specialization,
+        priority=payload.priority,
+    )
+    session.add(request)
+    await session.flush()
+    now = datetime.now(timezone.utc)
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="request.created",
+        resource_type="service_request",
+        resource_id=request.id,
+        description=f"Admin created request '{request.title}'.",
+        event_metadata={"customer_id": str(customer.id), "service_id": str(service.id)},
+        created_at=now,
+    ))
+    await session.commit()
+    await session.refresh(request)
+    return {
+        "id": str(request.id),
+        "title": request.title,
+        "description": request.description,
+        "specialization": request.specialization,
+        "status": request.status.value if hasattr(request.status, "value") else str(request.status),
+        "priority": request.priority.value if hasattr(request.priority, "value") else str(request.priority),
+        "customer_id": str(request.customer_id),
+        "service_id": str(request.service_id),
+        "created_at": request.created_at.isoformat(),
     }
 
 
