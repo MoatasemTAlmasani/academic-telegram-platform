@@ -192,3 +192,16 @@ This section supersedes older statements above that describe the repository as u
 - No database migration was required; the existing `identity_link_challenges` table safely stores hashed email-verification challenges. No production database operation was performed.
 
 **Module 02 remains `PARTIAL`.** This increment does not close the remaining browser/E2E acceptance, secure CSV import/invitation, retention/deletion policy, and cross-module governance requirements.
+
+## Email transport and verification response hardening — 2026-11-08
+
+- **PR #29** merged to `main` as `0d471232517e1e36c25b4c862d0f2092fd688be5`.
+- SMTP delivery now requires transport encryption: either STARTTLS or implicit TLS must be selected. Plaintext SMTP and ambiguous simultaneous SSL/STARTTLS configuration are rejected before sending.
+- Token-bearing email verification pages now send `Cache-Control: no-store`, `Pragma: no-cache`, `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`, and a restrictive Content Security Policy that permits only inline styles and same-origin form submission.
+- Regression coverage verifies secure SMTP modes and the anti-cache/anti-referrer response headers.
+- Python workflow: **177 passed, 1 skipped, 2 warnings**; the skipped PostgreSQL concurrency test is expected because this workflow does not provision the dedicated disposable database.
+- Phase 01 verification: **178 passed, 2 warnings**, with the dedicated disposable PostgreSQL concurrency database enabled and no skips.
+- Vercel production deployment reached **READY** for the merge commit; the observed 10-minute production error/fatal runtime-log query returned no entries.
+- No production database access or migration was performed. SMTP remains unconfigured in production pending a verified sender and credentials, followed by a real delivery smoke test.
+
+**Module 02 remains `PARTIAL`.** Browser/device E2E acceptance, secure CSV import/invitation, retention/deletion policy, and cross-module governance remain open requirements.
