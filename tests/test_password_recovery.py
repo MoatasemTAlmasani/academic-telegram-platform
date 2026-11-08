@@ -282,7 +282,7 @@ def test_password_recovery_uses_only_verified_email_and_revokes_sessions(monkeyp
             assert requested.json()["status"] == "accepted"
             assert len(delivered) == 1
             assert delivered[0]["recipient"] == "recovery@example.test"
-            code = re.search(r"(?<!\\d)(\\d{8})(?!\\d)", delivered[0]["text_body"]).group(1)
+            code = re.search(r"(?<!\d)(\d{8})(?!\d)", delivered[0]["text_body"]).group(1)
 
             transport = httpx.ASGITransport(app=app)
             async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -361,7 +361,7 @@ def test_signed_in_user_can_verify_email_with_explicit_single_use_link(monkeypat
                 requested = await client.post("/api/v1/auth/identity-links/email/challenge")
             assert requested.status_code == 202
             assert len(delivered) == 1
-            verification_url = re.search(r"https://\\S+", delivered[0]["text_body"]).group(0)
+            verification_url = re.search(r"https://\S+", delivered[0]["text_body"]).group(0)
             parsed = urlparse(verification_url)
             token = parse_qs(parsed.query)["token"][0]
 
