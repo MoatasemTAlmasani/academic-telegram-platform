@@ -1,6 +1,8 @@
 """End-to-end API integration checks using an isolated async SQLite database."""
 
 import asyncio
+import csv
+import io
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import uuid4
@@ -910,5 +912,42 @@ def test_admin_password_recovery_requires_users_update(api_harness):
             f"/api/v1/admin/users/{api_harness.target_id}/password-recovery",
         )
         assert denied.status_code == 403, denied.text
+
+    asyncio.run(scenario())
+
+def test_account_and_activity_csv_exports_neutralize_spreadsheet_formulas(api_harness):
+    async def scenario():
+        await api_harness.start()
+        formula = '=HYPERLINK("https://evil.test","click")'
+        phone_formula = "+CMD|' /C calc'!A0"
+        async with api_harness.factory() as session:
+            target = await session.get(User, api_harness.target_id)
+            target.first_name = formula
+            target.phone = phone_formula
+            session.add(AuditLog(
+                actor_id=api_harness.actor_id,
+                action="user.profile_note",
+                resource_type="user",
+                resource_id=api_harness.target_id,
+                description=formula,
+                event_metadata={},
+                created_at=datetime.now(timezone.utc),
+            ))
+            await session.commit()
+
+        directory = await api_harness.request("GET", "/api/v1/admin/users/export.csv")
+        assert directory.status_code == 200, directory.text
+        directory_rows = list(csv.reader(io.StringIO(directory.text.lstrip("\ufeff"))))
+        target_row = next(row for row in directory_rows if row[1] == "target.member")
+        assert target_row[3] == "'" + formula
+        assert target_row[5] == "'" + phone_formula
+
+        activity = await api_harness.request(
+            "GET", f"/api/v1/admin/users/{api_harness.target_id}/activity.csv"
+        )
+        assert activity.status_code == 200, activity.text
+        activity_rows = list(csv.reader(io.StringIO(activity.text.lstrip("\ufeff"))))
+        event_row = next(row for row in activity_rows if row[-1] == "'" + formula)
+        assert event_row[-1] == "'" + formula
 
     asyncio.run(scenario())
