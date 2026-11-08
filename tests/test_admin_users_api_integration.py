@@ -912,3 +912,120 @@ def test_admin_password_recovery_requires_users_update(api_harness):
         assert denied.status_code == 403, denied.text
 
     asyncio.run(scenario())
+
+
+def test_rbac_permission_update_is_audited_and_reserves_roles_manage(api_harness):
+    async def scenario():
+        await api_harness.start(permissions=("roles:manage",))
+        async with api_harness.factory() as session:
+            read_users = PermissionRecord(code="users:read", description="Read users")
+            read_requests = PermissionRecord(code="requests:read", description="Read requests")
+            manager = Role(
+                name="manager",
+                description="Manager role",
+                permissions=[read_users],
+            )
+            session.add_all([read_users, read_requests, manager])
+            await session.commit()
+            manager_id = manager.id
+
+        changed = await api_harness.request(
+            "PUT",
+            f"/api/v1/rbac/roles/{manager_id}/permissions",
+            json={"permission_codes": ["requests:read"]},
+        )
+        assert changed.status_code == 200, changed.text
+        assert [item["code"] for item in changed.json()["role"]["permissions"]] == [
+            "requests:read"
+        ]
+
+        async with api_harness.factory() as session:
+            stored = await session.scalar(
+                select(Role)
+                .options(selectinload(Role.permissions))
+                .where(Role.id == manager_id)
+            )
+            assert stored is not None
+            assert {permission.code for permission in stored.permissions} == {
+                "requests:read"
+            }
+            events = (
+                await session.execute(
+                    select(AuditLog).where(
+                        AuditLog.action == "rbac.role_permissions_updated",
+                        AuditLog.resource_id == manager_id,
+                    )
+                )
+            ).scalars().all()
+            assert len(events) == 1
+            assert events[0].actor_id == api_harness.actor_id
+            assert events[0].event_metadata == {
+                "role_name": "manager",
+                "before": ["users:read"],
+                "after": ["requests:read"],
+            }
+
+        escalation = await api_harness.request(
+            "PUT",
+            f"/api/v1/rbac/roles/{manager_id}/permissions",
+            json={"permission_codes": ["roles:manage"]},
+        )
+        assert escalation.status_code == 422, escalation.text
+
+        async with api_harness.factory() as session:
+            stored = await session.scalar(
+                select(Role)
+                .options(selectinload(Role.permissions))
+                .where(Role.id == manager_id)
+            )
+            assert {permission.code for permission in stored.permissions} == {
+                "requests:read"
+            }
+            events = (
+                await session.execute(
+                    select(AuditLog).where(
+                        AuditLog.action == "rbac.role_permissions_updated",
+                        AuditLog.resource_id == manager_id,
+                    )
+                )
+            ).scalars().all()
+            assert len(events) == 1
+
+    asyncio.run(scenario())
+
+
+def test_rbac_permission_update_requires_roles_manage(api_harness):
+    async def scenario():
+        await api_harness.start(permissions=("admin:access",))
+        response = await api_harness.request(
+            "PUT",
+            f"/api/v1/rbac/roles/{uuid4()}/permissions",
+            json={"permission_codes": []},
+        )
+        assert response.status_code == 403
+
+    asyncio.run(scenario())
+
+
+def test_rbac_super_admin_permission_set_cannot_be_edited(api_harness):
+    async def scenario():
+        await api_harness.start(permissions=("roles:manage",))
+        async with api_harness.factory() as session:
+            role = Role(name="super_admin", description="Protected Super Admin role")
+            session.add(role)
+            await session.commit()
+            role_id = role.id
+
+        response = await api_harness.request(
+            "PUT",
+            f"/api/v1/rbac/roles/{role_id}/permissions",
+            json={"permission_codes": []},
+        )
+        assert response.status_code == 409, response.text
+
+        async with api_harness.factory() as session:
+            stored = await session.get(Role, role_id)
+            assert stored is not None
+            assert stored.permissions == []
+
+    asyncio.run(scenario())
