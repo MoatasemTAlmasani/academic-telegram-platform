@@ -148,3 +148,14 @@ This section supersedes older statements above that describe the repository as u
 5. Close the remaining evidence gaps: isolated PostgreSQL migration/concurrency tests, API authorization/IDOR coverage, browser/E2E flows, and operational documentation. SQLite-only checks must not be reported as PostgreSQL concurrency proof.
 
 **Current acceptance decision: Module 02 remains `PARTIAL`; do not mark it `VERIFIED` until the roadmap's end-to-end acceptance contract and all applicable outstanding requirements have evidence.**
+
+## Security and PostgreSQL verification update — 2026-11-08
+
+- **PR #22** merged to `main` as `5799a7471de22d4ecc3c5c609dbd2d17838b2e51`: account-directory and account-activity CSV exports now prefix spreadsheet-formula-leading untrusted text with a text marker. HTTP-level regression coverage verifies formula payloads in profile fields, phone values, and audit descriptions.
+- PR #22 CI: **162 passed, 1 skipped, 2 warnings** in the Python workflow. The skipped test was the dedicated PostgreSQL concurrency acceptance test because that workflow does not provide its database. Phase 01 verification also passed. Vercel production deployment for the merged commit reached `READY`; a query of production error/fatal runtime logs for the observed 10-minute window returned no entries.
+- **PR #23** merged to `main` as `a0681b0410532f0a643ad17c91b1b602726e2b71`: Phase 01 CI now creates a separate disposable PostgreSQL database named `phase_acceptance` and supplies `PHASE_ACCEPTANCE_DATABASE_URL`. The pre-existing PostgreSQL concurrency test's strict localhost/database-name guard remains in place; the general `ehteraf_test` database is not used for destructive schema setup.
+- PR #23 Phase 01 verification passed: **163 passed, 2 warnings**, with no skipped tests. This run includes the dedicated PostgreSQL concurrency acceptance scenario. The separate Python workflow passed as well (its configuration does not provide the dedicated PostgreSQL database, so that workflow alone is not evidence of PostgreSQL concurrency).
+- Vercel production deployment for PR #23's merge commit reached `READY`; the observed 10-minute production error/fatal runtime-log query returned no entries.
+- These CI checks use only the ephemeral PostgreSQL service in GitHub Actions. They do not imply that a production database was accessed or migrated.
+
+**Remaining Module 02 status: `PARTIAL`.** The email/SMS provider and verified sender, deletion/retention policy, secure CSV import flow, cross-module governance integration, browser/device E2E acceptance, and broader production-engine/API authorization evidence remain outstanding.
