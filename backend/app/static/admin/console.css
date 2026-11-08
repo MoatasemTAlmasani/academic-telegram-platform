@@ -310,3 +310,16 @@
 .notification-workspace{display:grid;grid-template-columns:minmax(280px,.85fr) minmax(0,1.5fr);gap:16px;align-items:start}.notification-compose,.notification-history{min-width:0;padding:18px}.notification-form{display:grid;grid-template-columns:1fr 1fr;gap:13px}.notification-form label{display:flex;flex-direction:column;gap:7px;color:var(--muted);font-size:12px}.notification-form input,.notification-form select,.notification-form textarea,.notification-history-filters input,.notification-history-filters select{width:100%;min-width:0;padding:10px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text);font:inherit;font-size:12px}.notification-form textarea{resize:vertical;line-height:1.7}.notification-form .wide{grid-column:1/-1}.notification-compose-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.notification-compose-actions small{max-width:60%;line-height:1.6}.channel-note{align-self:center;padding:7px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:10px}.notification-feedback{margin-top:12px;color:var(--accent);font-size:12px;line-height:1.6}.notification-history-filters{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:8px;margin-bottom:12px}.notification-message-cell{max-width:340px;white-space:normal;line-height:1.6}.notification-recipient-id{display:block;margin-top:3px;color:var(--muted);font-size:9px;overflow-wrap:anywhere}.notification-history .table-scroll{max-height:520px;overflow:auto}@media(max-width:1100px){.notification-workspace{grid-template-columns:1fr}}@media(max-width:620px){.notification-form{grid-template-columns:1fr}.notification-form .wide{grid-column:auto}.notification-compose-actions{align-items:stretch;flex-direction:column}.notification-compose-actions small{max-width:none}.notification-history-filters{grid-template-columns:1fr}.channel-note{display:inline-flex;max-width:100%;white-space:normal}}
 
 .filter-field{display:flex;flex-direction:column;gap:4px;min-width:130px;color:var(--muted);font-size:11px}.filter-field input{min-width:130px;max-width:170px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:9px 10px}.toolbar-filters{flex-wrap:wrap}
+
+
+/* User & Account Management navigation group */
+.nav-group-toggle{font-weight:700}
+.nav-group-toggle[aria-expanded="true"]{color:var(--accent2);background:#4bc1b610}
+.nav-group-chevron{margin-inline-start:auto;color:var(--muted2);font-size:12px;transition:transform .18s ease}
+.nav-group-toggle[aria-expanded="true"] .nav-group-chevron{transform:rotate(180deg)}
+.nav-submenu{display:flex;flex-direction:column;gap:2px;margin:2px 0 8px;padding:4px 0;border-inline-start:1px solid var(--line);margin-inline-start:22px}
+.nav-subitem{width:100%;border:0;background:transparent;color:var(--muted);text-align:start;padding:8px 13px 8px 15px;border-radius:7px;font-size:11px;line-height:1.5;transition:background .15s ease,color .15s ease}
+.nav-subitem:hover{background:#ffffff08;color:var(--text)}
+.nav-subitem.active{color:var(--accent2);background:#4bc1b612;font-weight:700}
+#userDirectoryPanel,#userCreateForm,#bulkUsersPanel{scroll-margin-top:86px}
+@media(max-width:760px){.nav-submenu{margin-inline-start:18px}.nav-subitem{padding-block:10px}}
