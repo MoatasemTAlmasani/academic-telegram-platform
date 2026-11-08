@@ -308,7 +308,7 @@ async def request_password_recovery(
         await uow.session.commit()
         return {
             "status": "accepted",
-            "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
+            "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel.",
         }
 
     uow.session.add(PasswordRecoveryAttempt(
@@ -378,25 +378,25 @@ async def request_password_recovery(
 
     language = (user.language or "ar").lower()
     if language == "en":
-        message = (
-            "Your EHTERAF password recovery code is:\n"
-            f"<code>{code}</code>\n\n"
-            "It expires in 10 minutes and can be used once. "
-            "Never share this code. If you did not request it, ignore this message."
-        )
+        message = f"Your EHTERAF password recovery code is:\n{code}\n\nIt expires in 10 minutes and can be used once. Never share it."
+        subject = "EHTERAF password recovery code"
     else:
-        message = (
-            "رمز استعادة كلمة المرور لمنصة إحتراف هو:\n"
-            f"<code>{code}</code>\n\n"
-            "تنتهي صلاحية الرمز خلال 10 دقائق ويُستخدم مرة واحدة. "
-            "لا تشاركه مع أي شخص. إذا لم تطلبه فتجاهل هذه الرسالة."
-        )
+        message = f"رمز استعادة كلمة المرور لمنصة إحتراف هو:\n{code}\n\nتنتهي صلاحية الرمز خلال 10 دقائق ويُستخدم مرة واحدة. لا تشاركه مع أي شخص."
+        subject = "رمز استعادة كلمة المرور - إحتراف"
 
     try:
-        telegram = TelegramClient(settings.telegram_bot_token)
-        await telegram.send_message(int(identity.subject), message)
-    except Exception:
-        logger.warning("Password recovery delivery failed through verified Telegram channel.")
+        if payload.channel == "telegram":
+            telegram = TelegramClient(settings.telegram_bot_token)
+            await telegram.send_message(int(identity.subject), message)
+        else:
+            await send_email(
+                settings,
+                recipient=identity.subject,
+                subject=subject,
+                text_body=message,
+                html_body="<p>" + ("Your EHTERAF password recovery code:" if language == "en" else "رمز استعادة كلمة المرور لمنصة إحتراف:") + "</p><p style=\"font-size:28px;font-weight:700;letter-spacing:5px\">" + code + "</p><p>" + ("Expires in 10 minutes. Never share this code." if language == "en" else "ينتهي خلال 10 دقائق. لا تشارك هذا الرمز.") + "</p>",
+            )    except Exception:
+        logger.warning("Password recovery delivery failed through the selected verified channel.")
         await uow.session.execute(
             update(PasswordRecoveryChallenge)
             .where(PasswordRecoveryChallenge.id == challenge.id)
