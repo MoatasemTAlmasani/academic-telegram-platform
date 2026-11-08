@@ -1285,7 +1285,7 @@ async def request_admin_user_password_recovery(
     session: AsyncSession = Depends(get_session),
     uow: UnitOfWork = Depends(get_unit_of_work),
 ) -> dict[str, str]:
-    """Trigger verified-Telegram recovery without exposing the recovery code."""
+    """Trigger recovery through the selected verified channel without exposing the code."""
     from backend.app.api.routes.auth import PasswordRecoveryRequest, request_password_recovery
 
     result = await session.execute(
@@ -1298,8 +1298,8 @@ async def request_admin_user_password_recovery(
     if not identifier:
         raise HTTPException(status_code=409, detail="This account has no supported recovery identifier.")
 
-    # Reuse the existing rate-limited recovery flow; delivery is restricted to
-    # the account's pre-verified Telegram identity and the code is never returned.
+    # Reuse the existing rate-limited flow; the selected channel must have a
+    # verified ExternalIdentity and the recovery code is never returned.
     recovery_result = await request_password_recovery(
         PasswordRecoveryRequest(identifier=identifier, channel=channel),
         request,
