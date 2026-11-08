@@ -1272,6 +1272,7 @@ async def export_admin_user_activity_csv(
 async def request_admin_user_password_recovery(
     user_id: UUID,
     request: Request,
+    channel: Literal["telegram", "email"] = Query("telegram"),
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
     uow: UnitOfWork = Depends(get_unit_of_work),
@@ -1292,7 +1293,7 @@ async def request_admin_user_password_recovery(
     # Reuse the existing rate-limited recovery flow; delivery is restricted to
     # the account's pre-verified Telegram identity and the code is never returned.
     recovery_result = await request_password_recovery(
-        PasswordRecoveryRequest(identifier=identifier),
+        PasswordRecoveryRequest(identifier=identifier, channel=channel),
         request,
         uow,
     )
@@ -1303,7 +1304,7 @@ async def request_admin_user_password_recovery(
         resource_id=user.id,
         description=f"Admin initiated the verified-channel password recovery flow for '{user.username}'.",
         event_metadata={
-            "channel": "verified_telegram",
+            "channel": channel,
             "request_status": recovery_result.get("status", "accepted"),
         },
         created_at=datetime.now(timezone.utc),
@@ -1311,7 +1312,7 @@ async def request_admin_user_password_recovery(
     await session.commit()
     return {
         "status": "accepted",
-        "message": "If the account has an eligible verified Telegram identity, recovery instructions will be sent to it.",
+        "message": "If the account has an eligible verified recovery identity, instructions will be sent through the selected channel.",
     }
 
 
