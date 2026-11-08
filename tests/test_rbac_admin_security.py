@@ -55,7 +55,7 @@ class _Session:
 
 def test_rbac_update_locks_role_row_before_mutation():
     role = SimpleNamespace(id=uuid4(), name="manager", permissions=[])
-    session = _Session([_Result(role), _Result(items=[]), _Result(role)])
+    session = _Session([_Result(role), _Result(role)])
 
     asyncio.run(
         update_role_permissions(
