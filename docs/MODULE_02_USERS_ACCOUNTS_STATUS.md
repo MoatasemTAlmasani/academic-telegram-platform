@@ -159,3 +159,15 @@ This section supersedes older statements above that describe the repository as u
 - These CI checks use only the ephemeral PostgreSQL service in GitHub Actions. They do not imply that a production database was accessed or migrated.
 
 **Remaining Module 02 status: `PARTIAL`.** The email/SMS provider and verified sender, deletion/retention policy, secure CSV import flow, cross-module governance integration, browser/device E2E acceptance, and broader production-engine/API authorization evidence remain outstanding.
+
+## Exact API permission matrix acceptance — 2026-11-08
+
+- **PR #25** merged to `main` as `94bf2d03da2036a6227566a7411d0a7f7c871304`.
+- Added a route-by-route method/path permission matrix for all **21** Module 02 admin-user API routes. The regression test asserts the exact least-privilege permission set for each route, including the requirement that activity and activity CSV endpoints require both `users:read` and `audit:read`.
+- Existing route authentication-presence checks and cross-account session revocation scoping checks remain in place.
+- Python workflow: **163 passed, 1 skipped, 2 warnings**; the skipped case is the PostgreSQL concurrency test because this workflow does not provision its dedicated database.
+- Phase 01 verification: **164 passed, 2 warnings**, with the dedicated disposable PostgreSQL concurrency database enabled and no skipped tests.
+- Vercel production deployment for the merge commit reached `READY`; the observed 10-minute error/fatal runtime-log query returned no entries.
+- The first draft of the new matrix test exposed a test-harness assumption about callable dependencies (`HTTPBearer` is callable but has no `__name__`). The test was corrected to inspect dependency names safely; the corrected commit passed both workflows before merge.
+
+**Module 02 remains `PARTIAL`.** The permission matrix strengthens regression evidence but does not replace browser/E2E acceptance or close the remaining provider, retention/deletion, secure-import, and cross-module governance requirements.
