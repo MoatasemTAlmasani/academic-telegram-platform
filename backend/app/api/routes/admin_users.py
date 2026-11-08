@@ -1320,7 +1320,7 @@ async def request_admin_user_password_recovery(
     await session.commit()
     return {
         "status": "accepted",
-        "message": "If the account has an eligible verified recovery identity, instructions will be sent through the selected channel.",
+        "message": "If the account has an eligible verified recovery channel, instructions will be sent through the selected channel.",
     }
 
 
