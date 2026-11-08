@@ -2,14 +2,14 @@
 
 from datetime import datetime, timedelta, timezone
 from html import escape
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote
 from hashlib import sha256
 import hmac
 import logging
 import secrets
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import delete, func, or_, select, update
 from pydantic import BaseModel, Field
@@ -468,7 +468,7 @@ async def verify_password_recovery(
         await uow.session.commit()
         raise invalid
 
-    expected_hash = _recovery_digest("password-recovery-code", f"{user.id}:{payload.code}") if payload.channel == "telegram" else _recovery_digest("password-recovery-code-email", f"{user.id}:{payload.code}")
+    expected_hash = _recovery_digest(f"password-recovery-code-{payload.channel}", f"{user.id}:{payload.code}")
     if not hmac.compare_digest(challenge.token_hash, expected_hash):
         challenge.failed_attempts += 1
         if challenge.failed_attempts >= 5:
@@ -608,8 +608,10 @@ async def show_email_verification_confirmation(token: str):
 
 
 @router.post("/identity-links/email/verify", response_class=HTMLResponse)
-async def verify_email_identity(token: str = Form(...), uow: UnitOfWork = Depends(get_unit_of_work)):
+async def verify_email_identity(request: Request, uow: UnitOfWork = Depends(get_unit_of_work)):
     """Consume the email ownership token and persist a verified external identity."""
+    form_values = parse_qs((await request.body()).decode("utf-8", errors="replace"))
+    token = (form_values.get("token") or [""])[0]
     now = datetime.now(timezone.utc)
     challenge_result = await uow.session.execute(
         select(IdentityLinkChallenge).where(
