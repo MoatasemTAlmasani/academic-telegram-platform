@@ -33,6 +33,7 @@ jobs:
     env:
       APP_ENV: testing
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ehteraf_test
+      PHASE_ACCEPTANCE_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/phase_acceptance
       SECRET_KEY: ci-only-secret-key-not-for-production-0000000000000000
       TELEGRAM_MODE: webhook
     steps:
@@ -49,6 +50,9 @@ jobs:
           cache-dependency-glob: uv.lock
       - name: Install locked project and test dependencies
         run: uv sync --locked --all-groups --all-extras
+      - name: Create isolated PostgreSQL concurrency database
+        run: >-
+          uv run --no-sync python -c "import psycopg; conn = psycopg.connect('postgresql://postgres:postgres@localhost:5432/postgres', autocommit=True); conn.execute('CREATE DATABASE phase_acceptance'); conn.close()"
       - name: Compile Python sources
         run: uv run --no-sync python -m compileall -q backend database tests
       - name: Run test suite
