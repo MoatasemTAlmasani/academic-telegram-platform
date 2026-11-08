@@ -143,19 +143,22 @@ var loaders={dashboard:loadDashboard,customers:function(){return loadUsers(true)
 async function openPage(page){
  if(!loaders[page])return;
  if(page==="users"&&!has("users:read")){toast(t("noPermission"),true);return;}
- var btn=document.querySelector('.nav-item[data-page="'+page+'"]');
+ var btn=document.querySelector('.nav-item[data-page="'+page+'"],.nav-subitem[data-user-page="'+page+'"]');
  if(btn&&btn.hidden){toast(t("noPermission"),true);return;}
  document.querySelectorAll(".page").forEach(function(p){p.classList.toggle("active",p.id==="page-"+page);});
- document.querySelectorAll(".nav-item[data-page]").forEach(function(b){b.classList.toggle("active",b.dataset.page===page);});
+ document.querySelectorAll(".nav-item[data-page]").forEach(function(b){b.classList.toggle("active",b.dataset.page===page);});document.querySelectorAll(".nav-subitem[data-user-page]").forEach(function(b){b.classList.toggle("active",b.dataset.userPage===page);});
  var userToggle=$("userManagementToggle"),userSubnav=$("userManagementSubnav");
+ var groupedUserPage=["users","customers","staff","roles","security","audit"].includes(page);
  if(userToggle){
-  userToggle.classList.toggle("active",page==="users");
-  if(page==="users"){userSubnav.hidden=false;userToggle.setAttribute("aria-expanded","true");}
+  userToggle.classList.toggle("active",groupedUserPage);
+  if(groupedUserPage){userSubnav.hidden=false;userToggle.setAttribute("aria-expanded","true");}
+  if(page==="users"&&!userSubnav.querySelector(".nav-subitem.active")){var directory=userSubnav.querySelector('[data-user-action="directory"]');if(directory)directory.classList.add("active");}
  }
  $("breadcrumbPage").textContent=t(page);
  try{await loaders[page]();}catch(e){toast(e.message,true);}
 }
 function handleUserNavigation(action){
+ if(["customers","staff","roles","security","audit"].includes(action)){openPage(action);return;}
  openPage("users").then(function(){
   var target=null;
   if(action==="directory"){target=$("userDirectoryPanel");}
