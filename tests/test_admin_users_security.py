@@ -69,6 +69,56 @@ def test_every_admin_user_route_requires_authentication_and_rbac_permission():
         )
 
 
+def test_admin_user_routes_enforce_the_exact_least_privilege_permission_matrix():
+    expected = {
+        ("GET", "/admin/users"): {Permission.USERS_READ},
+        ("GET", "/admin/users/export.csv"): {Permission.USERS_READ},
+        ("GET", "/admin/users/{user_id}"): {Permission.USERS_READ},
+        ("POST", "/admin/users"): {Permission.USERS_CREATE},
+        ("PATCH", "/admin/users/{user_id}"): {Permission.USERS_UPDATE},
+        ("POST", "/admin/users/{user_id}/lifecycle"): {Permission.USERS_UPDATE},
+        ("DELETE", "/admin/users/{user_id}"): {Permission.USERS_DELETE},
+        ("PUT", "/admin/users/{user_id}/role"): {Permission.ROLES_MANAGE},
+        ("GET", "/admin/users/{user_id}/access-summary"): {Permission.USERS_READ},
+        ("GET", "/admin/users/{user_id}/audit-history"): {Permission.AUDIT_READ},
+        ("GET", "/admin/users/{user_id}/login-attempts"): {Permission.USERS_READ},
+        ("GET", "/admin/users/{user_id}/activity"): {Permission.USERS_READ, Permission.AUDIT_READ},
+        ("GET", "/admin/users/{user_id}/activity.csv"): {Permission.USERS_READ, Permission.AUDIT_READ},
+        ("POST", "/admin/users/{user_id}/password-recovery"): {Permission.USERS_UPDATE},
+        ("GET", "/admin/users/{user_id}/identities"): {Permission.USERS_READ},
+        ("PATCH", "/admin/users/{user_id}/access-policy"): {Permission.USERS_UPDATE},
+        ("POST", "/admin/users/bulk/preview"): {Permission.USERS_UPDATE},
+        ("POST", "/admin/users/bulk/lifecycle"): {Permission.USERS_UPDATE},
+        ("GET", "/admin/users/{user_id}/sessions"): {Permission.USERS_READ},
+        ("DELETE", "/admin/users/{user_id}/sessions/{session_id}"): {Permission.USERS_UPDATE},
+        ("POST", "/admin/users/{user_id}/sessions/revoke-all"): {Permission.USERS_UPDATE},
+    }
+
+    routes = [route for route in admin_users.router.routes if isinstance(route, APIRoute)]
+    actual = {}
+    for route in routes:
+        assert len(route.methods) == 1, f"Unexpected methods for {route.path}: {route.methods}"
+        method = next(iter(route.methods))
+        dependencies = list(_dependency_tree(route.dependant.dependencies))
+        granted = set()
+        for dependency in dependencies:
+            call = dependency.call
+            if call is None or call.__name__ != "permission_dependency":
+                continue
+            for cell in call.__closure__ or ():
+                value = cell.cell_contents
+                if isinstance(value, Permission):
+                    granted.add(value)
+        actual[(method, route.path)] = granted
+
+    assert actual == expected, (
+        f"Module 02 route permission matrix changed. "
+        f"Missing={expected.keys() - actual.keys()}, "
+        f"unexpected={actual.keys() - expected.keys()}, "
+        f"changed={ {key: (expected[key], actual[key]) for key in expected.keys() & actual.keys() if expected[key] != actual[key]} }"
+    )
+
+
 def test_permission_dependency_denies_user_without_required_permission():
     dependency = require_permission(Permission.USERS_READ)
     user = SimpleNamespace(roles=[SimpleNamespace(permissions=[])])
