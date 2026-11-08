@@ -36,6 +36,17 @@ router = APIRouter(
     tags=["admin-users"],
 )
 
+def _safe_csv_cell(value: object) -> object:
+    """Prevent spreadsheet formula execution when exporting untrusted text."""
+    if not isinstance(value, str) or not value:
+        return value
+    if value[0] in {"\\t", "\\r", "\\n"}:
+        return "'" + value
+    if value.lstrip(" \\t\\r\\n").startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
+
+
 
 class AdminUserRoleResponse(BaseModel):
     """Role returned in the admin users list."""
@@ -291,8 +302,11 @@ async def export_admin_users_csv(
     writer.writerow(["id", "username", "email", "first_name", "last_name", "phone", "language", "timezone", "status", "created_at"])
     for user in result.scalars().all():
         writer.writerow([
-            user.id, user.username, user.email, user.first_name, user.last_name,
-            user.phone, user.language, user.timezone, user.status, user.created_at,
+            _safe_csv_cell(value)
+            for value in (
+                user.id, user.username, user.email, user.first_name, user.last_name,
+                user.phone, user.language, user.timezone, user.status, user.created_at,
+            )
         ])
     return Response(
         content="\ufeff" + output.getvalue(),
@@ -1237,8 +1251,11 @@ async def export_admin_user_activity_csv(
     writer.writerow(["event_id", "occurred_at", "event_type", "source", "actor_id", "resource_type", "description"])
     for row in result.all():
         writer.writerow([
-            row.event_id, row.occurred_at, row.event_type, row.source,
-            row.actor_id, row.resource_type, row.description,
+            _safe_csv_cell(value)
+            for value in (
+                row.event_id, row.occurred_at, row.event_type, row.source,
+                row.actor_id, row.resource_type, row.description,
+            )
         ])
     return Response(
         content="\\ufeff" + output.getvalue(),
