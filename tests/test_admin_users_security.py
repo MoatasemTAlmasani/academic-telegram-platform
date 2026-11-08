@@ -147,9 +147,10 @@ def test_last_active_admin_guard_serializes_checks_on_admin_role_row():
 
     asyncio.run(admin_users._protect_last_active_admin(session, target_id))
 
-    assert len(session.statements) == 3
+    assert len(session.statements) == 4
     role_lock_query = session.statements[1]
     assert role_lock_query._for_update_arg is not None
+    assert "super_admin" in session.statements[3].compile().params.values()
 
 
 def test_sensitive_account_mutations_lock_target_rows_before_changes():

@@ -1,8 +1,8 @@
 # Phase 01 · Module 01 — Dashboard Delivery Status
 
-**Branch:** `feature/admin-system-delivery`  
+**Branch:** `feature/admin-dashboard-enhancements`
 **Module status:** `IN_PROGRESS`  
-**Last updated:** 2026-11-06
+**Last updated:** 2026-11-07
 
 This file records implementation evidence and remaining work. It does not mark the dashboard as complete or verified.
 
@@ -119,3 +119,50 @@ This file records implementation evidence and remaining work. It does not mark t
 - No production deployment or Vercel configuration was changed.
 - No branch merge or pull request merge was performed.
 - Existing dashboard and legacy admin routes were retained.
+
+
+## Security Center delivery slice · 2026-11-07
+
+| Item | Status | Evidence |
+|---|---|---|
+| Platform-wide active-session metric | IMPLEMENTED | `GET /api/v1/admin/dashboard/security/overview` |
+| Failed sign-in count for the last 24 hours and recent failed attempts | IMPLEMENTED | `LoginAttempt` persisted records; no synthetic events |
+| Locked and suspended account metrics | IMPLEMENTED | Existing `users.locked_until` and `users.status` fields |
+| Searchable, filterable platform session list | IMPLEMENTED | `GET /api/v1/admin/dashboard/security/sessions` |
+| Revoke a selected other-user session | IMPLEMENTED | `POST /api/v1/admin/dashboard/security/sessions/{session_id}/revoke` |
+| Prevent self-account session revocation from this center | IMPLEMENTED | Explicit 409 guard and integration test |
+| Immutable audit event for administrative revocation | IMPLEMENTED | `security.session.revoked` audit record |
+| Arabic/English and responsive Security Center UI | IMPLEMENTED | `security-center.js`, `security-center.css`, active `/admin` console |
+| Module-grouped RBAC permission matrix with per-module select-all and search | IMPLEMENTED | Active `console.js` role detail view; existing RBAC API only |
+| Audit log filtering by actor, resource type, and date/time range | IMPLEMENTED | Existing audit API extended with bounded datetime filters |
+| Audit event detail view | IMPLEMENTED | Active console displays resource IDs, IP, user agent, and event metadata |
+| In-app notification center for admins | IMPLEMENTED | Targeted/broadcast creation, active recipient directory, filters, history, audit events |
+| Authenticated in-app notification inbox | IMPLEMENTED | `/api/v1/notifications/me` and Mini App inbox; no read-state column exists yet |
+| External notification channels | NOT IMPLEMENTED | Email, SMS, and Telegram delivery are explicitly not claimed/configured; no Firebase |
+| Security API/UI regression coverage | VERIFIED | Focused integration tests use isolated in-memory SQLite |
+| Full Python regression suite | VERIFIED | `pytest -q`: 131 passed, 1 Starlette deprecation warning (latest full run) |
+
+No database schema change or migration was introduced for this slice. Revenue, receivables, staff performance, and branch performance remain unavailable until authoritative ledger, assignment, and branch-scope data exist. This delivery slice does not mark Module 01 complete; full browser/device end-to-end verification and the remaining governance/notification work are still outstanding.
+
+## 2026-11-07 acceptance addendum
+
+- Dashboard aggregate metrics are now suppressed when the caller lacks the matching read permission; the API returns unavailable values rather than leaking aggregate counts.
+- Request trend/status charts and service-dependent analytics are permission-gated. Dashboard drill-down links are only clickable when the corresponding read permission is present.
+- Added a source-level regression test confirming restricted metrics render as “unavailable” with the permission reason instead of displaying zero.
+- Latest complete Python suite: **131 passed, 1 Starlette deprecation warning**. Python compilation, JavaScript syntax checks, and `git diff --check` pass.
+- Final acceptance remains blocked on full browser RTL/LTR, accessibility and chart interactions, complete seeded aggregate/timezone boundary coverage, and reconciliation of dashboard data dependencies. A limited authenticated RTL/mobile browser smoke test and the targeted PostgreSQL row-lock scenario have since passed; neither constitutes full module acceptance.
+
+## 2026-11-07 additional acceptance evidence
+
+- Authenticated Playwright Chromium smoke test passed against a disposable PostgreSQL-backed local app: admin login, RTL Users & Accounts navigation, and a 390px mobile viewport with no horizontal overflow. No browser page errors or API failures were observed. This is a limited smoke test, not full visual/accessibility/chart acceptance.
+- Restricted dashboard metrics have a source-level regression test: null values render as unavailable with a permission reason and drill-downs remain permission-gated.
+- Latest complete Python suite: **131 passed, 1 Starlette deprecation warning**.
+- Dashboard aggregate/timezone boundary coverage and full chart/interaction/accessibility review remain open. Revenue/receivables, staff performance, and branch performance require authoritative ledger, assignment, and organization/branch data that are not yet implemented.
+
+
+## 2026-11-07 PostgreSQL issue and fix
+
+- Real browser login against PostgreSQL exposed an aware/naive timestamp mismatch when authentication updated `User.last_seen_at`.
+- Updated the ORM column to `DateTime(timezone=True)` and added reversible Alembic revision `ff66aa77bb88` (head).
+- A dedicated PostgreSQL 18 model/schema test confirms UTC-aware timestamp round-trip. The migration itself has not yet been applied or upgrade/downgrade-tested against a migrated database; no application database was changed.
+- A Playwright smoke test verified admin login, RTL Users & Accounts navigation, and a 390px viewport with no horizontal overflow, page errors, or API failures. Full account CRUD/lifecycle, identity-linking, password-recovery, LTR, accessibility, and chart interactions remain unverified.

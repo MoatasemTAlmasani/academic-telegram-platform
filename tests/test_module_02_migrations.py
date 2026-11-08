@@ -160,3 +160,19 @@ def test_password_recovery_migration_upgrade_and_downgrade_on_isolated_sqlite() 
             assert "password_recovery_challenges" not in inspector.get_table_names()
     finally:
         engine.dispose()
+
+
+def test_user_last_seen_timezone_migration_is_chained_and_reversible() -> None:
+    migration = (MIGRATIONS / "ff66aa77bb88_user_last_seen_timezone.py").read_text(
+        encoding="utf-8"
+    )
+    model = (Path(__file__).resolve().parents[1] / "database" / "models" / "identity.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'revision: str = "ff66aa77bb88"' in migration
+    assert 'down_revision: Union[str, Sequence[str], None] = "ee55ff66aa77"' in migration
+    assert 'type_=sa.DateTime(timezone=True)' in migration
+    assert 'postgresql_using="last_seen_at AT TIME ZONE \'UTC\'"' in migration
+    assert 'type_=sa.DateTime()' in migration
+    assert 'DateTime(timezone=True), nullable=True' in model

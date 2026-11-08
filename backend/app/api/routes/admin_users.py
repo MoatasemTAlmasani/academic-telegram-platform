@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,8 +18,11 @@ from sqlalchemy.orm import selectinload
 
 from backend.app.api.auth_dependencies import get_current_user
 from backend.app.api.rbac_dependencies import require_permission
+from backend.app.api.dependencies import get_unit_of_work
 from backend.app.infrastructure.persistence.database import get_session
+from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 from backend.app.modules.authentication.permissions import Permission
+from backend.app.modules.authentication.roles import RoleName
 from database.models.identity import Role, User, UserSession
 from database.models.audit import AuditLog
 from database.models.security import ExternalIdentity, LoginAttempt
@@ -80,41 +83,58 @@ async def _protect_last_active_admin(
     session: AsyncSession,
     user_id: UUID,
 ) -> None:
-    """Prevent deactivating or archiving the final active admin account.
-
-    Locking the admin role row serializes concurrent lifecycle changes to admin
-    accounts on databases that support SELECT FOR UPDATE.
-    """
+    """Prevent loss of the final active Super Admin or legacy admin account."""
     from fastapi import HTTPException
 
-    target_is_admin = await session.execute(
+    target_admin = await session.execute(
         select(User.status).where(
             User.id == user_id,
             User.roles.any(Role.name == "admin"),
         )
     )
-    target_status = target_is_admin.scalar_one_or_none()
-    if target_status is None or str(target_status).upper() != "ACTIVE":
-        return
+    admin_status = target_admin.scalar_one_or_none()
+    if admin_status is not None and str(admin_status).upper() == "ACTIVE":
+        admin_role = await session.execute(
+            select(Role).where(Role.name == "admin").with_for_update()
+        )
+        if admin_role.scalar_one_or_none() is not None:
+            active_admin_count = await session.execute(
+                select(func.count(User.id)).where(
+                    func.upper(User.status) == "ACTIVE",
+                    User.deleted_at.is_(None),
+                    User.roles.any(Role.name == "admin"),
+                )
+            )
+            if (active_admin_count.scalar_one() or 0) <= 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="The last active administrator account cannot be deactivated or archived.",
+                )
 
-    admin_role = await session.execute(
-        select(Role).where(Role.name == "admin").with_for_update()
-    )
-    if admin_role.scalar_one_or_none() is None:
-        return
-
-    active_admin_count = await session.execute(
-        select(func.count(User.id)).where(
-            func.upper(User.status) == "ACTIVE",
-            User.deleted_at.is_(None),
-            User.roles.any(Role.name == "admin"),
+    target_super_admin = await session.execute(
+        select(User.status).where(
+            User.id == user_id,
+            User.roles.any(Role.name == "super_admin"),
         )
     )
-    if (active_admin_count.scalar_one() or 0) <= 1:
-        raise HTTPException(
-            status_code=409,
-            detail="The last active administrator account cannot be deactivated or archived.",
+    super_admin_status = target_super_admin.scalar_one_or_none()
+    if super_admin_status is not None and str(super_admin_status).upper() == "ACTIVE":
+        super_admin_role = await session.execute(
+            select(Role).where(Role.name == "super_admin").with_for_update()
         )
+        if super_admin_role.scalar_one_or_none() is not None:
+            active_super_admin_count = await session.execute(
+                select(func.count(User.id)).where(
+                    func.upper(User.status) == "ACTIVE",
+                    User.deleted_at.is_(None),
+                    User.roles.any(Role.name == "super_admin"),
+                )
+            )
+            if (active_super_admin_count.scalar_one() or 0) <= 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="The last active Super Admin cannot be deactivated or archived.",
+                )
 
 
 def _safe_user_audit_snapshot(user: User) -> dict[str, str | None]:
@@ -147,14 +167,20 @@ async def list_admin_users(
     search: str | None = Query(default=None, max_length=255),
     status: str | None = Query(default=None, max_length=32),
     role: str | None = Query(default=None, max_length=100),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
+    sort_by: Literal["created_at", "last_seen_at", "username"] = Query(default="created_at"),
+    sort_order: Literal["asc", "desc"] = Query(default="desc"),
 ) -> AdminUserListResponse:
     """List platform users for the admin dashboard."""
+
+    if created_from and created_to and created_from > created_to:
+        raise HTTPException(status_code=422, detail="created_from must be earlier than or equal to created_to.")
 
     query = (
         select(User)
         .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
-        .order_by(User.created_at.desc())
     )
 
     count_query = select(func.count(func.distinct(User.id))).where(
@@ -178,7 +204,6 @@ async def list_admin_users(
     if status:
         normalized_status = status.strip().upper()
         if normalized_status not in {"ACTIVE", "INACTIVE", "SUSPENDED"}:
-            from fastapi import HTTPException
             raise HTTPException(status_code=422, detail="Unsupported account status.")
         query = query.where(func.upper(User.status) == normalized_status)
         count_query = count_query.where(func.upper(User.status) == normalized_status)
@@ -186,6 +211,21 @@ async def list_admin_users(
     if role:
         query = query.join(User.roles).where(Role.name == role)
         count_query = count_query.join(User.roles).where(Role.name == role)
+
+    if created_from:
+        query = query.where(User.created_at >= created_from)
+        count_query = count_query.where(User.created_at >= created_from)
+    if created_to:
+        query = query.where(User.created_at <= created_to)
+        count_query = count_query.where(User.created_at <= created_to)
+
+    sort_column = {
+        "created_at": User.created_at,
+        "last_seen_at": User.last_seen_at,
+        "username": User.username,
+    }[sort_by]
+    ordering = sort_column.asc() if sort_order == "asc" else sort_column.desc()
+    query = query.order_by(ordering.nullslast(), User.id.asc())
 
     total_result = await session.execute(count_query)
     total = total_result.scalar_one()
@@ -366,16 +406,24 @@ async def create_admin_user(
             detail="Username or email already exists.",
         )
 
-    # Role governance belongs to Module 03. Module 02 must not let a user
-    # creator assign arbitrary or privileged roles through this endpoint.
-    if payload.role.strip().lower() != "customer":
+    try:
+        requested_role = RoleName(payload.role.strip().lower())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Unsupported account role.") from exc
+
+    actor_permissions = {
+        permission.code
+        for assigned_role in (getattr(current_user, "roles", None) or [])
+        for permission in (getattr(assigned_role, "permissions", None) or [])
+    }
+    if requested_role != RoleName.CUSTOMER and Permission.ROLES_MANAGE.value not in actor_permissions:
         raise HTTPException(
             status_code=403,
-            detail="Role assignment is managed by the Roles & Permissions module.",
+            detail="Assigning a privileged role requires roles:manage.",
         )
 
     role_result = await session.execute(
-        select(Role).where(func.lower(Role.name) == payload.role.strip().lower())
+        select(Role).where(func.lower(Role.name) == requested_role.value)
     )
 
     role = role_result.scalar_one_or_none()
@@ -791,6 +839,117 @@ async def delete_admin_user(
     await session.commit()
 
 
+class AdminUserRoleAssignmentRequest(BaseModel):
+    """Replace a user's single canonical platform role."""
+
+    role: RoleName
+
+
+class AdminUserRoleAssignmentResponse(BaseModel):
+    user_id: UUID
+    role: AdminUserRoleResponse
+    sessions_revoked: int
+
+
+@router.put(
+    "/{user_id}/role",
+    response_model=AdminUserRoleAssignmentResponse,
+    dependencies=[Depends(require_permission(Permission.ROLES_MANAGE))],
+)
+async def assign_admin_user_role(
+    user_id: UUID,
+    payload: AdminUserRoleAssignmentRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminUserRoleAssignmentResponse:
+    """Assign exactly one canonical role, audit it, and revoke stale sessions."""
+    from fastapi import HTTPException
+
+    # Lock both the account and the canonical role row to serialize competing changes.
+    user_result = await session.execute(
+        select(User)
+        .where(User.id == user_id, User.deleted_at.is_(None))
+        .options(selectinload(User.roles))
+        .with_for_update()
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    role_result = await session.execute(
+        select(Role).where(Role.name == payload.role.value).with_for_update()
+    )
+    new_role = role_result.scalar_one_or_none()
+    if new_role is None:
+        raise HTTPException(status_code=409, detail="The six-role catalog migration must be applied before assigning roles.")
+
+    previous_roles = sorted(role.name for role in user.roles)
+    if previous_roles == [new_role.name]:
+        return AdminUserRoleAssignmentResponse(
+            user_id=user.id,
+            role=AdminUserRoleResponse(id=new_role.id, name=new_role.name, description=new_role.description),
+            sessions_revoked=0,
+        )
+
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=409,
+            detail="Administrators cannot change their own role. Ask another Super Admin to perform this action.",
+        )
+
+    if (
+        user.status == "ACTIVE"
+        and "super_admin" in previous_roles
+        and new_role.name != "super_admin"
+    ):
+        super_admin_role = await session.execute(
+            select(Role).where(Role.name == "super_admin").with_for_update()
+        )
+        if super_admin_role.scalar_one_or_none() is not None:
+            active_super_admins = await session.execute(
+                select(func.count(User.id)).where(
+                    func.upper(User.status) == "ACTIVE",
+                    User.deleted_at.is_(None),
+                    User.roles.any(Role.name == "super_admin"),
+                )
+            )
+            if (active_super_admins.scalar_one() or 0) <= 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="The last active Super Admin cannot be demoted or reassigned.",
+                )
+
+    user.roles = [new_role]
+    revoked_at = datetime.now(timezone.utc)
+    revoked_result = await session.execute(
+        update(UserSession)
+        .where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
+        .values(revoked_at=revoked_at, revoked_reason="role_changed")
+    )
+    revoked_count = max(0, revoked_result.rowcount or 0)
+
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="user.role_assigned",
+        resource_type="user",
+        resource_id=user.id,
+        description=f"Role changed for user '{user.username}'.",
+        event_metadata={
+            "user_id": str(user.id),
+            "before_roles": previous_roles,
+            "after_roles": [new_role.name],
+            "sessions_revoked": revoked_count,
+        },
+        created_at=revoked_at,
+    ))
+    await session.commit()
+    return AdminUserRoleAssignmentResponse(
+        user_id=user.id,
+        role=AdminUserRoleResponse(id=new_role.id, name=new_role.name, description=new_role.description),
+        sessions_revoked=revoked_count,
+    )
+
+
 class AdminUserAccessSummaryResponse(BaseModel):
     """Read-only summary of roles and effective permission codes."""
 
@@ -1086,6 +1245,57 @@ async def export_admin_user_activity_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="user-{user_id}-activity.csv"'},
     )
+
+
+@router.post(
+    "/{user_id}/password-recovery",
+    status_code=202,
+    dependencies=[Depends(require_permission(Permission.USERS_UPDATE))],
+)
+async def request_admin_user_password_recovery(
+    user_id: UUID,
+    request: Request,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    uow: UnitOfWork = Depends(get_unit_of_work),
+) -> dict[str, str]:
+    """Trigger verified-Telegram recovery without exposing the recovery code."""
+    from backend.app.api.routes.auth import PasswordRecoveryRequest, request_password_recovery
+
+    result = await session.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    identifier = user.username or user.email
+    if not identifier:
+        raise HTTPException(status_code=409, detail="This account has no supported recovery identifier.")
+
+    # Reuse the existing rate-limited recovery flow; delivery is restricted to
+    # the account's pre-verified Telegram identity and the code is never returned.
+    recovery_result = await request_password_recovery(
+        PasswordRecoveryRequest(identifier=identifier),
+        request,
+        uow,
+    )
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="user.password_recovery_requested_by_admin",
+        resource_type="user",
+        resource_id=user.id,
+        description=f"Admin initiated the verified-channel password recovery flow for '{user.username}'.",
+        event_metadata={
+            "channel": "verified_telegram",
+            "request_status": recovery_result.get("status", "accepted"),
+        },
+        created_at=datetime.now(timezone.utc),
+    ))
+    await session.commit()
+    return {
+        "status": "accepted",
+        "message": "If the account has an eligible verified Telegram identity, recovery instructions will be sent to it.",
+    }
 
 
 class AdminUserExternalIdentityResponse(BaseModel):

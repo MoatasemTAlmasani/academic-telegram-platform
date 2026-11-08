@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,6 +55,8 @@ async def list_audit_logs(
     search: str | None = Query(default=None, max_length=200),
     resource_type: str | None = Query(default=None, max_length=100),
     actor_id: UUID | None = None,
+    from_datetime: datetime | None = Query(default=None),
+    to_datetime: datetime | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     current_user=Depends(get_current_user),
@@ -81,6 +84,17 @@ async def list_audit_logs(
 
     if actor_id:
         filters.append(AuditLog.actor_id == actor_id)
+
+    if from_datetime and from_datetime.tzinfo is None:
+        from_datetime = from_datetime.replace(tzinfo=timezone.utc)
+    if to_datetime and to_datetime.tzinfo is None:
+        to_datetime = to_datetime.replace(tzinfo=timezone.utc)
+    if from_datetime and to_datetime and from_datetime > to_datetime:
+        raise HTTPException(status_code=422, detail="from_datetime must not be after to_datetime.")
+    if from_datetime:
+        filters.append(AuditLog.created_at >= from_datetime)
+    if to_datetime:
+        filters.append(AuditLog.created_at <= to_datetime)
 
     count_query = select(func.count(AuditLog.id))
 

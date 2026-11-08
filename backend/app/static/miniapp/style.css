@@ -335,3 +335,5 @@ html[dir="rtl"] .back-button svg { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+.notification-card{display:flex;align-items:flex-start;gap:13px;margin:12px 0;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--paper);box-shadow:var(--shadow)}.notification-card-icon{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:12px;background:var(--teal-pale);color:var(--teal)}.notification-card-icon svg{width:19px;height:19px}.notification-card-content{min-width:0;flex:1}.notification-card h3{margin:0 0 6px;color:var(--ink);font-size:14px}.notification-card p{margin:0;color:var(--muted);font-size:13px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}.notification-card time{display:block;margin-top:9px;color:var(--muted);font-size:10px}

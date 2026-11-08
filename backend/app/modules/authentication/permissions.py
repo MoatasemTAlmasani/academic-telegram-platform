@@ -46,3 +46,4 @@ class Permission(StrEnum):
     AUDIT_READ = "audit:read"
 
     ADMIN_ACCESS = "admin:access"
+    ROLES_MANAGE = "roles:manage"

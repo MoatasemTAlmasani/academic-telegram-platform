@@ -116,7 +116,7 @@ async def list_permissions(
 @router.put(
     "/roles/{role_id}/permissions",
     response_model=RBACRolePermissionUpdateResponse,
-    dependencies=[Depends(require_permission(Permission.ADMIN_ACCESS))],
+    dependencies=[Depends(require_permission(Permission.ROLES_MANAGE))],
 )
 async def update_role_permissions(
     role_id: UUID,

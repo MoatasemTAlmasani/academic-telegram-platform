@@ -44,7 +44,8 @@ const COPY = {
     requestNotFound: "لم نعثر على هذا الطلب ضمن الطلبات المحملة.", goRequests: "العودة إلى طلباتي",
     notificationTitle: "الإشعارات", notificationSub: "آخر التنبيهات المرتبطة بطلباتك",
     notificationUnavailableTitle: "الإشعارات غير متاحة بعد",
-    notificationUnavailableBody: "لا توجد واجهة إشعارات متاحة حالياً، لذلك لا يمكن عرض تنبيهات أو تحديثات فعلية.",
+    notificationUnavailableBody: "لا توجد إشعارات مرتبطة بحسابك حالياً.",
+    notificationsLoading: "جارٍ تحميل إشعاراتك…", notificationsEmpty: "لا توجد إشعارات جديدة حالياً.", notificationsFailed: "تعذر تحميل الإشعارات. حاول مرة أخرى.", notificationDate: "تاريخ الإشعار",
     supportTitle: "الدعم والمساعدة", supportSub: "إجابات سريعة حول استخدام المنصة",
     supportContactTitle: "التواصل مع الدعم", supportContactBody: "لم يتم إعداد وسيلة تواصل رسمية داخل التطبيق بعد.",
     faqTitle: "الأسئلة الشائعة", faq1: "كيف أجد الخدمة المناسبة؟", faq1a: "تصفح التخصصات أو استخدم البحث لعرض الخدمات المتاحة في الكتالوج.",
@@ -101,8 +102,9 @@ const COPY = {
     statusOnlyBody: "This page shows only the status recorded on the request. An update history is not available.",
     requestNotFound: "This request was not found in the loaded request list.", goRequests: "Back to my requests",
     notificationTitle: "Notifications", notificationSub: "Alerts related to your requests",
-    notificationUnavailableTitle: "Notifications are not available yet",
-    notificationUnavailableBody: "There is no notification API available, so live alerts and updates cannot be shown.",
+    notificationUnavailableTitle: "No notifications yet",
+    notificationUnavailableBody: "There are no notifications linked to your account yet.",
+    notificationsLoading: "Loading your notifications…", notificationsEmpty: "You have no notifications right now.", notificationsFailed: "Notifications could not be loaded. Please try again.", notificationDate: "Notification date",
     supportTitle: "Help & support", supportSub: "Quick answers about using the platform",
     supportContactTitle: "Contact support", supportContactBody: "An official contact method has not been configured in the app.",
     faqTitle: "Frequently asked questions", faq1: "How do I find the right service?", faq1a: "Browse specialties or search the catalog to see available services.",
@@ -180,6 +182,8 @@ const state = {
   showAll: false,
   requests: [],
   requestsState: "idle",
+  notifications: [],
+  notificationsState: "idle",
   requestFilter: "all",
   draft: { serviceId: "", title: "", description: "", specialization: "", deadline: "" },
   faqOpen: null,
@@ -648,9 +652,36 @@ function renderRequestDetail() {
 }
 
 function renderNotifications() {
-  return `<section class="page">${pageHeader(t("notificationTitle"), t("notificationSub"))}
-    ${stateCard("bell", t("notificationUnavailableTitle"), t("notificationUnavailableBody"))}
-  </section>`;
+  if (state.notificationsState === "idle" || state.notificationsState === "loading") {
+    return `<section class="page">${pageHeader(t("notificationTitle"), t("notificationSub"))}${stateCard("bell", t("notificationTitle"), t("notificationsLoading"))}</section>`;
+  }
+  if (state.notificationsState === "auth") {
+    return `<section class="page">${pageHeader(t("notificationTitle"), t("notificationSub"))}${authenticatedState()}</section>`;
+  }
+  if (state.notificationsState === "error") {
+    return `<section class="page">${pageHeader(t("notificationTitle"), t("notificationSub"))}${stateCard("refresh", t("notificationUnavailableTitle"), t("notificationsFailed"), `<button class="secondary-button" type="button" data-action="retry-notifications">${escapeHTML(t("retry"))}</button>`)}</section>`;
+  }
+  const items = state.notifications.map((item) => `<article class="notification-card"><div class="notification-card-icon">${icon("bell")}</div><div class="notification-card-content"><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.message)}</p><time>${escapeHTML(new Date(item.created_at).toLocaleString(state.language === "ar" ? "ar" : "en-GB"))}</time></div></article>`).join("");
+  return `<section class="page">${pageHeader(t("notificationTitle"), t("notificationSub"))}${items || stateCard("bell", t("notificationUnavailableTitle"), t("notificationsEmpty"))}</section>`;
+}
+
+async function loadNotifications() {
+  const token = getExistingBearerToken();
+  if (!token) { state.notificationsState = "auth"; render(); return; }
+  state.notificationsState = "loading";
+  render();
+  try {
+    const response = await fetch("/api/v1/notifications/me?limit=50", { method: "GET", headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error(`Notifications request failed (${response.status})`);
+    const payload = await response.json();
+    if (!Array.isArray(payload.items)) throw new Error("Unexpected notifications response");
+    state.notifications = payload.items;
+    state.notificationsState = "ready";
+  } catch (error) {
+    console.error("Could not load notifications:", error);
+    state.notificationsState = "error";
+  }
+  render();
 }
 
 function renderSupport() {
@@ -739,6 +770,9 @@ function render() {
   }
   if (state.current.name === "requests" && state.requestsState === "idle") {
     loadRequests();
+  }
+  if (state.current.name === "notifications" && state.notificationsState === "idle") {
+    loadNotifications();
   }
   updateTelegramBackButton();
 }
@@ -921,6 +955,9 @@ function handleClick(event) {
     else if (action === "retry-requests") {
       state.requestsState = "idle";
       loadRequests(true);
+    } else if (action === "retry-notifications") {
+      state.notificationsState = "idle";
+      loadNotifications();
     } else if (action === "go-requests") navigate("requests");
     else if (action === "close-language" || action === "save-language") {
       closeLanguage();

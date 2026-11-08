@@ -1,6 +1,7 @@
 """Smoke tests for the refreshed administration entry points and protection."""
 
 import asyncio
+from pathlib import Path
 import httpx
 from uuid import uuid4
 
@@ -18,16 +19,31 @@ async def get(path: str) -> httpx.Response:
         return await client.get(path)
 
 
+def test_dashboard_renders_restricted_metrics_as_unavailable_not_zero() -> None:
+    source = Path("backend/app/static/admin/console.js").read_text(encoding="utf-8")
+
+    assert "var unavailable=m[x[0]]==null" in source
+    assert 'unavailable?t("unavailable"):fmtNum(m[x[0]])' in source
+    assert '(d.availability||{})[x[0]]' in source
+    assert "clickable=!!target&&has(required)" in source
+
+
 def test_admin_console_entrypoint_is_served() -> None:
     response = asyncio.run(get("/admin"))
     assert response.status_code == 200
     assert "EHTERAF" in response.text
     assert "console.js" in response.text
     assert "dashboard-period-analytics.js" in response.text
+    assert "security-center.js" in response.text
+    assert 'id="page-security"' in response.text
+    assert 'data-page="security"' in response.text
     assert 'id="globalSearch"' in response.text
     assert 'id="auditSearch"' in response.text
     assert 'id="auditPrev"' in response.text
     assert 'id="auditNext"' in response.text
+    assert 'id="auditFrom"' in response.text
+    assert 'id="auditTo"' in response.text
+    assert 'id="auditDetailPanel"' in response.text
     assert 'id="dashboardQuickActions"' in response.text
     assert "loginForm" in response.text
 
@@ -229,7 +245,7 @@ def test_suspended_users_cannot_authenticate(monkeypatch) -> None:
     monkeypatch.setattr(
         jwt_module,
         "get_settings",
-        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret")),
+        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret-for-unit-tests-32bytes")),
     )
     suspended_user = SimpleNamespace(
         id=uuid4(),
@@ -341,11 +357,12 @@ def test_user_creation_workspace_has_validated_bilingual_form() -> None:
     assert 'id="newUserPassword"' in page.text
     assert 'minlength="12"' in page.text
     assert 'id="newUserStatus"' in page.text
+    assert 'id="newUserRoleField"' in page.text
 
     script = asyncio.run(get("/admin/static/console.js"))
     assert script.status_code == 200
     assert 'api("/admin/users",{method:"POST"' in script.text
-    assert 'role:"customer"' in script.text
+    assert 'role:has("roles:manage")?$("newUserRole").value:"customer"' in script.text
     assert 'has("users:create")' in script.text
     assert "إنشاء حساب جديد" in script.text
 
@@ -355,6 +372,8 @@ def test_user_profile_detail_and_edit_workspace_is_permission_aware() -> None:
     assert page.status_code == 200
     assert 'id="userDetailsPanel"' in page.text
     assert 'id="userEditForm"' in page.text
+    assert 'id="userRoleAssignmentForm"' in page.text
+    assert 'id="requestUserPasswordRecovery"' in page.text
     assert 'id="closeUserDetails"' in page.text
 
     script = asyncio.run(get("/admin/static/console.js"))
@@ -438,7 +457,7 @@ def test_authentication_creates_persistent_session_before_issuing_token(monkeypa
     monkeypatch.setattr(
         jwt_module,
         "get_settings",
-        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret")),
+        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret-for-unit-tests-32bytes")),
     )
     monkeypatch.setattr(auth_module, "verify_password", lambda password, password_hash: True)
     monkeypatch.setattr(
@@ -475,14 +494,14 @@ def test_access_tokens_require_a_server_side_session_identifier(monkeypatch) -> 
 
     user_id = uuid4()
     session_id = uuid4()
-    monkeypatch.setattr(token_module, "_get_secret_key", lambda: "test-secret-key")
+    monkeypatch.setattr(token_module, "_get_secret_key", lambda: "test-secret-key-for-hmac-unit-tests-32bytes")
 
     token = token_module.create_access_token(user_id, session_id)
     assert token_module.decode_access_token_with_session(token) == (user_id, session_id)
 
     legacy_token = jwt_library.encode(
         {"sub": str(user_id), "type": "access", "exp": 4102444800},
-        "test-secret-key",
+        "test-secret-key-for-hmac-unit-tests-32bytes",
         algorithm=token_module.ALGORITHM,
     )
     try:
@@ -638,7 +657,7 @@ def test_login_throttling_blocks_after_five_failed_username_ip_attempts(monkeypa
     monkeypatch.setattr(
         jwt_module,
         "get_settings",
-        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret")),
+        lambda: SimpleNamespace(secret_key=SecretStr("test-application-secret-for-unit-tests-32bytes")),
     )
 
     class FakeResult:
@@ -855,8 +874,13 @@ def test_last_active_admin_is_protected_from_deactivation_and_archive() -> None:
             return self.value
 
     class FakeSession:
-        def __init__(self, active_admin_count):
-            self.results = [Result("ACTIVE"), Result(SimpleNamespace(name="admin")), Result(active_admin_count)]
+        def __init__(self, active_admin_count=2, active_super_admin_count=2, *, target_admin="ACTIVE", target_super_admin=None):
+            self.results = [Result(target_admin)]
+            if target_admin == "ACTIVE":
+                self.results.extend([Result(SimpleNamespace(name="admin")), Result(active_admin_count)])
+            self.results.append(Result(target_super_admin))
+            if target_super_admin == "ACTIVE":
+                self.results.extend([Result(SimpleNamespace(name="super_admin")), Result(active_super_admin_count)])
 
         async def execute(self, statement):
             return self.results.pop(0)
@@ -872,8 +896,15 @@ def test_last_active_admin_is_protected_from_deactivation_and_archive() -> None:
 
         await _protect_last_active_admin(FakeSession(2), uuid4())
 
-        inactive_session = FakeSession(0)
-        inactive_session.results = [Result("INACTIVE")]
+        try:
+            await _protect_last_active_admin(FakeSession(target_admin="INACTIVE", target_super_admin="ACTIVE", active_super_admin_count=1), uuid4())
+        except HTTPException as exc:
+            assert exc.status_code == 409
+            assert "last active super admin" in exc.detail.lower()
+        else:
+            raise AssertionError("The last active Super Admin must be protected.")
+
+        inactive_session = FakeSession(target_admin="INACTIVE", target_super_admin="INACTIVE")
         await _protect_last_active_admin(inactive_session, uuid4())
         assert inactive_session.results == []
 
@@ -894,6 +925,7 @@ def test_last_admin_protection_is_used_for_lifecycle_and_archive() -> None:
 
     assert source.count("await _protect_last_active_admin(session, user.id)") >= 2
     assert 'User.roles.any(Role.name == "admin")' in source
+    assert 'User.roles.any(Role.name == "super_admin")' in source
 
 
 def test_admin_user_linked_identity_endpoint_and_workspace() -> None:
@@ -1231,3 +1263,65 @@ def test_public_login_includes_bilingual_verified_telegram_recovery_flow() -> No
     assert "هوية Telegram موثّقة" in script
     assert "dir=\"rtl\"" in page
     assert "[hidden]{display:none!important}" in stylesheet
+
+
+def test_security_dashboard_endpoints_require_authentication() -> None:
+    overview = asyncio.run(get("/api/v1/admin/dashboard/security/overview"))
+    sessions = asyncio.run(get("/api/v1/admin/dashboard/security/sessions"))
+    assert overview.status_code == 401
+    assert sessions.status_code == 401
+
+
+def test_security_sessions_filter_contract_is_bounded() -> None:
+    operation = app.openapi()["paths"]["/api/v1/admin/dashboard/security/sessions"]["get"]
+    parameters = {item["name"]: item["schema"] for item in operation["parameters"]}
+    assert parameters["limit"]["minimum"] == 1
+    assert parameters["limit"]["maximum"] == 100
+    assert parameters["status"]["pattern"] == "^(active|revoked|expired|all)$"
+
+
+def test_security_center_static_assets_are_served() -> None:
+    script = asyncio.run(get("/admin/static/security-center.js"))
+    stylesheet = asyncio.run(get("/admin/static/security-center.css"))
+    assert script.status_code == 200
+    assert "loadSecurityCenter" in script.text
+    assert stylesheet.status_code == 200
+    assert ".security-metrics" in stylesheet.text
+
+
+def test_roles_page_uses_grouped_permission_matrix() -> None:
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert "data-permission-module" in script.text
+    assert "data-permission-group" in script.text
+    assert "permissionSearch" in script.text
+
+
+def test_audit_detail_and_date_filter_controls_are_wired() -> None:
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert "from_datetime" in script.text
+    assert "to_datetime" in script.text
+    assert "auditDetailPanel" in script.text
+
+
+def test_notifications_center_is_present_and_wired() -> None:
+    response = asyncio.run(get("/admin"))
+    assert response.status_code == 200
+    assert 'id="page-notifications"' in response.text
+    assert 'id="notificationForm"' in response.text
+    assert 'data-page="notifications"' in response.text
+    script = asyncio.run(get("/admin/static/console.js"))
+    assert script.status_code == 200
+    assert "loadNotifications" in script.text
+    assert "/admin/notifications" in script.text
+
+
+def test_miniapp_notification_inbox_uses_authenticated_api() -> None:
+    page = asyncio.run(get("/miniapp"))
+    assert page.status_code == 200
+    assert "/miniapp/static/app.js" in page.text
+    script = asyncio.run(get("/miniapp/static/app.js"))
+    assert script.status_code == 200
+    assert "/api/v1/notifications/me" in script.text
+    assert "retry-notifications" in script.text
