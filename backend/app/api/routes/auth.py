@@ -7,7 +7,8 @@ import logging
 import secrets
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
 from sqlalchemy import delete, func, or_, select, update
 from pydantic import BaseModel, Field
 
@@ -18,6 +19,7 @@ from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 from backend.app.modules.authentication.passwords import hash_password, verify_password
 from backend.app.modules.authentication.jwt import _get_secret_key
 from backend.app.infrastructure.telegram.client import TelegramClient
+from backend.app.infrastructure.email.client import email_is_configured, send_email
 from database.models.audit import AuditLog
 from database.models.identity import User, UserSession
 from database.models.security import (
