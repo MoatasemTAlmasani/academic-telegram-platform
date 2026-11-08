@@ -103,7 +103,7 @@ def test_admin_user_routes_enforce_the_exact_least_privilege_permission_matrix()
         granted = set()
         for dependency in dependencies:
             call = dependency.call
-            if call is None or call.__name__ != "permission_dependency":
+            if call is None or getattr(call, "__name__", None) != "permission_dependency":
                 continue
             for cell in call.__closure__ or ():
                 value = cell.cell_contents
