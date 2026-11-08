@@ -128,3 +128,23 @@ This document records implementation evidence. The approved roadmap remains the 
 - No production Supabase connection, live database access, migration application, real Telegram API call, commit, push, merge, or deployment occurred.
 
 **Module 02 remains `PARTIAL`.**
+
+## Repository status reconciliation — 2026-11-08
+
+This section supersedes older statements above that describe the repository as uncommitted/unpushed or PR #15 as the current open delivery. Those statements are historical evidence from earlier checkpoints, not the current GitHub state.
+
+- The approved User & Account Management dashboard navigation work was delivered in **PR #19**, merged to `main` (merge commit `6862f220a196b327852786de4c1f6218f7ce771e`).
+- The profile-panel HTML markup correction and regression test were delivered in **PR #20**, merged to `main` (merge commit `f0c80bef27b2d7f3367af90ecc93c002fed1aa65`).
+- PR #20's Python test workflow and Phase 01 verification workflow both completed successfully; its Vercel commit status was successful. This is CI evidence for the profile markup fix, not browser/device acceptance.
+- The repository's default branch is `main`. The Module 02 product status remains **PARTIAL**; merging these UI/navigation fixes does not close the outstanding Module 02 requirements.
+- No production database migration or production database mutation was performed as part of PR #20. No live PostgreSQL concurrency test or browser/device acceptance is claimed here.
+
+### Next safe delivery priorities
+
+1. Keep email/SMS verification and recovery blocked until a provider, verified sender/phone, secret configuration, and delivery-failure contract are explicitly selected. Telegram remains the implemented recovery channel; do not create a fake delivery adapter.
+2. Define a reviewed retention, deletion-request, and anonymization policy before implementing destructive or irreversible account states.
+3. Implement CSV import only after a secure invitation/password-setup workflow exists; require preview, row-level validation, field-level authorization, bounded commit, idempotency, and auditable per-row outcomes.
+4. Coordinate effective-access administration with Module 03 and security-event triage with Module 22 rather than duplicating their ownership in Module 02.
+5. Close the remaining evidence gaps: isolated PostgreSQL migration/concurrency tests, API authorization/IDOR coverage, browser/E2E flows, and operational documentation. SQLite-only checks must not be reported as PostgreSQL concurrency proof.
+
+**Current acceptance decision: Module 02 remains `PARTIAL`; do not mark it `VERIFIED` until the roadmap's end-to-end acceptance contract and all applicable outstanding requirements have evidence.**
