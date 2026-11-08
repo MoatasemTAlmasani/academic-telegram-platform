@@ -40,9 +40,9 @@ def _safe_csv_cell(value: object) -> object:
     """Prevent spreadsheet formula execution when exporting untrusted text."""
     if not isinstance(value, str) or not value:
         return value
-    if value[0] in {"\\t", "\\r", "\\n"}:
+    if value[0] in {"\t", "\r", "\n"}:
         return "'" + value
-    if value.lstrip(" \\t\\r\\n").startswith(("=", "+", "-", "@")):
+    if value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")):
         return "'" + value
     return value
 
