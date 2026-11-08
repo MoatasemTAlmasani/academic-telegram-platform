@@ -541,8 +541,20 @@ async def create_email_verification_challenge(
             ExternalIdentity.provider == "email",
         )
     )
-    if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=409, detail="An email identity is already verified for this account.")
+    previous_identity = existing.scalar_one_or_none()
+    if previous_identity is not None and previous_identity.subject.strip().casefold() == email:
+        raise HTTPException(status_code=409, detail="This email address is already verified for the account.")
+    if previous_identity is not None:
+        await uow.session.delete(previous_identity)
+    conflicting_identity = await uow.session.execute(
+        select(ExternalIdentity.id).where(
+            ExternalIdentity.provider == "email",
+            func.lower(ExternalIdentity.subject) == email,
+            ExternalIdentity.user_id != user.id,
+        )
+    )
+    if conflicting_identity.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="This email address is already linked to another account.")
     marker = _email_challenge_provider(email)
     recent = await uow.session.execute(
         select(IdentityLinkChallenge.id).where(
