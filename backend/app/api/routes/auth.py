@@ -327,31 +327,35 @@ async def request_password_recovery(
         or str(user.status).upper() != "ACTIVE"
         or _is_future_datetime(user.locked_until, now)
         or _is_expired_datetime(user.account_expires_at, now)
-        or user.telegram_user_id is None
-        or settings.telegram_bot_token is None
     ):
         await uow.session.commit()
-        return {
-            "status": "accepted",
-            "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
-        }
+        return {"status": "accepted", "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel."}
+
+    if payload.channel == "telegram":
+        if user.telegram_user_id is None or settings.telegram_bot_token is None:
+            await uow.session.commit()
+            return {"status": "accepted", "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel."}
+        identity_provider = "telegram"
+        identity_subject = str(user.telegram_user_id)
+    else:
+        if not user.email or not email_is_configured(settings):
+            await uow.session.commit()
+            return {"status": "accepted", "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel."}
+        identity_provider = "email"
+        identity_subject = user.email.strip().casefold()
 
     identity_result = await uow.session.execute(
         select(ExternalIdentity).where(
             ExternalIdentity.user_id == user.id,
-            ExternalIdentity.provider == "telegram",
-            ExternalIdentity.subject == str(user.telegram_user_id),
+            ExternalIdentity.provider == identity_provider,
+            func.lower(ExternalIdentity.subject) == identity_subject,
             ExternalIdentity.verified_at.is_not(None),
         )
     )
     identity = identity_result.scalar_one_or_none()
     if identity is None:
         await uow.session.commit()
-        return {
-            "status": "accepted",
-            "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
-        }
-
+        return {"status": "accepted", "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel."}
     await uow.session.execute(
         update(PasswordRecoveryChallenge)
         .where(
