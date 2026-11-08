@@ -228,7 +228,7 @@ class PasswordRecoveryRequest(BaseModel):
 
 
 class PasswordRecoveryVerifyRequest(BaseModel):
-    """Verify a Telegram-delivered code and replace the account password."""
+    """Verify a code delivered through the selected verified channel."""
 
     identifier: str = Field(min_length=1, max_length=320)
     code: str = Field(pattern=r"^[0-9]{8}$")
@@ -397,7 +397,8 @@ async def request_password_recovery(
                 subject=subject,
                 text_body=message,
                 html_body="<p>" + ("Your EHTERAF password recovery code:" if language == "en" else "رمز استعادة كلمة المرور لمنصة إحتراف:") + "</p><p style=\"font-size:28px;font-weight:700;letter-spacing:5px\">" + code + "</p><p>" + ("Expires in 10 minutes. Never share this code." if language == "en" else "ينتهي خلال 10 دقائق. لا تشارك هذا الرمز.") + "</p>",
-            )    except Exception:
+            )
+    except Exception:
         logger.warning("Password recovery delivery failed through the selected verified channel.")
         await uow.session.execute(
             update(PasswordRecoveryChallenge)
@@ -407,7 +408,7 @@ async def request_password_recovery(
         await uow.session.commit()
         return {
             "status": "accepted",
-            "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
+            "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel.",
         }
 
     await uow.session.execute(
