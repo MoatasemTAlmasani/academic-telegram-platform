@@ -369,6 +369,10 @@ def test_signed_in_user_can_verify_email_with_explicit_single_use_link(monkeypat
             async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
                 confirmation = await client.get(parsed.path + "?token=" + token)
                 assert confirmation.status_code == 200
+                assert confirmation.headers["cache-control"] == "no-store, max-age=0"
+                assert confirmation.headers["referrer-policy"] == "no-referrer"
+                assert confirmation.headers["x-content-type-options"] == "nosniff"
+                assert "frame-ancestors 'none'" in confirmation.headers["content-security-policy"]
                 async with factory() as session:
                     assert (await session.execute(select(ExternalIdentity).where(ExternalIdentity.provider == "email"))).scalar_one_or_none() is None
                 verified = await client.post(parsed.path, data={"token": token})

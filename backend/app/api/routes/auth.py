@@ -511,6 +511,24 @@ async def verify_password_recovery(
     }
 
 
+def _email_verification_page(content: str, *, status_code: int = 200) -> HTMLResponse:
+    """Render token-bearing confirmation pages without caching or referrer leakage."""
+    return HTMLResponse(
+        content,
+        status_code=status_code,
+        headers={
+            "Cache-Control": "no-store, max-age=0",
+            "Pragma": "no-cache",
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": (
+                "default-src 'none'; style-src 'unsafe-inline'; "
+                "form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+            ),
+        },
+    )
+
+
 def _email_challenge_provider(email: str) -> str:
     """Bind an email challenge to the exact normalized address without storing it twice."""
     return "email:" + sha256(email.strip().casefold().encode("utf-8")).hexdigest()[:40]
@@ -604,7 +622,7 @@ async def show_email_verification_confirmation(token: str):
     """Require an explicit user action; email scanners must not consume the token on GET."""
     safe_token = escape(token, quote=True)
     page = "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>EHTERAF email verification</title><body style=\"font-family:Arial,sans-serif;max-width:520px;margin:12vh auto;padding:24px;background:#0b1424;color:#edf3fb\"><h2>EHTERAF · Email verification</h2><p>Confirm ownership of this email address. The link is single-use and expires in 20 minutes.</p><form method=\"post\" action=\"/api/v1/auth/identity-links/email/verify\"><input type=\"hidden\" name=\"token\" value=\"" + safe_token + "\"><button style=\"padding:12px 20px;background:#4bc1b6;border:0;border-radius:8px;font-weight:bold\" type=\"submit\">Confirm email address</button></form></body></html>"
-    return HTMLResponse(page)
+    return _email_verification_page(page)
 
 
 @router.post("/identity-links/email/verify", response_class=HTMLResponse)
@@ -624,7 +642,7 @@ async def verify_email_identity(request: Request, uow: UnitOfWork = Depends(get_
     challenge = challenge_result.scalar_one_or_none()
     invalid_page = "<!doctype html><html><meta charset=\"utf-8\"><body style=\"font-family:Arial,sans-serif;max-width:520px;margin:12vh auto;padding:24px\"><h2>Email verification link invalid or expired</h2><p>Sign in and request a new verification link.</p></body></html>"
     if challenge is None:
-        return HTMLResponse(invalid_page, status_code=400)
+        return _email_verification_page(invalid_page, status_code=400)
     user = await uow.session.get(User, challenge.user_id)
     email = (user.email or "").strip().casefold() if user else ""
     if user is None or user.deleted_at is not None or str(user.status).upper() != "ACTIVE" or not email or challenge.provider != _email_challenge_provider(email):
@@ -638,14 +656,14 @@ async def verify_email_identity(request: Request, uow: UnitOfWork = Depends(get_
     if existing is not None and existing.user_id != user.id:
         challenge.consumed_at = now
         await uow.session.commit()
-        return HTMLResponse(invalid_page, status_code=409)
+        return _email_verification_page(invalid_page, status_code=409)
     challenge.consumed_at = now
     if existing is None:
         uow.session.add(ExternalIdentity(user_id=user.id, provider="email", subject=email, display_name=email, linked_at=now, verified_at=now))
     uow.session.add(AuditLog(actor_id=user.id, action="user.email_verified", resource_type="user", resource_id=user.id, description="User verified the account email address.", event_metadata={"provider": "email"}, created_at=now))
     await uow.session.commit()
     success_page = "<!doctype html><html><meta charset=\"utf-8\"><body style=\"font-family:Arial,sans-serif;max-width:520px;margin:12vh auto;padding:24px\"><h2>Email address verified</h2><p>Your EHTERAF account can now use this email address for password recovery.</p><a href=\"/admin\">Return to EHTERAF</a></body></html>"
-    return HTMLResponse(success_page)
+    return _email_verification_page(success_page)
 
 class ExternalIdentityResponse(BaseModel):
     provider: str

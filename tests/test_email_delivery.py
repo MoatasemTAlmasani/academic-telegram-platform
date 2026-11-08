@@ -58,3 +58,15 @@ def test_send_email_refuses_unconfigured_delivery():
             raise AssertionError("Unconfigured SMTP delivery must be rejected.")
 
     asyncio.run(scenario())
+
+
+def test_smtp_requires_tls_transport():
+    assert not email_is_configured(_settings(email_smtp_starttls=False, email_smtp_use_ssl=False))
+
+
+def test_smtp_rejects_ambiguous_ssl_and_starttls_configuration():
+    assert not email_is_configured(_settings(email_smtp_starttls=True, email_smtp_use_ssl=True))
+
+
+def test_smtp_accepts_implicit_tls_when_starttls_is_disabled():
+    assert email_is_configured(_settings(email_smtp_starttls=False, email_smtp_use_ssl=True))
