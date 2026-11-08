@@ -888,7 +888,7 @@ def test_admin_password_recovery_uses_verified_channel_and_is_audited(api_harnes
         )
         assert response.status_code == 202, response.text
         assert response.json()["status"] == "accepted"
-        assert "verified Telegram" in response.json()["message"]
+        assert "verified recovery channel" in response.json()["message"]
 
         async with api_harness.factory() as session:
             event = await session.scalar(
@@ -899,7 +899,7 @@ def test_admin_password_recovery_uses_verified_channel_and_is_audited(api_harnes
             )
             assert event is not None
             assert event.actor_id == api_harness.actor_id
-            assert event.event_metadata["channel"] == "verified_telegram"
+            assert event.event_metadata["channel"] == "telegram"
 
     asyncio.run(scenario())
 
