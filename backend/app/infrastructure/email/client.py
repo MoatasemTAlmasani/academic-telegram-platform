@@ -6,7 +6,6 @@ import asyncio
 import smtplib
 import ssl
 from email.message import EmailMessage
-from html import escape
 from typing import Any
 
 
@@ -51,7 +50,7 @@ async def send_email(
         starttls = bool(getattr(settings, "email_smtp_starttls", True))
         context = ssl.create_default_context()
         client_cls = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
-        with client_cls(host, port, timeout=timeout, context=context) if use_ssl else client_cls(host, port, timeout=timeout) as server:
+        with (client_cls(host, port, timeout=timeout, context=context) if use_ssl else client_cls(host, port, timeout=timeout)) as server:
             if not use_ssl and starttls:
                 server.starttls(context=context)
             username = getattr(settings, "email_smtp_username", None)
