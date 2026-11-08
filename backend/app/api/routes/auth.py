@@ -222,6 +222,7 @@ class PasswordRecoveryRequest(BaseModel):
     """Request a recovery code without revealing whether an account exists."""
 
     identifier: str = Field(min_length=1, max_length=320)
+    channel: Literal["telegram", "email"] = "telegram"
 
 
 class PasswordRecoveryVerifyRequest(BaseModel):
@@ -230,6 +231,7 @@ class PasswordRecoveryVerifyRequest(BaseModel):
     identifier: str = Field(min_length=1, max_length=320)
     code: str = Field(pattern=r"^[0-9]{8}$")
     new_password: str = Field(min_length=12, max_length=500)
+    channel: Literal["telegram", "email"] = "telegram"
 
 
 def _recovery_digest(purpose: str, value: str) -> str:
@@ -361,7 +363,7 @@ async def request_password_recovery(
     code = f"{secrets.randbelow(100_000_000):08d}"
     challenge = PasswordRecoveryChallenge(
         user_id=user.id,
-        token_hash=_recovery_digest("password-recovery-code", f"{user.id}:{code}"),
+        token_hash=_recovery_digest(f"password-recovery-code-{payload.channel}", f"{user.id}:{code}"),
         delivery_status="PENDING",
         failed_attempts=0,
         created_at=now,
@@ -459,7 +461,7 @@ async def verify_password_recovery(
         await uow.session.commit()
         raise invalid
 
-    expected_hash = _recovery_digest("password-recovery-code", f"{user.id}:{payload.code}")
+    expected_hash = _recovery_digest(f"password-recovery-code-{payload.channel}", f"{user.id}:{payload.code}")
     if not hmac.compare_digest(challenge.token_hash, expected_hash):
         challenge.failed_attempts += 1
         if challenge.failed_attempts >= 5:
@@ -490,8 +492,8 @@ async def verify_password_recovery(
         action="user.password_recovered",
         resource_type="user",
         resource_id=user.id,
-        description="User recovered account access through a verified Telegram identity.",
-        event_metadata={"channel": "telegram", "revoked_sessions": revoked_count},
+        description="User recovered account access through a verified recovery identity.",
+        event_metadata={"channel": payload.channel, "revoked_sessions": revoked_count},
         created_at=now,
     ))
     await uow.session.commit()
