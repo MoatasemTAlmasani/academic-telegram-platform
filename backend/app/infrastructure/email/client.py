@@ -15,9 +15,17 @@ def email_is_configured(settings: Any) -> bool:
     sender = getattr(settings, "email_smtp_from", None)
     username = getattr(settings, "email_smtp_username", None)
     password = getattr(settings, "email_smtp_password", None)
-    if not host or not sender:
+    if not isinstance(host, str) or not host.strip():
         return False
-    if bool(username) != bool(password):
+    if not isinstance(sender, str) or not sender.strip():
+        return False
+    username_value = username.strip() if isinstance(username, str) else ""
+    password_value = (
+        password.get_secret_value()
+        if hasattr(password, "get_secret_value")
+        else str(password or "")
+    )
+    if bool(username_value) != bool(password_value):
         return False
     return True
 
