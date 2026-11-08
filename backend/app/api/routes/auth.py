@@ -419,7 +419,7 @@ async def request_password_recovery(
     await uow.session.commit()
     return {
         "status": "accepted",
-        "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
+        "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel.",
     }
 
 
