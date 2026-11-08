@@ -39,3 +39,10 @@ def test_user_account_submenu_has_responsive_active_states():
     assert '.nav-subitem.active' in CSS
     assert '.nav-group-toggle[aria-expanded="true"]' in CSS
     assert '@media(max-width:760px)' in CSS
+
+
+def test_user_profile_sections_have_valid_opening_tags():
+    assert '<div class="settings-grid" data-profile-section="overview"><div>' in HTML
+    assert '<div class="settings-grid"><label><span data-i18n="username">' in HTML
+    assert '<div class="settings-grid"<div>' not in HTML
+    assert 'data-profile-section="overview"<label>' not in HTML
