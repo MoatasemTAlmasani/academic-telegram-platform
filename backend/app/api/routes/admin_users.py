@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
-from sqlalchemy import case, func, literal, or_, select, union_all, update
+from sqlalchemy import case, delete, func, literal, or_, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -604,6 +604,14 @@ async def update_admin_user(
                 detail="Email already exists.",
             )
 
+        previous_email = (user.email or "").strip().casefold()
+        if normalized_email != (previous_email or None):
+            await session.execute(
+                delete(ExternalIdentity).where(
+                    ExternalIdentity.user_id == user.id,
+                    ExternalIdentity.provider == "email",
+                )
+            )
         user.email = normalized_email
 
     if "first_name" in payload.model_fields_set:
