@@ -323,3 +323,12 @@
 .nav-subitem.active{color:var(--accent2);background:#4bc1b612;font-weight:700}
 #userDirectoryPanel,#userCreateForm,#bulkUsersPanel{scroll-margin-top:86px}
 @media(max-width:760px){.nav-submenu{margin-inline-start:18px}.nav-subitem{padding-block:10px}}
+
+.recovery-open{display:block;margin:14px 0 0 auto;padding:4px 0;border:0;background:transparent;color:var(--accent2);font-size:12px;font-weight:700}
+.recovery-panel{margin-top:16px;padding:18px;border:1px solid var(--line);border-radius:14px;background:#101f32}
+.recovery-panel h3{margin:0 0 6px;font-size:18px}
+.recovery-panel p{font-size:12px;line-height:1.7}
+.recovery-panel label{display:block;color:var(--muted);font-size:12px;font-weight:600;margin:13px 0 7px}
+.recovery-panel input,.recovery-panel select{width:100%;min-height:43px;border:1px solid var(--line);background:#0c192b;color:var(--text);border-radius:9px;padding:10px 12px;margin-bottom:8px}
+.recovery-panel .btn{width:100%;margin-top:8px}
+#recoveryFeedback{min-height:18px;margin:12px 0 0}

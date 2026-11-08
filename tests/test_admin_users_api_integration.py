@@ -18,7 +18,7 @@ from backend.app.infrastructure.persistence.database import get_session
 from backend.app.main import app
 from database.models import Base, AuditLog, Role, User, UserSession
 from database.models.identity import Permission as PermissionRecord
-from database.models.security import LoginAttempt
+from database.models.security import ExternalIdentity, LoginAttempt
 from database.models.notifications import Notification
 from database.models.catalog import Category, Service
 from database.models.enums import ServiceRequestStatus
@@ -888,7 +888,7 @@ def test_admin_password_recovery_uses_verified_channel_and_is_audited(api_harnes
         )
         assert response.status_code == 202, response.text
         assert response.json()["status"] == "accepted"
-        assert "verified Telegram" in response.json()["message"]
+        assert "verified recovery channel" in response.json()["message"]
 
         async with api_harness.factory() as session:
             event = await session.scalar(
@@ -899,7 +899,7 @@ def test_admin_password_recovery_uses_verified_channel_and_is_audited(api_harnes
             )
             assert event is not None
             assert event.actor_id == api_harness.actor_id
-            assert event.event_metadata["channel"] == "verified_telegram"
+            assert event.event_metadata["channel"] == "telegram"
 
     asyncio.run(scenario())
 
@@ -949,5 +949,37 @@ def test_account_and_activity_csv_exports_neutralize_spreadsheet_formulas(api_ha
         activity_rows = list(csv.reader(io.StringIO(activity.text.lstrip("\ufeff"))))
         event_row = next(row for row in activity_rows if row[-1] == "'" + formula)
         assert event_row[-1] == "'" + formula
+
+    asyncio.run(scenario())
+
+
+def test_changing_account_email_invalidates_previous_verified_email_identity(api_harness):
+    async def scenario():
+        await api_harness.start()
+        async with api_harness.factory() as session:
+            session.add(ExternalIdentity(
+                user_id=api_harness.target_id,
+                provider="email",
+                subject="target@example.test",
+                display_name="target@example.test",
+                linked_at=datetime.now(timezone.utc),
+                verified_at=datetime.now(timezone.utc),
+            ))
+            await session.commit()
+
+        response = await api_harness.request(
+            "PATCH",
+            f"/api/v1/admin/users/{api_harness.target_id}",
+            json={"email": "new.target@example.test"},
+        )
+        assert response.status_code == 200, response.text
+        async with api_harness.factory() as session:
+            identities = (await session.execute(
+                select(ExternalIdentity).where(
+                    ExternalIdentity.user_id == api_harness.target_id,
+                    ExternalIdentity.provider == "email",
+                )
+            )).scalars().all()
+            assert identities == []
 
     asyncio.run(scenario())

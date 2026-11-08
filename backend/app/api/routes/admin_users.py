@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
-from sqlalchemy import case, func, literal, or_, select, union_all, update
+from sqlalchemy import case, delete, func, literal, or_, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -604,6 +604,14 @@ async def update_admin_user(
                 detail="Email already exists.",
             )
 
+        previous_email = (user.email or "").strip().casefold()
+        if normalized_email != (previous_email or None):
+            await session.execute(
+                delete(ExternalIdentity).where(
+                    ExternalIdentity.user_id == user.id,
+                    ExternalIdentity.provider == "email",
+                )
+            )
         user.email = normalized_email
 
     if "first_name" in payload.model_fields_set:
@@ -1272,11 +1280,12 @@ async def export_admin_user_activity_csv(
 async def request_admin_user_password_recovery(
     user_id: UUID,
     request: Request,
+    channel: Literal["telegram", "email"] = Query("telegram"),
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
     uow: UnitOfWork = Depends(get_unit_of_work),
 ) -> dict[str, str]:
-    """Trigger verified-Telegram recovery without exposing the recovery code."""
+    """Trigger recovery through the selected verified channel without exposing the code."""
     from backend.app.api.routes.auth import PasswordRecoveryRequest, request_password_recovery
 
     result = await session.execute(
@@ -1289,10 +1298,10 @@ async def request_admin_user_password_recovery(
     if not identifier:
         raise HTTPException(status_code=409, detail="This account has no supported recovery identifier.")
 
-    # Reuse the existing rate-limited recovery flow; delivery is restricted to
-    # the account's pre-verified Telegram identity and the code is never returned.
+    # Reuse the existing rate-limited flow; the selected channel must have a
+    # verified ExternalIdentity and the recovery code is never returned.
     recovery_result = await request_password_recovery(
-        PasswordRecoveryRequest(identifier=identifier),
+        PasswordRecoveryRequest(identifier=identifier, channel=channel),
         request,
         uow,
     )
@@ -1303,7 +1312,7 @@ async def request_admin_user_password_recovery(
         resource_id=user.id,
         description=f"Admin initiated the verified-channel password recovery flow for '{user.username}'.",
         event_metadata={
-            "channel": "verified_telegram",
+            "channel": channel,
             "request_status": recovery_result.get("status", "accepted"),
         },
         created_at=datetime.now(timezone.utc),
@@ -1311,7 +1320,7 @@ async def request_admin_user_password_recovery(
     await session.commit()
     return {
         "status": "accepted",
-        "message": "If the account has an eligible verified Telegram identity, recovery instructions will be sent to it.",
+        "message": "If the account has an eligible verified recovery channel, instructions will be sent through the selected channel.",
     }
 
 

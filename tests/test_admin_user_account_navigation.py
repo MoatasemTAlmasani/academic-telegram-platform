@@ -46,3 +46,26 @@ def test_user_profile_sections_have_valid_opening_tags():
     assert '<div class="settings-grid"><label><span data-i18n="username">' in HTML
     assert '<div class="settings-grid"<div>' not in HTML
     assert 'data-profile-section="overview"<label>' not in HTML
+
+
+def test_every_account_and_access_page_is_nested_under_the_single_management_icon():
+    for action in ("directory", "customers", "staff", "create", "lifecycle", "bulk", "export", "roles", "security", "audit"):
+        assert f'data-user-action="{action}"' in HTML
+    for page in ("customers", "staff", "roles", "security", "audit"):
+        assert f'data-user-page="{page}"' in HTML
+    assert 'class="nav-item" data-page="customers"' not in HTML
+    assert 'class="nav-item" data-page="staff"' not in HTML
+    assert 'class="nav-item" data-page="roles"' not in HTML
+    assert 'class="nav-item" data-page="security"' not in HTML
+    assert 'class="nav-item" data-page="audit"' not in HTML
+
+
+def test_public_email_recovery_and_verified_email_link_are_present():
+    for element in ("openPasswordRecovery", "passwordRecoveryRequestForm", "passwordRecoveryVerifyForm", "recoveryChannel"):
+        assert f'id="{element}"' in HTML
+    assert 'data-i18n="emailVerificationTitle"' in HTML
+    assert 'id="sendEmailVerification"' in HTML
+    assert 'requestUserEmailPasswordRecovery' in HTML
+    assert 'async function requestPasswordRecovery' in JS
+    assert 'async function verifyPasswordRecovery' in JS
+    assert 'async function loadMyEmailIdentity' in JS

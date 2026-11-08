@@ -1,6 +1,8 @@
 """Authentication API routes."""
 
 from datetime import datetime, timedelta, timezone
+from html import escape
+from urllib.parse import parse_qs, quote
 from hashlib import sha256
 import hmac
 import logging
@@ -8,6 +10,7 @@ import secrets
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
 from sqlalchemy import delete, func, or_, select, update
 from pydantic import BaseModel, Field
 
@@ -18,6 +21,7 @@ from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 from backend.app.modules.authentication.passwords import hash_password, verify_password
 from backend.app.modules.authentication.jwt import _get_secret_key
 from backend.app.infrastructure.telegram.client import TelegramClient
+from backend.app.infrastructure.email.client import email_is_configured, send_email
 from database.models.audit import AuditLog
 from database.models.identity import User, UserSession
 from database.models.security import (
@@ -220,14 +224,16 @@ class PasswordRecoveryRequest(BaseModel):
     """Request a recovery code without revealing whether an account exists."""
 
     identifier: str = Field(min_length=1, max_length=320)
+    channel: Literal["telegram", "email"] = "telegram"
 
 
 class PasswordRecoveryVerifyRequest(BaseModel):
-    """Verify a Telegram-delivered code and replace the account password."""
+    """Verify a code delivered through the selected verified channel."""
 
     identifier: str = Field(min_length=1, max_length=320)
     code: str = Field(pattern=r"^[0-9]{8}$")
     new_password: str = Field(min_length=12, max_length=500)
+    channel: Literal["telegram", "email"] = "telegram"
 
 
 def _recovery_digest(purpose: str, value: str) -> str:
@@ -304,7 +310,7 @@ async def request_password_recovery(
         await uow.session.commit()
         return {
             "status": "accepted",
-            "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
+            "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel.",
         }
 
     uow.session.add(PasswordRecoveryAttempt(
@@ -323,31 +329,35 @@ async def request_password_recovery(
         or str(user.status).upper() != "ACTIVE"
         or _is_future_datetime(user.locked_until, now)
         or _is_expired_datetime(user.account_expires_at, now)
-        or user.telegram_user_id is None
-        or settings.telegram_bot_token is None
     ):
         await uow.session.commit()
-        return {
-            "status": "accepted",
-            "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
-        }
+        return {"status": "accepted", "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel."}
+
+    if payload.channel == "telegram":
+        if user.telegram_user_id is None or settings.telegram_bot_token is None:
+            await uow.session.commit()
+            return {"status": "accepted", "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel."}
+        identity_provider = "telegram"
+        identity_subject = str(user.telegram_user_id)
+    else:
+        if not user.email or not email_is_configured(settings):
+            await uow.session.commit()
+            return {"status": "accepted", "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel."}
+        identity_provider = "email"
+        identity_subject = user.email.strip().casefold()
 
     identity_result = await uow.session.execute(
         select(ExternalIdentity).where(
             ExternalIdentity.user_id == user.id,
-            ExternalIdentity.provider == "telegram",
-            ExternalIdentity.subject == str(user.telegram_user_id),
+            ExternalIdentity.provider == identity_provider,
+            func.lower(ExternalIdentity.subject) == identity_subject,
             ExternalIdentity.verified_at.is_not(None),
         )
     )
     identity = identity_result.scalar_one_or_none()
     if identity is None:
         await uow.session.commit()
-        return {
-            "status": "accepted",
-            "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
-        }
-
+        return {"status": "accepted", "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel."}
     await uow.session.execute(
         update(PasswordRecoveryChallenge)
         .where(
@@ -359,7 +369,7 @@ async def request_password_recovery(
     code = f"{secrets.randbelow(100_000_000):08d}"
     challenge = PasswordRecoveryChallenge(
         user_id=user.id,
-        token_hash=_recovery_digest("password-recovery-code", f"{user.id}:{code}"),
+        token_hash=_recovery_digest("password-recovery-code", f"{user.id}:{code}") if payload.channel == "telegram" else _recovery_digest("password-recovery-code-email", f"{user.id}:{code}"),
         delivery_status="PENDING",
         failed_attempts=0,
         created_at=now,
@@ -370,25 +380,26 @@ async def request_password_recovery(
 
     language = (user.language or "ar").lower()
     if language == "en":
-        message = (
-            "Your EHTERAF password recovery code is:\n"
-            f"<code>{code}</code>\n\n"
-            "It expires in 10 minutes and can be used once. "
-            "Never share this code. If you did not request it, ignore this message."
-        )
+        message = f"Your EHTERAF password recovery code is:\n{code}\n\nIt expires in 10 minutes and can be used once. Never share it."
+        subject = "EHTERAF password recovery code"
     else:
-        message = (
-            "رمز استعادة كلمة المرور لمنصة إحتراف هو:\n"
-            f"<code>{code}</code>\n\n"
-            "تنتهي صلاحية الرمز خلال 10 دقائق ويُستخدم مرة واحدة. "
-            "لا تشاركه مع أي شخص. إذا لم تطلبه فتجاهل هذه الرسالة."
-        )
+        message = f"رمز استعادة كلمة المرور لمنصة إحتراف هو:\n{code}\n\nتنتهي صلاحية الرمز خلال 10 دقائق ويُستخدم مرة واحدة. لا تشاركه مع أي شخص."
+        subject = "رمز استعادة كلمة المرور - إحتراف"
 
     try:
-        telegram = TelegramClient(settings.telegram_bot_token)
-        await telegram.send_message(int(identity.subject), message)
+        if payload.channel == "telegram":
+            telegram = TelegramClient(settings.telegram_bot_token)
+            await telegram.send_message(int(identity.subject), message)
+        else:
+            await send_email(
+                settings,
+                recipient=identity.subject,
+                subject=subject,
+                text_body=message,
+                html_body="<p>" + ("Your EHTERAF password recovery code:" if language == "en" else "رمز استعادة كلمة المرور لمنصة إحتراف:") + "</p><p style=\"font-size:28px;font-weight:700;letter-spacing:5px\">" + code + "</p><p>" + ("Expires in 10 minutes. Never share this code." if language == "en" else "ينتهي خلال 10 دقائق. لا تشارك هذا الرمز.") + "</p>",
+            )
     except Exception:
-        logger.warning("Password recovery delivery failed through verified Telegram channel.")
+        logger.warning("Password recovery delivery failed through the selected verified channel.")
         await uow.session.execute(
             update(PasswordRecoveryChallenge)
             .where(PasswordRecoveryChallenge.id == challenge.id)
@@ -397,7 +408,7 @@ async def request_password_recovery(
         await uow.session.commit()
         return {
             "status": "accepted",
-            "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
+            "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel.",
         }
 
     await uow.session.execute(
@@ -408,7 +419,7 @@ async def request_password_recovery(
     await uow.session.commit()
     return {
         "status": "accepted",
-        "message": "If an eligible account exists, recovery instructions will be sent to its verified Telegram account.",
+        "message": "If an eligible account exists, recovery instructions will be sent to its verified recovery channel.",
     }
 
 
@@ -457,7 +468,7 @@ async def verify_password_recovery(
         await uow.session.commit()
         raise invalid
 
-    expected_hash = _recovery_digest("password-recovery-code", f"{user.id}:{payload.code}")
+    expected_hash = _recovery_digest("password-recovery-code", f"{user.id}:{payload.code}") if payload.channel == "telegram" else _recovery_digest("password-recovery-code-email", f"{user.id}:{payload.code}")
     if not hmac.compare_digest(challenge.token_hash, expected_hash):
         challenge.failed_attempts += 1
         if challenge.failed_attempts >= 5:
@@ -488,8 +499,8 @@ async def verify_password_recovery(
         action="user.password_recovered",
         resource_type="user",
         resource_id=user.id,
-        description="User recovered account access through a verified Telegram identity.",
-        event_metadata={"channel": "telegram", "revoked_sessions": revoked_count},
+        description="User recovered account access through a verified recovery identity.",
+        event_metadata={"channel": payload.channel, "revoked_sessions": revoked_count},
         created_at=now,
     ))
     await uow.session.commit()
@@ -499,6 +510,142 @@ async def verify_password_recovery(
         "reauthentication_required": True,
     }
 
+
+def _email_challenge_provider(email: str) -> str:
+    """Bind an email challenge to the exact normalized address without storing it twice."""
+    return "email:" + sha256(email.strip().casefold().encode("utf-8")).hexdigest()[:40]
+
+
+@router.post("/identity-links/email/challenge", status_code=status.HTTP_202_ACCEPTED)
+async def create_email_verification_challenge(
+    current_user=Depends(get_current_user),
+    uow: UnitOfWork = Depends(get_unit_of_work),
+) -> dict[str, str]:
+    """Send an ownership-verification link to the signed-in user current email address."""
+    now = datetime.now(timezone.utc)
+    user_result = await uow.session.execute(
+        select(User).where(User.id == current_user.id).with_for_update()
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None or user.deleted_at is not None or str(user.status).upper() != "ACTIVE":
+        raise HTTPException(status_code=409, detail="This account cannot verify an email address.")
+    email = (user.email or "").strip().casefold()
+    if not email:
+        raise HTTPException(status_code=409, detail="Add an email address to your account before verifying it.")
+    settings = get_settings()
+    if not email_is_configured(settings):
+        raise HTTPException(status_code=503, detail="Email delivery is not configured.")
+    existing = await uow.session.execute(
+        select(ExternalIdentity).where(
+            ExternalIdentity.user_id == user.id,
+            ExternalIdentity.provider == "email",
+        )
+    )
+    previous_identity = existing.scalar_one_or_none()
+    if previous_identity is not None and previous_identity.subject.strip().casefold() == email:
+        raise HTTPException(status_code=409, detail="This email address is already verified for the account.")
+    if previous_identity is not None:
+        await uow.session.delete(previous_identity)
+    conflicting_identity = await uow.session.execute(
+        select(ExternalIdentity.id).where(
+            ExternalIdentity.provider == "email",
+            func.lower(ExternalIdentity.subject) == email,
+            ExternalIdentity.user_id != user.id,
+        )
+    )
+    if conflicting_identity.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="This email address is already linked to another account.")
+    marker = _email_challenge_provider(email)
+    recent = await uow.session.execute(
+        select(IdentityLinkChallenge.id).where(
+            IdentityLinkChallenge.user_id == user.id,
+            IdentityLinkChallenge.provider == marker,
+            IdentityLinkChallenge.consumed_at.is_(None),
+            IdentityLinkChallenge.expires_at > now,
+            IdentityLinkChallenge.created_at >= now - timedelta(minutes=1),
+        )
+    )
+    if recent.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=429, detail="A verification email was sent recently. Wait before requesting another.")
+    await uow.session.execute(
+        update(IdentityLinkChallenge)
+        .where(IdentityLinkChallenge.user_id == user.id, IdentityLinkChallenge.provider.like("email:%"), IdentityLinkChallenge.consumed_at.is_(None))
+        .values(consumed_at=now)
+    )
+    token = secrets.token_urlsafe(32)
+    challenge = IdentityLinkChallenge(
+        user_id=user.id,
+        provider=marker,
+        token_hash=sha256(token.encode("utf-8")).hexdigest(),
+        created_at=now,
+        expires_at=now + timedelta(minutes=20),
+    )
+    uow.session.add(challenge)
+    await uow.session.commit()
+    verification_url = settings.public_app_url.rstrip("/") + "/api/v1/auth/identity-links/email/verify?token=" + quote(token)
+    language = (user.language or "ar").lower()
+    subject = "Verify your EHTERAF email address" if language == "en" else "تأكيد البريد الإلكتروني - إحتراف"
+    text_body = ("Open this link to verify your EHTERAF email address. The link expires in 20 minutes.\n\n" if language == "en" else "افتح الرابط التالي لتأكيد بريدك الإلكتروني في منصة إحتراف. تنتهي صلاحيته خلال 20 دقيقة.\n\n") + verification_url
+    html_body = "<p>" + ("Confirm that this email address belongs to your EHTERAF account." if language == "en" else "أكد أن هذا البريد الإلكتروني يخص حسابك في منصة إحتراف.") + "</p><p><a href=\"" + escape(verification_url, quote=True) + "\">" + ("Verify email address" if language == "en" else "تأكيد البريد الإلكتروني") + "</a></p><p>" + ("This link expires in 20 minutes. If you did not request it, ignore this email." if language == "en" else "ينتهي الرابط خلال 20 دقيقة. إذا لم تطلبه فتجاهل الرسالة.") + "</p>"
+    try:
+        await send_email(settings, recipient=email, subject=subject, text_body=text_body, html_body=html_body)
+    except Exception:
+        logger.warning("Email identity verification delivery failed.")
+        await uow.session.execute(
+            update(IdentityLinkChallenge).where(IdentityLinkChallenge.id == challenge.id).values(consumed_at=now)
+        )
+        await uow.session.commit()
+        raise HTTPException(status_code=503, detail="The verification email could not be sent. Try again later.")
+    return {"status": "accepted", "message": "A verification link was sent to your account email."}
+
+
+@router.get("/identity-links/email/verify", response_class=HTMLResponse)
+async def show_email_verification_confirmation(token: str):
+    """Require an explicit user action; email scanners must not consume the token on GET."""
+    safe_token = escape(token, quote=True)
+    page = "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>EHTERAF email verification</title><body style=\"font-family:Arial,sans-serif;max-width:520px;margin:12vh auto;padding:24px;background:#0b1424;color:#edf3fb\"><h2>EHTERAF · Email verification</h2><p>Confirm ownership of this email address. The link is single-use and expires in 20 minutes.</p><form method=\"post\" action=\"/api/v1/auth/identity-links/email/verify\"><input type=\"hidden\" name=\"token\" value=\"" + safe_token + "\"><button style=\"padding:12px 20px;background:#4bc1b6;border:0;border-radius:8px;font-weight:bold\" type=\"submit\">Confirm email address</button></form></body></html>"
+    return HTMLResponse(page)
+
+
+@router.post("/identity-links/email/verify", response_class=HTMLResponse)
+async def verify_email_identity(request: Request, uow: UnitOfWork = Depends(get_unit_of_work)):
+    """Consume the email ownership token and persist a verified external identity."""
+    form_values = parse_qs((await request.body()).decode("utf-8", errors="replace"))
+    token = (form_values.get("token") or [""])[0]
+    now = datetime.now(timezone.utc)
+    challenge_result = await uow.session.execute(
+        select(IdentityLinkChallenge).where(
+            IdentityLinkChallenge.provider.like("email:%"),
+            IdentityLinkChallenge.token_hash == sha256(token.encode("utf-8")).hexdigest(),
+            IdentityLinkChallenge.consumed_at.is_(None),
+            IdentityLinkChallenge.expires_at > now,
+        ).with_for_update()
+    )
+    challenge = challenge_result.scalar_one_or_none()
+    invalid_page = "<!doctype html><html><meta charset=\"utf-8\"><body style=\"font-family:Arial,sans-serif;max-width:520px;margin:12vh auto;padding:24px\"><h2>Email verification link invalid or expired</h2><p>Sign in and request a new verification link.</p></body></html>"
+    if challenge is None:
+        return HTMLResponse(invalid_page, status_code=400)
+    user = await uow.session.get(User, challenge.user_id)
+    email = (user.email or "").strip().casefold() if user else ""
+    if user is None or user.deleted_at is not None or str(user.status).upper() != "ACTIVE" or not email or challenge.provider != _email_challenge_provider(email):
+        challenge.consumed_at = now
+        await uow.session.commit()
+        return HTMLResponse(invalid_page, status_code=400)
+    conflict = await uow.session.execute(
+        select(ExternalIdentity).where(ExternalIdentity.provider == "email", func.lower(ExternalIdentity.subject) == email)
+    )
+    existing = conflict.scalar_one_or_none()
+    if existing is not None and existing.user_id != user.id:
+        challenge.consumed_at = now
+        await uow.session.commit()
+        return HTMLResponse(invalid_page, status_code=409)
+    challenge.consumed_at = now
+    if existing is None:
+        uow.session.add(ExternalIdentity(user_id=user.id, provider="email", subject=email, display_name=email, linked_at=now, verified_at=now))
+    uow.session.add(AuditLog(actor_id=user.id, action="user.email_verified", resource_type="user", resource_id=user.id, description="User verified the account email address.", event_metadata={"provider": "email"}, created_at=now))
+    await uow.session.commit()
+    success_page = "<!doctype html><html><meta charset=\"utf-8\"><body style=\"font-family:Arial,sans-serif;max-width:520px;margin:12vh auto;padding:24px\"><h2>Email address verified</h2><p>Your EHTERAF account can now use this email address for password recovery.</p><a href=\"/admin\">Return to EHTERAF</a></body></html>"
+    return HTMLResponse(success_page)
 
 class ExternalIdentityResponse(BaseModel):
     provider: str

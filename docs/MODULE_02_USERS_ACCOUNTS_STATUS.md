@@ -171,3 +171,24 @@ This section supersedes older statements above that describe the repository as u
 - The first draft of the new matrix test exposed a test-harness assumption about callable dependencies (`HTTPBearer` is callable but has no `__name__`). The test was corrected to inspect dependency names safely; the corrected commit passed both workflows before merge.
 
 **Module 02 remains `PARTIAL`.** The permission matrix strengthens regression evidence but does not replace browser/E2E acceptance or close the remaining provider, retention/deletion, secure-import, and cross-module governance requirements.
+
+## Email recovery and unified account navigation — 2026-11-08
+
+- The single **User & Account Management / إدارة المستخدمين والحسابات** sidebar entry now groups the account-related pages: user directory, customers, staff, account creation, lifecycle, bulk operations, CSV export, roles and permissions, security center, and audit trail. Child visibility follows each page's existing permission; the parent remains visible whenever at least one child is permitted.
+- Public sign-in now exposes a bilingual password recovery panel with an explicit channel choice: verified email or verified Telegram. Both channels use the existing generic response, identifier/IP throttling, eight-digit code, ten-minute expiry, five-attempt limit, HMAC-protected challenge, audit event, and session revocation. Email and Telegram challenge digests are domain-separated; the existing Telegram digest format is retained so an in-flight Telegram code is not invalidated by this release.
+- Email recovery is permitted only when the current account email has a matching verified `ExternalIdentity(provider="email")`. Merely having an email value on the user record is not proof of ownership.
+- Signed-in users can request an email ownership-verification link. The random 256-bit token is stored only as a SHA-256 hash, expires after 20 minutes, and is single-use. The GET page displays an explicit confirmation form; GET alone does not consume the token, avoiding accidental consumption by email-security scanners. The POST confirmation rechecks that the account's current email still matches the address bound to the challenge, enforces global email identity uniqueness, and records an audit event.
+- Changing a user's email through the admin profile API invalidates the previous verified email identity. Email recovery cannot continue against a stale address.
+- Administrators can initiate recovery through either channel; the email action is displayed only when the target account has a verified email identity.
+- SMTP delivery uses Python's standard library in a worker thread; no third-party mail package or Firebase dependency was added. Configuration is environment-only:
+  - `EMAIL_SMTP_HOST`
+  - `EMAIL_SMTP_PORT` (default `587`)
+  - `EMAIL_SMTP_USERNAME` and `EMAIL_SMTP_PASSWORD` (both or neither)
+  - `EMAIL_SMTP_FROM`
+  - `EMAIL_SMTP_STARTTLS` (default `true`)
+  - `EMAIL_SMTP_USE_SSL` (default `false`)
+  - `PUBLIC_APP_URL` (defaults to `https://ehteraf-tech.vercel.app`)
+- **Deployment prerequisite:** SMTP credentials and sender configuration have not been supplied or configured in the production environment. Until these environment variables are configured and a real delivery smoke test is completed, the email workflow is implemented but email delivery is not production-enabled. No credentials are stored in source control.
+- No database migration was required; the existing `identity_link_challenges` table safely stores hashed email-verification challenges. No production database operation was performed.
+
+**Module 02 remains `PARTIAL`.** This increment does not close the remaining browser/E2E acceptance, secure CSV import/invitation, retention/deletion policy, and cross-module governance requirements.

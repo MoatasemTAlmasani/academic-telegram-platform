@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     telegram_webhook_secret: SecretStr | None = None
     telegram_mode: Literal["webhook", "polling"] = "webhook"
     telegram_auth_max_age_seconds: int = 300
+    email_smtp_host: str | None = None
+    email_smtp_port: int = 587
+    email_smtp_username: str | None = None
+    email_smtp_password: SecretStr | None = None
+    email_smtp_from: str | None = None
+    email_smtp_starttls: bool = True
+    email_smtp_use_ssl: bool = False
+    public_app_url: str = "https://ehteraf-tech.vercel.app"
     file_storage_dir: str = ".local/private_uploads"
     file_upload_max_bytes: int = 10 * 1024 * 1024
 
