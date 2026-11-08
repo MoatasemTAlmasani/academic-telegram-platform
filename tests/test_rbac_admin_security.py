@@ -181,3 +181,13 @@ def test_rbac_noop_permission_update_does_not_create_audit_event():
 
     assert not session.committed
     assert not session.added
+
+
+def test_rbac_ui_disables_permission_edits_without_governance_authority():
+    from pathlib import Path
+
+    source = Path("backend/app/static/admin/console.js").read_text(encoding="utf-8")
+    assert 'var canEdit=has("roles:manage")&&r.name!=="super_admin";' in source
+    assert 'var disabledAttr=canEdit?"":" disabled";' in source
+    assert '(canEdit?\'\':\' hidden disabled\')' in source
+    assert "The Super Admin permission set is protected." in source
