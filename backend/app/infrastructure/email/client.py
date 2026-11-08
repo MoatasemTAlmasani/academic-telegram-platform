@@ -27,6 +27,12 @@ def email_is_configured(settings: Any) -> bool:
     )
     if bool(username_value) != bool(password_value):
         return False
+    use_ssl = bool(getattr(settings, "email_smtp_use_ssl", False))
+    starttls = bool(getattr(settings, "email_smtp_starttls", True))
+    if not use_ssl and not starttls:
+        return False
+    if use_ssl and starttls:
+        return False
     return True
 
 
