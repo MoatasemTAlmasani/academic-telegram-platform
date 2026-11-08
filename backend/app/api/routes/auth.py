@@ -369,7 +369,7 @@ async def request_password_recovery(
     code = f"{secrets.randbelow(100_000_000):08d}"
     challenge = PasswordRecoveryChallenge(
         user_id=user.id,
-        token_hash=_recovery_digest(f"password-recovery-code-{payload.channel}", f"{user.id}:{code}"),
+        token_hash=_recovery_digest("password-recovery-code", f"{user.id}:{code}") if payload.channel == "telegram" else _recovery_digest("password-recovery-code-email", f"{user.id}:{code}"),
         delivery_status="PENDING",
         failed_attempts=0,
         created_at=now,
@@ -468,7 +468,7 @@ async def verify_password_recovery(
         await uow.session.commit()
         raise invalid
 
-    expected_hash = _recovery_digest(f"password-recovery-code-{payload.channel}", f"{user.id}:{payload.code}")
+    expected_hash = _recovery_digest("password-recovery-code", f"{user.id}:{payload.code}") if payload.channel == "telegram" else _recovery_digest("password-recovery-code-email", f"{user.id}:{payload.code}")
     if not hmac.compare_digest(challenge.token_hash, expected_hash):
         challenge.failed_attempts += 1
         if challenge.failed_attempts >= 5:
