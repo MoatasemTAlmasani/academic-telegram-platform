@@ -1187,3 +1187,135 @@ def test_inactive_user_access_summary_keeps_assignments_but_reports_no_effective
         assert diagnostic.json()["contributing_roles"] == ["support"]
 
     asyncio.run(scenario())
+
+def test_account_creation_accepts_governed_custom_role_and_audits_role_identity(api_harness):
+    async def scenario():
+        await api_harness.start(
+            permissions=("users:create", "users:read", "roles:manage")
+        )
+        async with api_harness.factory() as session:
+            custom_role = Role(
+                name="regional_manager",
+                description="Regional operations",
+                permissions=[
+                    PermissionRecord(code="users:read", description="Read users")
+                ],
+            )
+            session.add(custom_role)
+            await session.commit()
+            role_id = custom_role.id
+
+        response = await api_harness.request(
+            "POST",
+            "/api/v1/admin/users",
+            json={
+                "username": "regional.new",
+                "password": "A-strong-test-password-123",
+                "role": "  REGIONAL_MANAGER  ",
+            },
+        )
+        assert response.status_code == 201, response.text
+        assert [role["name"] for role in response.json()["roles"]] == ["regional_manager"]
+
+        async with api_harness.factory() as session:
+            created = await session.scalar(
+                select(User).where(User.username == "regional.new")
+            )
+            event = await session.scalar(
+                select(AuditLog).where(
+                    AuditLog.resource_id == created.id,
+                    AuditLog.action == "user.created",
+                )
+            )
+            assert created is not None
+            assert event is not None
+            assert event.event_metadata == {
+                "role": "regional_manager",
+                "role_id": str(role_id),
+            }
+
+    asyncio.run(scenario())
+
+
+def test_account_creation_cannot_grant_custom_role_permissions_beyond_actor(api_harness):
+    async def scenario():
+        await api_harness.start(
+            permissions=("users:create", "users:read", "roles:manage")
+        )
+        async with api_harness.factory() as session:
+            session.add(
+                Role(
+                    name="restricted_finance",
+                    description="Must not be granted by this operator",
+                    permissions=[
+                        PermissionRecord(
+                            code="users:delete",
+                            description="Delete users",
+                        )
+                    ],
+                )
+            )
+            await session.commit()
+
+        response = await api_harness.request(
+            "POST",
+            "/api/v1/admin/users",
+            json={
+                "username": "restricted.new",
+                "password": "A-strong-test-password-123",
+                "role": "restricted_finance",
+            },
+        )
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"]["unauthorized_permissions"] == ["users:delete"]
+
+        async with api_harness.factory() as session:
+            assert await session.scalar(
+                select(User).where(User.username == "restricted.new")
+            ) is None
+            assert (await session.execute(select(AuditLog))).scalars().all() == []
+
+    asyncio.run(scenario())
+
+
+def test_account_creation_cannot_grant_super_admin_or_rbac_governance_role(api_harness):
+    async def scenario():
+        await api_harness.start(
+            permissions=("users:create", "users:read", "roles:manage")
+        )
+        async with api_harness.factory() as session:
+            session.add(
+                Role(
+                    name="super_admin",
+                    description="Protected governance role",
+                    permissions=[
+                        PermissionRecord(
+                            code="users:read",
+                            description="Read users",
+                        ),
+                        PermissionRecord(
+                            code="roles:manage",
+                            description="Manage roles",
+                        ),
+                    ],
+                )
+            )
+            await session.commit()
+
+        response = await api_harness.request(
+            "POST",
+            "/api/v1/admin/users",
+            json={
+                "username": "attempt.super",
+                "password": "A-strong-test-password-123",
+                "role": "super_admin",
+            },
+        )
+        assert response.status_code == 403, response.text
+        async with api_harness.factory() as session:
+            assert await session.scalar(
+                select(User).where(User.username == "attempt.super")
+            ) is None
+            assert (await session.execute(select(AuditLog))).scalars().all() == []
+
+    asyncio.run(scenario())
