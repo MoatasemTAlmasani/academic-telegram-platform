@@ -424,3 +424,13 @@ This closes an important privilege-escalation gap in the earlier implementation 
 - Added an account-detail status indicator and integration coverage for active permission unions and inactive-account access suppression.
 
 This does not introduce role-active flags or direct-user permission grants; neither exists in the inspected schema. Tests and browser acceptance remain pending.
+
+
+### Phase 03.8 — Read-only permission diagnostics (in progress)
+
+- Added `GET /api/v1/admin/users/{user_id}/access-check?permission_code=...` under `users:read`.
+- The diagnostic checks only registered permission codes, evaluates account eligibility and assigned-role permission sources, and returns allow/deny with a safe reason and contributing role names.
+- Unknown permission codes are reported as unknown/denied. The endpoint is read-only: it does not impersonate the user or execute a business action.
+- Added integration coverage for granted, unknown, and account-inactive permission checks.
+
+The endpoint does not evaluate resource-specific or branch scope because those policies are not yet implemented in the inspected RBAC model. Browser acceptance and automated execution remain pending.
