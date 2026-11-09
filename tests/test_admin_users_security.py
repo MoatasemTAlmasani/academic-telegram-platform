@@ -542,3 +542,22 @@ def test_user_creation_role_picker_loads_the_database_role_catalogue():
     assert 'form.dataset.roleCatalogReady="true"' in script
     assert 'form.dataset.roleCatalogReady!=="true"' in script
     assert 'await loadUserCreationRoles()' in script
+
+
+def test_rbac_dashboard_renders_database_backed_overview_metrics():
+    from pathlib import Path
+
+    html = Path("backend/app/static/admin/console.html").read_text(encoding="utf-8")
+    script = Path("backend/app/static/admin/console.js").read_text(encoding="utf-8")
+
+    assert 'id="rbacOverviewMetrics"' in html
+    assert 'api("/rbac/overview")' in script
+    for metric in (
+        "total_roles",
+        "system_roles",
+        "custom_roles",
+        "permission_catalog_size",
+        "users_with_roles",
+        "recent_rbac_changes",
+    ):
+        assert metric in script
