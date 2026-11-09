@@ -6,7 +6,7 @@
 
 This note records concrete integration gaps found while reviewing the current Module 03 implementation. It does not change application behavior or claim acceptance.
 
-## Finding 01 — Custom roles are not supported by the user-creation workflow
+## Finding 01 — Custom roles in user creation (addressed in current branch; tests not run)
 
 **Location:** `backend/app/api/routes/admin_users.py`, `AdminUserCreateRequest` and `create_admin_user`.
 
