@@ -49,7 +49,7 @@ class RBACRoleCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
     description: str | None = Field(default=None, max_length=500)
 
-    @field_validator("name")
+    @field_validator("name", mode="before")
     @classmethod
     def normalize_name(cls, value: str) -> str:
         return value.strip().lower()
