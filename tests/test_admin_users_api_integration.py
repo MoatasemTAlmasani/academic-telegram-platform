@@ -1159,7 +1159,7 @@ def test_inactive_user_access_summary_keeps_assignments_but_reports_no_effective
                 description="Support",
                 permissions=[permission],
             )
-            target = await session.get(User, api_harness.target_id)
+            target = await session.get(User, api_harness.target_id, options=[selectinload(User.roles)])
             target.status = "INACTIVE"
             target.roles = [support_role]
             session.add(support_role)
