@@ -276,3 +276,12 @@ def test_custom_role_creation_rejects_duplicate_names():
     asyncio.run(scenario())
     assert not session.committed
     assert not session.added
+
+
+def test_custom_role_creation_ui_is_gated_by_roles_manage_and_uses_existing_api():
+    from pathlib import Path
+
+    source = Path("backend/app/static/admin/console.js").read_text(encoding="utf-8")
+    assert 'has("roles:manage")?\'<form id="createRoleForm"' in source
+    assert 'api("/rbac/roles",{method:"POST"' in source
+    assert 'selectedRole=created.role.id' in source
