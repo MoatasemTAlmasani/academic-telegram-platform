@@ -561,3 +561,64 @@ def test_custom_role_duplication_rejects_super_admin_and_unauthorized_permission
     asyncio.run(unauthorized_scenario())
     assert not unauthorized_session.committed
     assert not unauthorized_session.added
+
+
+def test_custom_role_metadata_noop_does_not_write_audit_or_commit():
+    from backend.app.api.routes.rbac_admin import (
+        RBACRoleUpdateRequest,
+        update_custom_role,
+    )
+
+    role = SimpleNamespace(
+        id=uuid4(),
+        name="regional_manager",
+        description="Regional operations",
+        permissions=[],
+    )
+    session = _Session([_Result(role), _Result(role)])
+
+    response = asyncio.run(
+        update_custom_role(
+            role_id=role.id,
+            payload=RBACRoleUpdateRequest(),
+            current_user=SimpleNamespace(id=uuid4()),
+            session=session,
+        )
+    )
+
+    assert response.role.name == "regional_manager"
+    assert response.role.description == "Regional operations"
+    assert not session.committed
+    assert not session.added
+
+
+def test_custom_role_metadata_update_rejects_case_insensitive_duplicate():
+    from backend.app.api.routes.rbac_admin import (
+        RBACRoleUpdateRequest,
+        update_custom_role,
+    )
+
+    role = SimpleNamespace(
+        id=uuid4(),
+        name="regional_manager",
+        description="Regional operations",
+        permissions=[],
+    )
+    session = _Session([
+        _Result(role),
+        _Result(SimpleNamespace(name="AREA_LEAD")),
+    ])
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await update_custom_role(
+                role_id=role.id,
+                payload=RBACRoleUpdateRequest(name="area_lead"),
+                current_user=SimpleNamespace(id=uuid4()),
+                session=session,
+            )
+        assert exc_info.value.status_code == 409
+
+    asyncio.run(scenario())
+    assert not session.committed
+    assert not session.added
