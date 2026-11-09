@@ -434,3 +434,12 @@ This does not introduce role-active flags or direct-user permission grants; neit
 - Added integration coverage for granted, unknown, and account-inactive permission checks.
 
 The endpoint does not evaluate resource-specific or branch scope because those policies are not yet implemented in the inspected RBAC model. Browser acceptance and automated execution remain pending.
+
+
+### Phase 03.3 — Additional metadata regression coverage
+
+- Added a no-op PATCH test confirming an unchanged custom-role metadata request does not commit or create an audit event.
+- Added a case-insensitive duplicate-name test for metadata changes, including a pre-existing uppercase role name.
+- The end-to-end API scenario already exercises create → rename/description update → duplicate → assign → verify session revocation and audit events.
+
+**Verification remains PARTIAL / NOT VERIFIED:** tests are authored but have not been executed, and the browser workflow has not been exercised interactively.
