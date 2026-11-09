@@ -393,3 +393,14 @@ These tests are authored but have **not** been executed. The PostgreSQL acceptan
 - Added focused negative tests for unauthorized permission grants, over-privileged role assignments, and non-Super-Admin attempts to assign the Super Admin role.
 
 This closes an important privilege-escalation gap in the earlier implementation slice. Automated tests remain authored but unexecuted; the change is not yet verified.
+
+
+### Phase 03.5 — Safe custom-role duplication (in progress)
+
+- Added `POST /api/v1/rbac/roles/{role_id}/duplicate`.
+- Duplicating the protected `super_admin` role is rejected. Other role templates may be copied into a new custom role with a caller-supplied normalized name.
+- The duplicate copies only source permissions that are within the operator's own effective permission set; `roles:manage` is always excluded from the copy.
+- The operation is audited with source/target role identifiers and copied/excluded permission codes. It uses the existing `Role`, `Permission`, and `AuditLog` models without migrations.
+- Added a bilingual duplicate-role form and extended unit/API integration coverage for the copy rules and privilege boundaries.
+
+**Verification remains PARTIAL / NOT VERIFIED:** no automated test or browser run has been executed in this environment.
