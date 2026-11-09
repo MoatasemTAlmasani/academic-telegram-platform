@@ -67,6 +67,30 @@ class RBACRoleCreateResponse(BaseModel):
     role: RBACRoleResponse
 
 
+class RBACRoleUpdateRequest(BaseModel):
+    """Partial metadata update for an existing custom role."""
+
+    name: str | None = Field(default=None, min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
+    description: str | None = Field(default=None, max_length=500)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("description")
+    @classmethod
+    def normalize_description(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class RBACRoleUpdateResponse(BaseModel):
+    role: RBACRoleResponse
+
+
 class RBACRolePermissionUpdateRequest(BaseModel):
     permission_codes: list[str]
 
