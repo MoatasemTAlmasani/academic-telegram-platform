@@ -62,9 +62,9 @@ A permission-set change now revokes all non-revoked sessions belonging to users 
 
 This is deliberately scoped to sessions of users who currently hold the changed role. It does not revoke sessions for unrelated users or for no-op permission updates.
 
-**Test added:** `test_rbac_permission_change_revokes_sessions_for_users_with_the_role` checks that the route issues the session-revocation update and records its row count in the audit metadata.
+**Test added:** `test_rbac_permission_change_revokes_sessions_for_users_with_the_role` checks the route-level update and audit count. `test_role_permission_change_revokes_sessions_for_assigned_users` adds an isolated SQLite API integration scenario that assigns a role to a user, changes that role's permissions, and asserts that the user's session is revoked with the expected reason and audit metadata.
 
-**Verification:** Source and test changes only. The test has not been executed; database-engine behavior and full API integration remain unverified.
+**Verification:** Source and test changes only. Neither test has been executed; database-engine behavior and full API integration remain unverified.
 
 
 ## Finding 04 — RBAC overview API was not surfaced in the dashboard (addressed in current branch; tests not run)
