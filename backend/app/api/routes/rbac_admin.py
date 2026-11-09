@@ -252,6 +252,132 @@ async def create_custom_role(
     )
 
 
+@router.post(
+    "/roles/{role_id}/duplicate",
+    response_model=RBACRoleCreateResponse,
+    status_code=201,
+    dependencies=[Depends(require_permission(Permission.ROLES_MANAGE))],
+)
+async def duplicate_custom_role(
+    role_id: UUID,
+    payload: RBACRoleCreateRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Duplicate a role into a custom role without copying protected governance."""
+
+    source_result = await session.execute(
+        select(Role)
+        .options(selectinload(Role.permissions))
+        .where(Role.id == role_id)
+        .with_for_update()
+    )
+    source_role = source_result.scalar_one_or_none()
+    if source_role is None:
+        raise HTTPException(status_code=404, detail="Source role not found.")
+    if source_role.name == "super_admin":
+        raise HTTPException(
+            status_code=409,
+            detail="The Super Admin role cannot be duplicated.",
+        )
+
+    canonical_names = {
+        "super_admin",
+        "admin",
+        "manager",
+        "staff",
+        "support",
+        "customer",
+    }
+    if payload.name in canonical_names:
+        raise HTTPException(
+            status_code=409,
+            detail="Canonical system role names are reserved.",
+        )
+
+    duplicate = await session.execute(
+        select(Role).where(func.lower(Role.name) == payload.name).with_for_update()
+    )
+    if duplicate.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="A role with this name already exists.")
+
+    copied_permissions = [
+        permission
+        for permission in source_role.permissions
+        if permission.code != Permission.ROLES_MANAGE.value
+    ]
+    copied_codes = {permission.code for permission in copied_permissions}
+    unauthorized_codes = sorted(
+        copied_codes - _effective_permission_codes(current_user)
+    )
+    if unauthorized_codes:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "You cannot duplicate permissions beyond your own effective access.",
+                "unauthorized_permissions": unauthorized_codes,
+            },
+        )
+
+    new_role = Role(
+        name=payload.name,
+        description=payload.description or source_role.description,
+        permissions=copied_permissions,
+    )
+    session.add(new_role)
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A role with this name already exists.",
+        ) from exc
+
+    now = datetime.now(timezone.utc)
+    session.add(
+        AuditLog(
+            actor_id=current_user.id,
+            action="rbac.role_duplicated",
+            resource_type="role",
+            resource_id=new_role.id,
+            description=f"Duplicated role '{source_role.name}' as '{new_role.name}'.",
+            event_metadata={
+                "source_role_id": str(source_role.id),
+                "source_role_name": source_role.name,
+                "new_role_name": new_role.name,
+                "copied_permission_codes": sorted(copied_codes),
+                "excluded_permission_codes": (
+                    [Permission.ROLES_MANAGE.value]
+                    if any(
+                        permission.code == Permission.ROLES_MANAGE.value
+                        for permission in source_role.permissions
+                    )
+                    else []
+                ),
+            },
+            created_at=now,
+        )
+    )
+    await session.commit()
+
+    return RBACRoleCreateResponse(
+        role=RBACRoleResponse(
+            id=new_role.id,
+            name=new_role.name,
+            description=new_role.description,
+            permissions=[
+                RBACPermissionResponse(
+                    id=permission.id,
+                    code=permission.code,
+                    description=permission.description,
+                )
+                for permission in copied_permissions
+            ],
+        )
+    )
+
+
 @router.patch(
     "/roles/{role_id}",
     response_model=RBACRoleUpdateResponse,
