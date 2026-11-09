@@ -229,6 +229,7 @@ def test_custom_role_assignment_is_supported_and_revokes_existing_sessions():
         id=role_id,
         name="regional_manager",
         description="Regional operations",
+        permissions=[],
     )
     session = _Session([
         _Result(target),
@@ -269,6 +270,7 @@ def test_custom_role_assignment_cannot_demote_the_last_active_super_admin():
         id=uuid4(),
         name="regional_manager",
         description="Regional operations",
+        permissions=[],
     )
     super_admin_role = SimpleNamespace(name="super_admin")
     session = _Session([
