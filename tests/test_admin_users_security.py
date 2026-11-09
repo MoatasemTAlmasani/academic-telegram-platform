@@ -512,3 +512,14 @@ def test_multi_role_assignment_rejects_permissions_beyond_grantor_access():
     asyncio.run(scenario())
     assert not session.committed
     assert not session.added
+
+
+def test_user_access_panel_uses_permission_gated_multi_role_assignment_ui():
+    from pathlib import Path
+
+    html = Path("backend/app/static/admin/console.html").read_text(encoding="utf-8")
+    script = Path("backend/app/static/admin/console.js").read_text(encoding="utf-8")
+    assert 'id="userRoleChoices"' in html
+    assert 'data-user-role-choice' in script
+    assert '"/roles",{method:"PUT"' in script
+    assert 'form.hidden=!has("roles:manage")' in script
