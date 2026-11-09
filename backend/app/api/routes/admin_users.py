@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from sqlalchemy import case, delete, func, literal, or_, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -146,6 +146,64 @@ async def _protect_last_active_admin(
                     status_code=409,
                     detail="The last active Super Admin cannot be deactivated or archived.",
                 )
+
+
+async def _protect_last_active_super_admin(
+    session: AsyncSession,
+    user_id: UUID,
+) -> None:
+    """Serialize Super Admin demotions and preserve the final active account."""
+    from fastapi import HTTPException
+
+    target = await session.execute(
+        select(User.status).where(
+            User.id == user_id,
+            User.roles.any(Role.name == "super_admin"),
+        )
+    )
+    target_status = target.scalar_one_or_none()
+    if target_status is None or str(target_status).upper() != "ACTIVE":
+        return
+
+    # Every demotion locks this same canonical row before counting active owners.
+    super_admin_role = await session.execute(
+        select(Role).where(Role.name == "super_admin").with_for_update()
+    )
+    if super_admin_role.scalar_one_or_none() is None:
+        return
+
+    active_count = await session.execute(
+        select(func.count(User.id)).where(
+            func.upper(User.status) == "ACTIVE",
+            User.deleted_at.is_(None),
+            User.roles.any(Role.name == "super_admin"),
+        )
+    )
+    if (active_count.scalar_one() or 0) <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="The last active Super Admin cannot be demoted or reassigned.",
+        )
+
+
+def _effective_permission_codes(user) -> set[str]:
+    """Return the authenticated user's effective permission union."""
+
+    return {
+        permission.code
+        for role in (getattr(user, "roles", None) or [])
+        for permission in (getattr(role, "permissions", None) or [])
+        if getattr(permission, "code", None)
+    }
+
+
+def _has_super_admin_role(user) -> bool:
+    """Check the canonical Super Admin role, not a client-supplied claim."""
+
+    return any(
+        getattr(role, "name", None) == "super_admin"
+        for role in (getattr(user, "roles", None) or [])
+    )
 
 
 def _safe_user_audit_snapshot(user: User) -> dict[str, str | None]:
@@ -862,9 +920,14 @@ async def delete_admin_user(
 
 
 class AdminUserRoleAssignmentRequest(BaseModel):
-    """Replace a user's single canonical platform role."""
+    """Replace a user's single platform role, including a custom role."""
 
-    role: RoleName
+    role: str = Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role_name(cls, value: str) -> str:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class AdminUserRoleAssignmentResponse(BaseModel):
@@ -884,10 +947,10 @@ async def assign_admin_user_role(
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AdminUserRoleAssignmentResponse:
-    """Assign exactly one canonical role, audit it, and revoke stale sessions."""
+    """Assign exactly one existing role, audit it, and revoke stale sessions."""
     from fastapi import HTTPException
 
-    # Lock both the account and the canonical role row to serialize competing changes.
+    # Lock both the account and the selected role row to serialize competing changes.
     user_result = await session.execute(
         select(User)
         .where(User.id == user_id, User.deleted_at.is_(None))
@@ -899,11 +962,39 @@ async def assign_admin_user_role(
         raise HTTPException(status_code=404, detail="User not found.")
 
     role_result = await session.execute(
-        select(Role).where(Role.name == payload.role.value).with_for_update()
+        select(Role)
+        .options(selectinload(Role.permissions))
+        .where(Role.name == payload.role)
+        .with_for_update()
     )
     new_role = role_result.scalar_one_or_none()
     if new_role is None:
-        raise HTTPException(status_code=409, detail="The six-role catalog migration must be applied before assigning roles.")
+        raise HTTPException(status_code=409, detail="The requested role does not exist.")
+
+    actor_permissions = _effective_permission_codes(current_user)
+    actor_is_super_admin = _has_super_admin_role(current_user)
+    target_permissions = {
+        permission.code for permission in (new_role.permissions or [])
+    }
+    if new_role.name == "super_admin" and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign the Super Admin role.",
+        )
+    if Permission.ROLES_MANAGE.value in target_permissions and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign a role with RBAC governance access.",
+        )
+    unauthorized_permissions = sorted(target_permissions - actor_permissions)
+    if unauthorized_permissions:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "You cannot assign a role with permissions beyond your own effective access.",
+                "unauthorized_permissions": unauthorized_permissions,
+            },
+        )
 
     previous_roles = sorted(role.name for role in user.roles)
     if previous_roles == [new_role.name]:
@@ -919,27 +1010,8 @@ async def assign_admin_user_role(
             detail="Administrators cannot change their own role. Ask another Super Admin to perform this action.",
         )
 
-    if (
-        user.status == "ACTIVE"
-        and "super_admin" in previous_roles
-        and new_role.name != "super_admin"
-    ):
-        super_admin_role = await session.execute(
-            select(Role).where(Role.name == "super_admin").with_for_update()
-        )
-        if super_admin_role.scalar_one_or_none() is not None:
-            active_super_admins = await session.execute(
-                select(func.count(User.id)).where(
-                    func.upper(User.status) == "ACTIVE",
-                    User.deleted_at.is_(None),
-                    User.roles.any(Role.name == "super_admin"),
-                )
-            )
-            if (active_super_admins.scalar_one() or 0) <= 1:
-                raise HTTPException(
-                    status_code=409,
-                    detail="The last active Super Admin cannot be demoted or reassigned.",
-                )
+    if new_role.name != "super_admin" and "super_admin" in previous_roles:
+        await _protect_last_active_super_admin(session, user.id)
 
     user.roles = [new_role]
     revoked_at = datetime.now(timezone.utc)
