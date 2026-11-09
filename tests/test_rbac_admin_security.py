@@ -31,6 +31,19 @@ class _Result:
         return self.items if self.items is not None else []
 
 
+def _actor_with_permissions(*codes: str):
+    return SimpleNamespace(
+        id=uuid4(),
+        roles=[
+            SimpleNamespace(
+                permissions=[
+                    SimpleNamespace(code=code) for code in codes
+                ]
+            )
+        ],
+    )
+
+
 class _Session:
     def __init__(self, results):
         self.results = list(results)
@@ -118,7 +131,7 @@ def test_rbac_permission_change_is_audited_with_before_and_after_codes():
         description="Manager role",
         permissions=[old_permission],
     )
-    actor = SimpleNamespace(id=uuid4())
+    actor = _actor_with_permissions("requests:read")
     session = _Session([
         _Result(role),
         _Result(items=[new_permission]),
@@ -174,7 +187,7 @@ def test_rbac_noop_permission_update_does_not_create_audit_event():
             payload=RBACRolePermissionUpdateRequest(
                 permission_codes=["users:read"]
             ),
-            current_user=SimpleNamespace(id=uuid4()),
+            current_user=_actor_with_permissions("users:read"),
             session=session,
         )
     )
@@ -404,3 +417,39 @@ def test_custom_role_update_rejects_system_roles_and_duplicate_names():
     asyncio.run(duplicate_scenario())
     assert not duplicate_session.committed
     assert not duplicate_session.added
+
+
+def test_rbac_update_cannot_grant_permissions_beyond_the_actors_effective_access():
+    role = SimpleNamespace(
+        id=uuid4(),
+        name="regional_manager",
+        description="Regional manager",
+        permissions=[],
+    )
+    permission = SimpleNamespace(
+        id=uuid4(),
+        code="requests:read",
+        description="Read requests",
+    )
+    actor = _actor_with_permissions("roles:manage", "users:read")
+    session = _Session([
+        _Result(role),
+        _Result(items=[permission]),
+    ])
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await update_role_permissions(
+                role_id=role.id,
+                payload=RBACRolePermissionUpdateRequest(
+                    permission_codes=["requests:read"]
+                ),
+                current_user=actor,
+                session=session,
+            )
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail["unauthorized_permissions"] == ["requests:read"]
+
+    asyncio.run(scenario())
+    assert not session.committed
+    assert not session.added
