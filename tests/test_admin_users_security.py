@@ -244,7 +244,18 @@ def test_custom_role_assignment_is_supported_and_revokes_existing_sessions():
         admin_users.assign_admin_user_role(
             user_id=target_id,
             payload=payload,
-            current_user=SimpleNamespace(id=actor_id),
+            current_user=SimpleNamespace(
+                id=actor_id,
+                roles=[
+                    SimpleNamespace(
+                        name="super_admin",
+                        permissions=[
+                            SimpleNamespace(code="roles:manage"),
+                            SimpleNamespace(code="users:read"),
+                        ],
+                    )
+                ],
+            ),
             session=session,
         )
     )
@@ -300,3 +311,89 @@ def test_custom_role_assignment_cannot_demote_the_last_active_super_admin():
     assert not session.committed
     assert not session.added
     assert [role.name for role in target.roles] == ["super_admin"]
+
+
+def test_role_assignment_cannot_grant_super_admin_to_non_super_admin_actor():
+    actor_id, target_id = uuid4(), uuid4()
+    target = SimpleNamespace(
+        id=target_id,
+        username="target-user",
+        status="ACTIVE",
+        roles=[],
+    )
+    super_admin_role = SimpleNamespace(
+        id=uuid4(),
+        name="super_admin",
+        description="Protected role",
+        permissions=[],
+    )
+    session = _Session([_Result(target), _Result(super_admin_role)])
+    actor = SimpleNamespace(
+        id=actor_id,
+        roles=[
+            SimpleNamespace(
+                name="admin",
+                permissions=[SimpleNamespace(code="roles:manage")],
+            )
+        ],
+    )
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_users.assign_admin_user_role(
+                user_id=target_id,
+                payload=admin_users.AdminUserRoleAssignmentRequest(role="super_admin"),
+                current_user=actor,
+                session=session,
+            )
+        assert exc_info.value.status_code == 403
+
+    asyncio.run(scenario())
+    assert not session.committed
+    assert not session.added
+
+
+def test_role_assignment_cannot_exceed_the_actors_effective_permissions():
+    actor_id, target_id = uuid4(), uuid4()
+    target = SimpleNamespace(
+        id=target_id,
+        username="target-user",
+        status="ACTIVE",
+        roles=[],
+    )
+    custom_role = SimpleNamespace(
+        id=uuid4(),
+        name="regional_manager",
+        description="Regional manager",
+        permissions=[SimpleNamespace(code="users:delete")],
+    )
+    actor = SimpleNamespace(
+        id=actor_id,
+        roles=[
+            SimpleNamespace(
+                name="admin",
+                permissions=[
+                    SimpleNamespace(code="roles:manage"),
+                    SimpleNamespace(code="users:read"),
+                ],
+            )
+        ],
+    )
+    session = _Session([_Result(target), _Result(custom_role)])
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_users.assign_admin_user_role(
+                user_id=target_id,
+                payload=admin_users.AdminUserRoleAssignmentRequest(
+                    role="regional_manager"
+                ),
+                current_user=actor,
+                session=session,
+            )
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail["unauthorized_permissions"] == ["users:delete"]
+
+    asyncio.run(scenario())
+    assert not session.committed
+    assert not session.added
