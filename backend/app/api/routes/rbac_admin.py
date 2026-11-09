@@ -54,6 +54,19 @@ class RBACRoleResponse(BaseModel):
     permissions: list[RBACPermissionResponse] = []
 
 
+class RBACOverviewResponse(BaseModel):
+    total_roles: int
+    system_roles: int
+    custom_roles: int
+    active_roles: int | None = None
+    inactive_roles: int | None = None
+    role_status_supported: bool
+    permission_catalog_size: int
+    users_with_roles: int
+    recent_rbac_changes: int
+    recent_change_window_days: int
+
+
 class RBACRoleCreateRequest(BaseModel):
     """Validated input for creating a non-system custom role."""
 
@@ -112,6 +125,73 @@ class RBACRolePermissionUpdateRequest(BaseModel):
 
 class RBACRolePermissionUpdateResponse(BaseModel):
     role: RBACRoleResponse
+
+
+@router.get(
+    "/overview",
+    response_model=RBACOverviewResponse,
+    dependencies=[Depends(require_permission(Permission.ADMIN_ACCESS))],
+)
+async def get_rbac_overview(
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return only database-backed RBAC counts; role lifecycle status is not modeled."""
+
+    canonical_names = (
+        "super_admin",
+        "admin",
+        "manager",
+        "staff",
+        "support",
+        "customer",
+    )
+    window_days = 30
+    since = datetime.now(timezone.utc) - timedelta(days=window_days)
+
+    total_roles = await session.execute(select(func.count(Role.id)))
+    system_roles = await session.execute(
+        select(func.count(Role.id)).where(Role.name.in_(canonical_names))
+    )
+    permission_count = await session.execute(
+        select(func.count(PermissionModel.id))
+    )
+    users_with_roles = await session.execute(
+        select(func.count(User.id)).where(
+            User.deleted_at.is_(None),
+            User.roles.any(),
+        )
+    )
+    recent_changes = await session.execute(
+        select(func.count(AuditLog.id)).where(
+            AuditLog.action.in_(
+                (
+                    "rbac.role_created",
+                    "rbac.role_updated",
+                    "rbac.role_duplicated",
+                    "rbac.role_permissions_updated",
+                    "user.role_assigned",
+                    "user.roles_assigned",
+                )
+            ),
+            AuditLog.created_at >= since,
+        )
+    )
+
+    total = int(total_roles.scalar_one() or 0)
+    system = int(system_roles.scalar_one() or 0)
+    return RBACOverviewResponse(
+        total_roles=total,
+        system_roles=system,
+        custom_roles=max(0, total - system),
+        active_roles=None,
+        inactive_roles=None,
+        role_status_supported=False,
+        permission_catalog_size=int(permission_count.scalar_one() or 0),
+        users_with_roles=int(users_with_roles.scalar_one() or 0),
+        recent_rbac_changes=int(recent_changes.scalar_one() or 0),
+        recent_change_window_days=window_days,
+    )
 
 
 @router.get(
