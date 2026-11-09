@@ -1246,7 +1246,7 @@ def test_user_profile_workspace_has_accessible_bilingual_tabs() -> None:
     assert "profile-tab.is-active" in stylesheet
 
 
-def test_public_login_includes_bilingual_verified_telegram_recovery_flow() -> None:
+def test_public_login_supports_bilingual_verified_telegram_and_email_recovery() -> None:
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
@@ -1255,18 +1255,25 @@ def test_public_login_includes_bilingual_verified_telegram_recovery_flow() -> No
     stylesheet = (root / "backend" / "app" / "static" / "website" / "auth.css").read_text(encoding="utf-8")
 
     for element_id in (
-        "showRecovery", "recoveryPanel", "recoveryRequestForm",
+        "showRecovery", "recoveryPanel", "recoveryRequestForm", "recoveryChannel",
         "recoveryVerifyForm", "recoveryIdentifier", "recoveryCode",
         "newPassword", "recoveryMessage", "backToLogin",
     ):
         assert f'id="{element_id}"' in page
+    assert '<option value="telegram">' in page
+    assert '<option value="email">' in page
     assert "/api/v1/auth/password-recovery/request" in script
     assert "/api/v1/auth/password-recovery/verify" in script
-    assert "verified linked Telegram account" in script
-    assert "هوية Telegram موثّقة" in script
-    assert "dir=\"rtl\"" in page
+    assert 'channel:$("recoveryChannel").value' in script
+    assert "requestSentTelegram" in script
+    assert "requestSentEmail" in script
+    assert "Verified Telegram account" in script
+    assert "Verified email address" in script
+    assert "حساب Telegram الموثّق" in script
+    assert "البريد الإلكتروني الموثّق" in script
+    assert ".auth-card select" in stylesheet
+    assert 'dir="rtl"' in page
     assert "[hidden]{display:none!important}" in stylesheet
-
 
 def test_security_dashboard_endpoints_require_authentication() -> None:
     overview = asyncio.run(get("/api/v1/admin/dashboard/security/overview"))
