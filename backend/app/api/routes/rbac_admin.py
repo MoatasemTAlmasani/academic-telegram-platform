@@ -52,7 +52,7 @@ class RBACRoleCreateRequest(BaseModel):
     @field_validator("name", mode="before")
     @classmethod
     def normalize_name(cls, value: str) -> str:
-        return value.strip().lower()
+        return value.strip().lower() if isinstance(value, str) else value
 
     @field_validator("description")
     @classmethod
