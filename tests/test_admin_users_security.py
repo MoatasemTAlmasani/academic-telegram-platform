@@ -520,6 +520,8 @@ def test_user_access_panel_uses_permission_gated_multi_role_assignment_ui():
     html = Path("backend/app/static/admin/console.html").read_text(encoding="utf-8")
     script = Path("backend/app/static/admin/console.js").read_text(encoding="utf-8")
     assert 'id="userRoleChoices"' in html
+    assert 'id="userAccessState"' in html
     assert 'data-user-role-choice' in script
+    assert 'data.access_enabled' in script
     assert '"/roles",{method:"PUT"' in script
     assert 'form.hidden=!has("roles:manage")' in script
