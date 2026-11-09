@@ -36,6 +36,11 @@
         <h2 id="recoveryHeading">استعادة كلمة المرور</h2>
         <p id="recoveryIntro">أدخل اسم المستخدم أو البريد الإلكتروني. إذا كان الحساب مرتبطًا بهوية Telegram موثّقة، فسنرسل رمز الاستعادة إليها.</p>
         <form id="recoveryRequestForm">
+          <label id="recoveryChannelLabel" for="recoveryChannel">قناة الاستعادة</label>
+          <select id="recoveryChannel" name="channel" required>
+            <option value="telegram">حساب Telegram الموثّق</option>
+            <option value="email">البريد الإلكتروني الموثّق</option>
+          </select>
           <label id="recoveryIdentifierLabel" for="recoveryIdentifier">اسم المستخدم أو البريد الإلكتروني</label>
           <input id="recoveryIdentifier" name="identifier" autocomplete="username" required maxlength="320">
           <button id="recoveryRequestButton" type="submit">إرسال رمز الاستعادة</button>
@@ -56,6 +61,6 @@
     </section>
     <footer>© <span id="year"></span> EHTERAF</footer>
   </main>
-  <script src="/website/static/login.js?v=20261106-recovery" defer></script>
+  <script src="/website/static/login.js?v=20261109-recovery-channels" defer></script>
 </body>
 </html>
