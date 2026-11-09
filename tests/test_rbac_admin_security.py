@@ -301,6 +301,8 @@ def test_custom_role_creation_ui_is_gated_by_roles_manage_and_uses_existing_api(
     assert 'has("roles:manage")&&isCustomRole' in source
     assert 'api("/rbac/roles/"+r.id,{method:"PATCH"' in source
     assert 'id="roleMetadataForm"' in source
+    assert 'id="duplicateRoleForm"' in source
+    assert 'api("/rbac/roles/"+r.id+"/duplicate",{method:"POST"' in source
 
 
 def test_custom_role_update_normalizes_metadata_and_records_before_after_audit():
