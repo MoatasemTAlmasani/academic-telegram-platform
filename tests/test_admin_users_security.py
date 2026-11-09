@@ -274,6 +274,7 @@ def test_custom_role_assignment_cannot_demote_the_last_active_super_admin():
     session = _Session([
         _Result(target),
         _Result(replacement_role),
+        _Result("ACTIVE"),
         _Result(super_admin_role),
         _Result(1),
     ])
@@ -292,8 +293,8 @@ def test_custom_role_assignment_cannot_demote_the_last_active_super_admin():
         assert "last active Super Admin" in exc_info.value.detail
 
     asyncio.run(scenario())
-    assert len(session.statements) == 4
-    assert session.statements[2]._for_update_arg is not None
+    assert len(session.statements) == 5
+    assert session.statements[3]._for_update_arg is not None
     assert not session.committed
     assert not session.added
     assert [role.name for role in target.roles] == ["super_admin"]
