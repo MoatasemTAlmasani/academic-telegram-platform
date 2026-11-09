@@ -892,7 +892,7 @@ async def assign_admin_user_role(
     """Assign exactly one existing role, audit it, and revoke stale sessions."""
     from fastapi import HTTPException
 
-    # Lock both the account and the canonical role row to serialize competing changes.
+    # Lock both the account and the selected role row to serialize competing changes.
     user_result = await session.execute(
         select(User)
         .where(User.id == user_id, User.deleted_at.is_(None))
@@ -908,7 +908,7 @@ async def assign_admin_user_role(
     )
     new_role = role_result.scalar_one_or_none()
     if new_role is None:
-        raise HTTPException(status_code=409, detail="The six-role catalog migration must be applied before assigning roles.")
+        raise HTTPException(status_code=409, detail="The requested role does not exist.")
 
     previous_roles = sorted(role.name for role in user.roles)
     if previous_roles == [new_role.name]:
