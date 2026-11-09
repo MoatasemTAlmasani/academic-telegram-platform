@@ -1064,3 +1064,65 @@ def test_custom_role_can_be_created_audited_and_assigned_with_session_revocation
             }
 
     asyncio.run(scenario())
+
+
+def test_multi_role_assignment_returns_effective_permission_union_and_revokes_sessions(api_harness):
+    async def scenario():
+        await api_harness.start(
+            permissions=("roles:manage", "users:read", "requests:read")
+        )
+        created_roles = []
+        for name in ("regional_reader", "request_reader"):
+            response = await api_harness.request(
+                "POST",
+                "/api/v1/rbac/roles",
+                json={"name": name},
+            )
+            assert response.status_code == 201, response.text
+            created_roles.append(response.json()["role"])
+
+        permission_sets = (
+            ("users:read",),
+            ("requests:read",),
+        )
+        for role, codes in zip(created_roles, permission_sets):
+            updated = await api_harness.request(
+                "PUT",
+                f"/api/v1/rbac/roles/{role['id']}/permissions",
+                json={"permission_codes": list(codes)},
+            )
+            assert updated.status_code == 200, updated.text
+
+        assigned = await api_harness.request(
+            "PUT",
+            f"/api/v1/admin/users/{api_harness.target_id}/roles",
+            json={"role_names": [" REQUEST_READER ", "regional_reader"]},
+        )
+        assert assigned.status_code == 200, assigned.text
+        assert [role["name"] for role in assigned.json()["roles"]] == [
+            "regional_reader",
+            "request_reader",
+        ]
+        assert assigned.json()["sessions_revoked"] == 1
+
+        summary = await api_harness.request(
+            "GET",
+            f"/api/v1/admin/users/{api_harness.target_id}/access-summary",
+        )
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["permissions"] == ["requests:read", "users:read"]
+
+        async with api_harness.factory() as session:
+            active_sessions = (await session.execute(
+                select(UserSession).where(
+                    UserSession.user_id == api_harness.target_id,
+                    UserSession.revoked_at.is_(None),
+                )
+            )).scalars().all()
+            assert active_sessions == []
+            events = (await session.execute(
+                select(AuditLog).where(AuditLog.resource_id == api_harness.target_id)
+            )).scalars().all()
+            assert any(event.action == "user.roles_assigned" for event in events)
+
+    asyncio.run(scenario())
