@@ -1233,8 +1233,11 @@ async def assign_admin_user_roles(
 
 
 class AdminUserAccessSummaryResponse(BaseModel):
-    """Read-only summary of roles and effective permission codes."""
+    """Read-only summary of assigned roles and currently effective access."""
 
+    account_status: str
+    access_enabled: bool
+    access_block_reason: str | None = None
     roles: list[AdminUserRoleResponse]
     permissions: list[str]
 
@@ -1269,12 +1272,39 @@ async def get_admin_user_access_summary(
         )
         for role in user.roles
     ]
+
+    now = datetime.now(timezone.utc)
+    account_status = str(user.status).upper()
+    locked_until = user.locked_until
+    account_expires_at = user.account_expires_at
+    if locked_until is not None and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if account_expires_at is not None and account_expires_at.tzinfo is None:
+        account_expires_at = account_expires_at.replace(tzinfo=timezone.utc)
+
+    if account_status != "ACTIVE":
+        access_block_reason = "account_inactive"
+    elif locked_until is not None and locked_until > now:
+        access_block_reason = "account_locked"
+    elif account_expires_at is not None and account_expires_at <= now:
+        access_block_reason = "account_expired"
+    else:
+        access_block_reason = None
+
+    access_enabled = access_block_reason is None
     permissions = sorted({
         permission.code
         for role in user.roles
         for permission in role.permissions
-    })
-    return AdminUserAccessSummaryResponse(roles=roles, permissions=permissions)
+    }) if access_enabled else []
+
+    return AdminUserAccessSummaryResponse(
+        account_status=account_status,
+        access_enabled=access_enabled,
+        access_block_reason=access_block_reason,
+        roles=roles,
+        permissions=permissions,
+    )
 
 
 class AdminUserAuditEntryResponse(BaseModel):
