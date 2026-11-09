@@ -1187,7 +1187,7 @@ async def assign_admin_user_roles(
         )
 
     if (
-        user.status == "ACTIVE"
+        str(user.status).upper() == "ACTIVE"
         and "super_admin" in previous_names
         and "super_admin" not in requested_names
     ):
