@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -168,7 +168,7 @@ async def create_custom_role(
         )
 
     existing = await session.execute(
-        select(Role).where(Role.name == payload.name).with_for_update()
+        select(Role).where(func.lower(Role.name) == payload.name).with_for_update()
     )
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail="A role with this name already exists.")
