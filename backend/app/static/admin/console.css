@@ -364,3 +364,8 @@
 .role-assignment-choice span{display:grid;gap:3px;min-width:0}
 .role-assignment-choice b{font-size:11px;color:var(--text);overflow-wrap:anywhere}
 .role-assignment-choice small{font-size:9px;color:var(--muted);overflow-wrap:anywhere}
+
+
+.access-state-note{margin:10px 0;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:10px}
+.access-state-note[data-state="enabled"]{border-color:var(--success-border,var(--line))}
+.access-state-note[data-state="disabled"]{border-color:var(--danger-border,var(--line));background:var(--panel2)}
