@@ -23,7 +23,7 @@ from backend.app.infrastructure.persistence.database import get_session
 from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 from backend.app.modules.authentication.permissions import Permission
 from backend.app.modules.authentication.roles import RoleName
-from database.models.identity import Role, User, UserSession
+from database.models.identity import Permission as PermissionModel, Role, User, UserSession
 from database.models.audit import AuditLog
 from database.models.security import ExternalIdentity, LoginAttempt
 from backend.app.modules.authentication.jwt import decode_access_token_with_session
@@ -1304,6 +1304,99 @@ async def get_admin_user_access_summary(
         access_block_reason=access_block_reason,
         roles=roles,
         permissions=permissions,
+    )
+
+
+class AdminUserAccessCheckResponse(BaseModel):
+    """Read-only explanation of a permission check for one account."""
+
+    account_status: str
+    access_enabled: bool
+    permission_code: str
+    permission_known: bool
+    allowed: bool
+    reason: str
+    contributing_roles: list[str]
+
+
+@router.get(
+    "/{user_id}/access-check",
+    response_model=AdminUserAccessCheckResponse,
+    dependencies=[Depends(require_permission(Permission.USERS_READ))],
+)
+async def check_admin_user_permission(
+    user_id: UUID,
+    permission_code: str = Query(min_length=1, max_length=150),
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminUserAccessCheckResponse:
+    """Explain whether an account currently has one catalogued permission; never impersonates it."""
+    from fastapi import HTTPException
+
+    normalized_code = permission_code.strip()
+    if not normalized_code:
+        raise HTTPException(status_code=422, detail="permission_code cannot be blank.")
+
+    result = await session.execute(
+        select(User)
+        .options(selectinload(User.roles).selectinload(Role.permissions))
+        .where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    catalog_result = await session.execute(
+        select(PermissionModel.id).where(PermissionModel.code == normalized_code)
+    )
+    permission_known = catalog_result.scalar_one_or_none() is not None
+
+    now = datetime.now(timezone.utc)
+    account_status = str(user.status).upper()
+    locked_until = user.locked_until
+    account_expires_at = user.account_expires_at
+    if locked_until is not None and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if account_expires_at is not None and account_expires_at.tzinfo is None:
+        account_expires_at = account_expires_at.replace(tzinfo=timezone.utc)
+
+    if account_status != "ACTIVE":
+        access_block_reason = "account_inactive"
+    elif locked_until is not None and locked_until > now:
+        access_block_reason = "account_locked"
+    elif account_expires_at is not None and account_expires_at <= now:
+        access_block_reason = "account_expired"
+    else:
+        access_block_reason = None
+
+    contributing_roles = sorted({
+        role.name
+        for role in user.roles
+        if any(
+            permission.code == normalized_code
+            for permission in role.permissions
+        )
+    })
+    if not permission_known:
+        reason = "unknown_permission_code"
+    elif access_block_reason is not None:
+        reason = access_block_reason
+    elif contributing_roles:
+        reason = "permission_granted"
+    else:
+        reason = "permission_not_assigned"
+
+    access_enabled = access_block_reason is None
+    allowed = permission_known and access_enabled and bool(contributing_roles)
+
+    return AdminUserAccessCheckResponse(
+        account_status=account_status,
+        access_enabled=access_enabled,
+        permission_code=normalized_code,
+        permission_known=permission_known,
+        allowed=allowed,
+        reason=reason,
+        contributing_roles=contributing_roles,
     )
 
 
