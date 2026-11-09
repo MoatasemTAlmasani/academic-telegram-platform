@@ -65,3 +65,16 @@ This is deliberately scoped to sessions of users who currently hold the changed 
 **Test added:** `test_rbac_permission_change_revokes_sessions_for_users_with_the_role` checks that the route issues the session-revocation update and records its row count in the audit metadata.
 
 **Verification:** Source and test changes only. The test has not been executed; database-engine behavior and full API integration remain unverified.
+
+
+## Finding 04 — RBAC overview API was not surfaced in the dashboard (addressed in current branch; tests not run)
+
+**Locations:** `backend/app/api/routes/rbac_admin.py`, `backend/app/static/admin/console.html`, and `backend/app/static/admin/console.js`.
+
+The database-backed `GET /api/v1/rbac/overview` endpoint already returned role totals, system/custom role counts, permission catalogue size, users with roles, and recent RBAC changes. The Roles & Permissions page did not call or display that endpoint.
+
+The current branch adds a responsive overview metric row to the existing page and loads the six available values from the API. If the overview request fails, the role list and permission editor remain usable and the metric values show the existing unavailable state rather than blocking the whole page.
+
+**Test added:** `test_rbac_dashboard_renders_database_backed_overview_metrics` verifies the dashboard container, API call, and displayed metric fields.
+
+**Verification:** Static source assertions only; not executed. Browser layout, localization rendering, and live API integration remain unverified.
