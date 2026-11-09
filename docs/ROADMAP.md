@@ -71,6 +71,120 @@ Scope:
 - Separate permission to administer RBAC from permission to access the admin console.
 - Protect the last active Super Admin and audit privileged changes.
 
+
+**Detailed scope — Roles & Permissions administration**
+
+**Administration dashboard navigation**
+- Add one primary sidebar section named **Roles & Permissions** (Arabic: **إدارة الأدوار والصلاحيات**) inside the existing administration dashboard. Keep all related screens nested beneath this section; do not create a separate application or disconnected navigation area.
+- Provide these permission-filtered child pages: Overview; Roles; Permission Catalog; Role Permission Matrix; User Role Assignments; Effective User Access; RBAC Change History; Security & Protection Policies.
+- Preserve the existing authenticated shell, breadcrumbs, responsive sidebar, theme, language, and RTL/LTR behavior. Direct URL access must be protected by backend authorization even when a navigation item is hidden.
+
+**1. RBAC overview**
+- Show database-backed counts for total, active, inactive, and system roles; permission catalog size; users with assigned roles; and recent RBAC changes.
+- Provide links to the corresponding filtered lists and recent events.
+- Show only verifiable persisted data. Do not fabricate KPIs or treat missing data as zero without an explicit definition.
+- Apply the relevant read permissions to each metric and drill-down.
+
+**2. Roles directory and lifecycle**
+- List roles with localized name/description, immutable role code, system/custom classification, active status, permission count, assigned-user count, and last update.
+- Support server-side search, filtering, sorting, pagination, and role detail views.
+- Authorized operators may create, edit, activate, deactivate, and duplicate custom roles, subject to privilege boundaries.
+- Validate required localized names, unique normalized role codes, reserved/system codes, field lengths, and valid status transitions.
+- A newly created role receives no implicit permissions. Duplicating a role copies only explicitly permitted assignments and never copies protected identity or Super Admin status.
+- Before deactivation, show the number of affected users and explain the effective-access impact. Deactivation must not delete historical relationships or audit evidence.
+- Protect system roles and the last active Super Admin from deletion, deactivation, or privilege reduction. Any exceptional protected-role workflow must be explicit, separately authorized, audited, and covered by security tests.
+
+**3. Permission Catalog**
+- Maintain one authoritative catalog of permissions used by backend authorization and administration UI.
+- Group entries by the actual registered platform modules and resources; do not invent permissions for modules or actions that do not exist.
+- For each permission expose its stable code, Arabic and English labels, description, module/resource, action, sensitivity/administrative classification, active/deprecated state, and roles currently assigned where authorized.
+- Support search by code/name, module and action filters, sensitive-permission filters, and unassigned-permission views.
+- Use a consistent documented naming convention such as `module:resource:action`, while preserving existing permission codes and compatibility. Any code migration requires an explicit mapping, backward-compatibility plan, and tests.
+- Unknown permission codes must be rejected. Retire/deprecate permissions safely; do not silently delete permissions still referenced by roles or code.
+
+**4. Role Permission Matrix**
+- Allow an authorized operator to select a role and inspect its complete current permission set grouped by module/resource.
+- Support granting and revoking individual permissions and clearly scoped group selections. Group selection must show the exact permissions affected before saving; it must not imply blanket access beyond the displayed set.
+- Display sensitive permissions distinctly, explain their impact, and require confirmation where policy classifies the change as high risk.
+- Show an explicit before/after change preview, unsaved-change state, validation errors, and conflict handling for concurrent edits.
+- Save the complete validated change atomically. If any permission is unknown, unauthorized, or invalid, reject the entire operation without partial updates.
+- Enforce the grantor's authority: an operator cannot grant permissions they are not authorized to administer or exceed their own permitted privilege boundary. Protect system/Super Admin role assignments.
+
+**5. User Role Assignments**
+- Search and inspect users using only fields the operator is authorized to see; show account status and current active/inactive roles.
+- Assign or remove roles through an explicit review-and-confirm workflow that previews the resulting effective-access changes.
+- Reject assignment of inactive roles and enforce account eligibility, organization/branch constraints where those policies are implemented, and the operator's grant authority.
+- Prevent self-escalation and indirect escalation through role or permission changes. Protect the last active Super Admin from removal, suspension, or privilege reduction.
+- Record the actor, target user, role, operation, timestamp, reason when required, and safe before/after metadata.
+- Preserve assignment history where supported by the existing data/audit model; do not invent validity periods or direct-user grants unless explicitly designed and approved.
+
+**6. Effective User Access**
+- Provide an authorized, server-calculated view of a user's effective permissions, based on active assigned roles and the platform's actual authorization rules.
+- Show which role(s) contribute each permission, relevant account/role status, and applicable organization/branch scope restrictions where implemented.
+- If the platform supports explicit deny rules or direct user grants, document and apply their precedence. Otherwise do not introduce an assumed deny/allow hierarchy or unsupported direct grants.
+- Provide a diagnostic access-check for a selected user, permission, and resource/scope where applicable. Return allow/deny and a safe reason/source explanation without exposing secrets or bypassing normal API authorization.
+- Keep this diagnostic read-only. It must not impersonate users or execute the requested business action.
+
+**7. RBAC change history**
+- Provide searchable, server-paginated history for role creation/update/status changes, permission grants/revocations, user-role assignments/removals, protected-role attempts, and denied privileged operations where safely recordable.
+- Record actor, target/resource, action, timestamp, outcome, request/correlation ID, reason when supplied, and sanitized before/after values.
+- Reuse the existing AuditLog/audit service and established transaction/outbox pattern. Do not create a parallel audit subsystem.
+- Never log passwords, access/refresh tokens, secrets, full private documents, or unnecessary personal data.
+- Restrict history viewing and export with separate permissions. Audit records must not be editable through ordinary RBAC screens.
+
+**8. Security and protection policies**
+- Keep permission to administer RBAC distinct from permission to enter the admin console. A broad admin-console permission must not implicitly authorize role/permission mutations.
+- Enforce authorization on every protected backend endpoint; frontend navigation and button visibility are usability controls only.
+- Prevent privilege escalation, self-escalation, assignment of permissions beyond the operator's authority, insecure object references (IDOR), and cross-scope access.
+- Protect the last active Super Admin using a transaction-safe invariant that remains correct under concurrent requests. Do not rely only on role names or frontend checks to identify the protected principal.
+- Re-evaluate authorization after role/permission changes. Invalidate or refresh relevant permission caches/sessions/tokens according to the existing authentication design so revoked permissions do not remain effective through stale claims.
+- Treat organization/branch scoping as backend policy constraints. Do not implement scope enforcement as UI filters or introduce speculative multi-tenancy in this stage.
+- Use least privilege, safe error responses, and security event auditing.
+
+**Data model and API constraints**
+- Existing `Role`, `Permission`, `user_roles`, and `role_permissions` records remain authoritative. Inspect their actual fields, constraints, relationships, seed data, and usage before changing anything.
+- Reuse existing RBAC routes, authorization dependencies, services, schemas, and audit infrastructure. Extend them only where a demonstrated gap exists; do not add duplicate endpoints or parallel models.
+- Any proposed endpoint must follow the repository's existing API versioning and response conventions. Expected capabilities include role list/detail/create/update/status, permission catalog, role-permission read/update, user-role read/update, effective-access inspection, access diagnostics, and audit search/export; reconcile these with existing routes before implementation.
+- All mutations require backend permission checks, input validation, transactional persistence, concurrency-safe invariants, and audit records.
+- Add database schema only when essential and justified. Any schema change requires a reviewed reversible migration and isolated-database tests; never run migrations against production as part of this delivery.
+
+**Localization, accessibility, and UI states**
+- Arabic and English labels, descriptions, validation messages, confirmations, and errors must be complete; verify true RTL/LTR layouts.
+- Support desktop, tablet, and mobile layouts, keyboard navigation, visible focus, and the existing light/dark theme.
+- Every screen must implement loading, empty, error, success, validation, permission-denied, conflict, and confirmation states as applicable.
+- Tables and search/filter/pagination must use server-side contracts for large datasets. Avoid loading the full user or permission catalog into the browser unnecessarily.
+
+**Required verification and security tests**
+- Test anonymous, authenticated-but-unauthorized, and authorized requests for every protected operation.
+- Test role create/update/duplicate/activate/deactivate, unique and reserved codes, inactive-role assignment, and protected system roles.
+- Test permission catalog integrity, unknown permission rejection, unauthorized grant/revoke, atomic rollback, and concurrent matrix updates.
+- Test user-role assignment/removal, multiple-role effective permission union under the actual policy, self-escalation, indirect escalation, and cross-scope access.
+- Test last active Super Admin lockout under sequential and concurrent operations.
+- Test stale token/session/cache behavior immediately after permission revocation and grant.
+- Test effective-access and diagnostic results against actual backend authorization decisions; UI and API must agree.
+- Test audit completeness, safe before/after metadata, denied privileged attempts, pagination, and export authorization.
+- Test the complete UI flows in Arabic/English, RTL/LTR, responsive viewports, and all relevant UI states.
+- Run tests only against isolated test databases and non-production identities. Record commands, results, CI run references, screenshots or browser evidence where available, and known limitations.
+
+**Definition of done**
+- All eight dashboard pages/workflows above are connected to real persisted data and existing application services.
+- No protected action depends solely on frontend visibility.
+- Permission administration is separated from general admin-console access.
+- Super Admin protection, least privilege, stale-authorization handling, and audit behavior are proven by automated tests.
+- Existing routes, roles, permission codes, user data, and integrations remain compatible or have a documented reviewed migration path.
+- Documentation, permission matrix, changed-file list, test evidence, known limitations, and rollback notes are recorded.
+- Set status to `VERIFIED` only after implementation and acceptance evidence pass; otherwise report the accurate status (`NOT_STARTED`, `IN_PROGRESS`, `PARTIAL`, `IMPLEMENTED`, or `BLOCKED`).
+
+**Implementation sequence**
+1. Inventory existing roles, permission codes, tables, relationships, APIs, dependencies, frontend navigation/pages, audit events, tests, and current gaps without changing behavior.
+2. Establish and test dedicated RBAC-administration authorization and a safe bootstrap path before enabling privileged editing.
+3. Complete role directory and lifecycle.
+4. Complete permission catalog and role-permission matrix.
+5. Complete user-role assignment and protection invariants.
+6. Complete effective-access diagnostics and stale-authorization handling.
+7. Complete audit history, dashboard integration, localization, and responsive behavior.
+8. Run security/integration/UI acceptance tests, document evidence, and update the stage status.
+
 #### 04. Platform-wide settings
 - Manage platform identity, branding, locale, timezone, date/number/currency formats, supported policies, notification settings, integrations, and operational preferences.
 - Validate settings, preserve omitted values during partial updates, protect secrets, and audit changes.
