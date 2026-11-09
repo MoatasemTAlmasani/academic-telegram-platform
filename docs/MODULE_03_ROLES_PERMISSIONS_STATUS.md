@@ -383,3 +383,13 @@ These tests are authored but have **not** been executed. The PostgreSQL acceptan
 - Extended unit and isolated SQLite API integration coverage for metadata updates, system-role protection, duplicate-name conflicts, and the create → update → assign → session-revocation workflow.
 
 **Verification remains PARTIAL / NOT VERIFIED:** these tests have been authored but not executed. Browser acceptance is also pending.
+
+
+### Phase 03.4 — Grantor privilege-boundary enforcement (in progress)
+
+- Role-permission updates now reject any requested permission that is not already present in the operator's effective permission union, even when the operator has `roles:manage`.
+- User-role assignment now loads the target role's permissions and rejects assignments that would grant permissions beyond the operator's own effective access.
+- Assigning the canonical `super_admin` role, or any role carrying `roles:manage`, is restricted to an operator who already holds the canonical `super_admin` role.
+- Added focused negative tests for unauthorized permission grants, over-privileged role assignments, and non-Super-Admin attempts to assign the Super Admin role.
+
+This closes an important privilege-escalation gap in the earlier implementation slice. Automated tests remain authored but unexecuted; the change is not yet verified.
