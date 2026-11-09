@@ -372,3 +372,14 @@ Repository-level source discovery is now substantially complete. Remaining check
 - Strengthened duplicate-name coverage to include a pre-existing uppercase role name, verifying the case-insensitive lookup behavior.
 
 These tests are authored but have **not** been executed. The PostgreSQL acceptance test is guarded by the existing strict local-database-name/host checks and must never be pointed at production or a shared application database.
+
+
+## Phase 03.3 — Custom role metadata management (in progress)
+
+- Added `PATCH /api/v1/rbac/roles/{role_id}` for custom-role rename and description updates.
+- The endpoint requires `roles:manage`, locks the role row, rejects edits to all six canonical system roles, rejects reserved system names and case-insensitive duplicates, and validates partial updates without accepting unexpected fields.
+- Changed metadata is recorded in the existing `AuditLog` with explicit before/after values; no-op updates do not create audit noise.
+- Added a bilingual Arabic/English metadata editor to the existing Roles & Permissions screen. It is only rendered for custom roles when the operator has `roles:manage`.
+- Extended unit and isolated SQLite API integration coverage for metadata updates, system-role protection, duplicate-name conflicts, and the create → update → assign → session-revocation workflow.
+
+**Verification remains PARTIAL / NOT VERIFIED:** these tests have been authored but not executed. Browser acceptance is also pending.
