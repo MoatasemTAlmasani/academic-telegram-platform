@@ -362,3 +362,13 @@ Repository-level source discovery is now substantially complete. Remaining check
 **Verification status:** `PARTIAL / NOT VERIFIED`. Tests were added but have not been executed in this environment. The current PR base is not `main`, and the inspected CI workflows trigger PR runs only when targeting `main`; therefore no CI run is expected from the current draft PR target. No production database, production data, secrets, or deployment were accessed or changed.
 
 **Remaining for this slice:** execute the targeted and full test suites in CI or an isolated development environment; inspect the resulting workflow logs; complete browser acceptance coverage for the create-role form and permission-assignment workflow. Custom-role permission assignment is already supported by the existing permission-matrix endpoint, subject to the same `roles:manage` authority and existing protection against granting `roles:manage` to non-Super-Admin roles.
+
+
+### Phase 03.2 security and acceptance-test additions
+
+- Extracted the last-active-Super-Admin demotion check into a focused helper. Every demotion now locks the canonical `super_admin` role row before counting active holders, so concurrent role changes serialize on the same database row.
+- Added a PostgreSQL-only concurrency acceptance test that runs two simultaneous Super Admin demotions against the dedicated disposable database `phase_acceptance`; it expects exactly one demotion to succeed and one to be rejected, leaving one active Super Admin.
+- Strengthened the isolated SQLite API integration test to create a live session for the target user and assert that role assignment revokes that session.
+- Strengthened duplicate-name coverage to include a pre-existing uppercase role name, verifying the case-insensitive lookup behavior.
+
+These tests are authored but have **not** been executed. The PostgreSQL acceptance test is guarded by the existing strict local-database-name/host checks and must never be pointed at production or a shared application database.
