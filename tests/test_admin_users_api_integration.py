@@ -1010,18 +1010,30 @@ def test_custom_role_can_be_created_audited_and_assigned_with_session_revocation
         assert role["description"] == "Regional operations"
         assert role["permissions"] == []
 
+        updated = await api_harness.request(
+            "PATCH",
+            f"/api/v1/rbac/roles/{role['id']}",
+            json={
+                "name": " AREA_LEAD ",
+                "description": " Area operations ",
+            },
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["role"]["name"] == "area_lead"
+        assert updated.json()["role"]["description"] == "Area operations"
+
         assigned = await api_harness.request(
             "PUT",
             f"/api/v1/admin/users/{api_harness.target_id}/role",
-            json={"role": "regional_manager"},
+            json={"role": "area_lead"},
         )
         assert assigned.status_code == 200, assigned.text
-        assert assigned.json()["role"]["name"] == "regional_manager"
+        assert assigned.json()["role"]["name"] == "area_lead"
         assert assigned.json()["sessions_revoked"] == 1
 
         async with api_harness.factory() as session:
             target = await session.get(User, api_harness.target_id, options=[selectinload(User.roles)])
-            assert [item.name for item in target.roles] == ["regional_manager"]
+            assert [item.name for item in target.roles] == ["area_lead"]
             active_sessions = (await session.execute(
                 select(UserSession).where(
                     UserSession.user_id == api_harness.target_id,
@@ -1034,6 +1046,7 @@ def test_custom_role_can_be_created_audited_and_assigned_with_session_revocation
             )).scalars().all()
             assert {event.action for event in events} == {
                 "rbac.role_created",
+                "rbac.role_updated",
                 "user.role_assigned",
             }
 
