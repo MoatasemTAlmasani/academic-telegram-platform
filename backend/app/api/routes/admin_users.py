@@ -939,6 +939,8 @@ class AdminUserRoleAssignmentResponse(BaseModel):
 class AdminUserRolesAssignmentRequest(BaseModel):
     """Replace a user's role set using existing role records."""
 
+    model_config = ConfigDict(extra="forbid")
+
     role_names: list[str] = Field(default_factory=list, max_length=20)
 
     @field_validator("role_names", mode="before")
@@ -960,6 +962,7 @@ class AdminUserRolesAssignmentRequest(BaseModel):
             if (
                 len(name) < 2
                 or len(name) > 50
+                or not name.isascii()
                 or not name[0].islower()
                 or any(not (character.islower() or character.isdigit() or character == "_") for character in name)
             ):
