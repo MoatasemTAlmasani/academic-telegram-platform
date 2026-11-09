@@ -415,3 +415,12 @@ This closes an important privilege-escalation gap in the earlier implementation 
 - Added unit and isolated SQLite API integration coverage for multi-role assignment, permission union, session revocation, and grantor-boundary rejection.
 
 **Verification remains PARTIAL / NOT VERIFIED:** automated tests and browser acceptance have not been run.
+
+
+### Phase 03.7 — Effective access respects account eligibility (in progress)
+
+- Extended the read-only access-summary response with account status, an explicit `access_enabled` flag, and a safe block reason.
+- Effective permissions are now empty when the target account is inactive, temporarily locked, or expired, matching the checks used by the authenticated-request dependency. Assigned roles remain visible for administrative diagnosis.
+- Added an account-detail status indicator and integration coverage for active permission unions and inactive-account access suppression.
+
+This does not introduce role-active flags or direct-user permission grants; neither exists in the inspected schema. Tests and browser acceptance remain pending.
