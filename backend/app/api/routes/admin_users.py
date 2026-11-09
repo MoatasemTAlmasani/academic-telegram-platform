@@ -22,7 +22,6 @@ from backend.app.api.dependencies import get_unit_of_work
 from backend.app.infrastructure.persistence.database import get_session
 from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 from backend.app.modules.authentication.permissions import Permission
-from backend.app.modules.authentication.roles import RoleName
 from database.models.identity import Permission as PermissionModel, Role, User, UserSession
 from database.models.audit import AuditLog
 from database.models.security import ExternalIdentity, LoginAttempt
@@ -437,7 +436,12 @@ class AdminUserCreateRequest(BaseModel):
     language: str | None = None
     timezone: str | None = None
     status: str = "active"
-    role: str = "customer"
+    role: str = Field(default="customer", min_length=2, max_length=50)
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role_name(cls, value: str) -> str:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 @router.post(
@@ -478,32 +482,54 @@ async def create_admin_user(
             detail="Username or email already exists.",
         )
 
-    try:
-        requested_role = RoleName(payload.role.strip().lower())
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Unsupported account role.") from exc
+    requested_role_name = payload.role
 
-    actor_permissions = {
-        permission.code
-        for assigned_role in (getattr(current_user, "roles", None) or [])
-        for permission in (getattr(assigned_role, "permissions", None) or [])
-    }
-    if requested_role != RoleName.CUSTOMER and Permission.ROLES_MANAGE.value not in actor_permissions:
+    actor_permissions = _effective_permission_codes(current_user)
+    actor_is_super_admin = _has_super_admin_role(current_user)
+
+    # Role assignment is a governed operation: creating an account must not
+    # become a lower-privilege path around the RBAC assignment endpoint.
+    if requested_role_name != "customer" and Permission.ROLES_MANAGE.value not in actor_permissions:
         raise HTTPException(
             status_code=403,
-            detail="Assigning a privileged role requires roles:manage.",
+            detail="Assigning a non-customer role requires roles:manage.",
         )
 
     role_result = await session.execute(
-        select(Role).where(func.lower(Role.name) == requested_role.value)
+        select(Role)
+        .options(selectinload(Role.permissions))
+        .where(func.lower(Role.name) == requested_role_name)
+        .with_for_update()
     )
-
     role = role_result.scalar_one_or_none()
 
     if role is None:
         raise HTTPException(
             status_code=400,
-            detail=f"Role '{payload.role}' does not exist.",
+            detail=f"Role '{requested_role_name}' does not exist.",
+        )
+
+    target_permissions = {
+        permission.code for permission in (role.permissions or [])
+    }
+    if role.name == "super_admin" and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign the Super Admin role.",
+        )
+    if Permission.ROLES_MANAGE.value in target_permissions and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign a role with RBAC governance access.",
+        )
+    unauthorized_permissions = sorted(target_permissions - actor_permissions)
+    if unauthorized_permissions:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "You cannot create an account with permissions beyond your own effective access.",
+                "unauthorized_permissions": unauthorized_permissions,
+            },
         )
 
     if payload.status.upper() not in {"ACTIVE", "INACTIVE", "SUSPENDED"}:
@@ -532,7 +558,7 @@ async def create_admin_user(
         resource_type="user",
         resource_id=user.id,
         description=f"Admin created user '{user.username}'.",
-        event_metadata={"role": payload.role},
+        event_metadata={"role": role.name, "role_id": str(role.id)},
         created_at=user.created_at,
     )
     session.add(audit_log)
