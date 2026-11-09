@@ -26,6 +26,17 @@ router = APIRouter(
 )
 
 
+def _effective_permission_codes(user) -> set[str]:
+    """Return the permission union actually assigned to an authenticated user."""
+
+    return {
+        permission.code
+        for role in (getattr(user, "roles", None) or [])
+        for permission in (getattr(role, "permissions", None) or [])
+        if getattr(permission, "code", None)
+    }
+
+
 class RBACPermissionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -309,6 +320,19 @@ async def update_role_permissions(
             detail={
                 "message": "Unknown permission codes.",
                 "unknown_permissions": unknown_codes,
+            },
+        )
+
+    # A grantor may only delegate permissions already present in their own
+    # effective access. This remains enforced even if roles:manage is misassigned.
+    actor_permissions = _effective_permission_codes(current_user)
+    unauthorized_codes = sorted(requested_codes - actor_permissions)
+    if unauthorized_codes:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "You cannot grant permissions beyond your own effective access.",
+                "unauthorized_permissions": unauthorized_codes,
             },
         )
 
