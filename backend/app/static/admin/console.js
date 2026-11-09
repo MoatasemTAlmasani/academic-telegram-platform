@@ -67,6 +67,7 @@ async function loadUserAccessSummary(userId){
   if(has("roles:manage")){
    var catalog=await api("/rbac/roles"),assigned=new Set((data.roles||[]).map(function(role){return role.id;}));
    choices.innerHTML=(catalog||[]).map(function(role){return '<label class="role-assignment-choice"><input type="checkbox" data-user-role-choice value="'+esc(role.name)+'" '+(assigned.has(role.id)?"checked":"")+'> <span><b>'+esc(role.name)+'</b><small>'+esc(role.description||"")+' · '+(role.permissions||[]).length+' '+t("permissionCount")+'</small></span></label>';}).join("")||'<p class="muted">'+t("noRecords")+'</p>';
+   document.querySelectorAll("#userRoleChoices [data-user-role-choice]").forEach(function(input){input.addEventListener("change",function(){if(input.value==="super_admin"&&input.checked){document.querySelectorAll("#userRoleChoices [data-user-role-choice]").forEach(function(other){if(other!==input)other.checked=false;});}else if(input.checked){var rootChoice=document.querySelector('#userRoleChoices [data-user-role-choice][value="super_admin"]');if(rootChoice)rootChoice.checked=false;}});});
   }
   var headerRoles=$("detailUserRoles");if(headerRoles)headerRoles.textContent=(data.roles||[]).map(function(role){return role.name;}).join(", ")||"—";
  }catch(error){roles.textContent=error.message;permissions.textContent=error.message;choices.textContent=error.message;}
