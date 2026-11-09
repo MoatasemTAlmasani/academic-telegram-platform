@@ -6,8 +6,9 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -25,6 +26,17 @@ router = APIRouter(
 )
 
 
+def _effective_permission_codes(user) -> set[str]:
+    """Return the permission union actually assigned to an authenticated user."""
+
+    return {
+        permission.code
+        for role in (getattr(user, "roles", None) or [])
+        for permission in (getattr(role, "permissions", None) or [])
+        if getattr(permission, "code", None)
+    }
+
+
 class RBACPermissionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -40,6 +52,58 @@ class RBACRoleResponse(BaseModel):
     name: str
     description: str | None = None
     permissions: list[RBACPermissionResponse] = []
+
+
+class RBACRoleCreateRequest(BaseModel):
+    """Validated input for creating a non-system custom role."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
+    description: str | None = Field(default=None, max_length=500)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("description")
+    @classmethod
+    def normalize_description(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class RBACRoleCreateResponse(BaseModel):
+    role: RBACRoleResponse
+
+
+class RBACRoleUpdateRequest(BaseModel):
+    """Partial metadata update for an existing custom role."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
+    description: str | None = Field(default=None, max_length=500)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("description")
+    @classmethod
+    def normalize_description(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class RBACRoleUpdateResponse(BaseModel):
+    role: RBACRoleResponse
 
 
 class RBACRolePermissionUpdateRequest(BaseModel):
@@ -115,6 +179,79 @@ async def list_permissions(
     ]
 
 
+@router.post(
+    "/roles",
+    response_model=RBACRoleCreateResponse,
+    status_code=201,
+    dependencies=[Depends(require_permission(Permission.ROLES_MANAGE))],
+)
+async def create_custom_role(
+    payload: RBACRoleCreateRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Create a custom role without changing canonical system roles."""
+
+    canonical_names = {
+        "super_admin",
+        "admin",
+        "manager",
+        "staff",
+        "support",
+        "customer",
+    }
+    if payload.name in canonical_names:
+        raise HTTPException(
+            status_code=409,
+            detail="Canonical system role names are reserved.",
+        )
+
+    existing = await session.execute(
+        select(Role).where(func.lower(Role.name) == payload.name).with_for_update()
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="A role with this name already exists.")
+
+    role = Role(name=payload.name, description=payload.description)
+    session.add(role)
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A role with this name already exists.",
+        ) from exc
+
+    now = datetime.now(timezone.utc)
+    session.add(
+        AuditLog(
+            actor_id=current_user.id,
+            action="rbac.role_created",
+            resource_type="role",
+            resource_id=role.id,
+            description=f"Created custom role '{role.name}'.",
+            event_metadata={
+                "role_name": role.name,
+                "description": role.description,
+                "role_type": "custom",
+            },
+            created_at=now,
+        )
+    )
+    await session.commit()
+    await session.refresh(role)
+
+    return RBACRoleCreateResponse(
+        role=RBACRoleResponse(
+            id=role.id,
+            name=role.name,
+            description=role.description,
+            permissions=[],
+        )
+    )
+
+
 @router.put(
     "/roles/{role_id}/permissions",
     response_model=RBACRolePermissionUpdateResponse,
@@ -183,6 +320,19 @@ async def update_role_permissions(
             detail={
                 "message": "Unknown permission codes.",
                 "unknown_permissions": unknown_codes,
+            },
+        )
+
+    # A grantor may only delegate permissions already present in their own
+    # effective access. This remains enforced even if roles:manage is misassigned.
+    actor_permissions = _effective_permission_codes(current_user)
+    unauthorized_codes = sorted(requested_codes - actor_permissions)
+    if unauthorized_codes:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "You cannot grant permissions beyond your own effective access.",
+                "unauthorized_permissions": unauthorized_codes,
             },
         )
 
