@@ -292,3 +292,57 @@ Remaining before declaring 03.1 complete:
 - Execute the isolated relevant test suite and record real results.
 
 **Next sub-phase safety:** Do not begin schema changes or role lifecycle implementation until the remaining inventory items above are resolved. Non-destructive test discovery and code-path tracing can proceed safely.
+
+
+## 13. Follow-up repository trace (2026-11-09)
+
+The recursive Git tree and source files were inspected after the initial report was committed. This resolves several items that were previously listed as pending discovery.
+
+### 13.1 Router registration
+
+- `backend/app/api/router.py` imports and registers both `rbac_router` and `rbac_admin_router` under the existing `/api/v1` API router.
+- Both routers use the `/rbac` prefix, so their paths coexist as intended; no additional router registration is required.
+
+### 13.2 Test inventory found
+
+- `tests/test_rbac_admin_security.py`: role-permission row-lock assertion, Super Admin protection, reserved `roles:manage`, audit before/after payload, no-op behavior, and a frontend permission-edit visibility assertion.
+- `tests/test_rbac_roles.py`: six canonical roles, least-privilege matrices, copy isolation, seed/runtime matrix parity, and an in-memory SQLite migration upgrade/downgrade preservation test.
+- `tests/test_admin_users_security.py`: admin-user route authentication/permission matrix, permission dependency behavior, session ownership checks, and lifecycle safeguards.
+- `tests/test_admin_users_api_integration.py`: existing admin-user API integration coverage.
+- `tests/test_postgres_concurrency.py`: isolated PostgreSQL concurrency acceptance test for concurrent admin deactivation. It requires `PHASE_ACCEPTANCE_DATABASE_URL` to point to a local disposable database named exactly `phase_acceptance`; it drops/recreates schema in that database. It does not currently prove concurrent removal/demotion of the last `super_admin` role assignment.
+- `tests/test_admin_console.py`: admin console test coverage.
+
+### 13.3 CI workflows found
+
+- `.github/workflows/python-tests.yml`: Python 3.12, locked dependencies, full pytest suite. Its configured PostgreSQL URL is explicitly described as import-time configuration; tests inject fakes and do not connect.
+- `.github/workflows/phase-01-verification.yml`: Python 3.12, isolated PostgreSQL 16 service, dedicated `ehteraf_test` and `phase_acceptance` databases, compileall and full pytest suite. The workflow creates the disposable `phase_acceptance` database before tests.
+
+These workflows were inspected but not executed by this remote inspection.
+
+### 13.4 Authentication and authorization refresh
+
+- `backend/app/api/auth_dependencies.py` validates the JWT-bound server-side `UserSession` on every authenticated request, rejects revoked/expired sessions, and loads the user through `UserService.get_by_id`.
+- `backend/app/api/rbac_dependencies.py` checks the current user's loaded database `roles[*].permissions[*].code` on each protected request.
+- `backend/app/modules/authentication/rbac.py` is a second database-backed permission helper.
+- `backend/app/modules/authentication/authorization.py` is a separate helper that resolves permissions through the hardcoded `ROLE_PERMISSIONS` mapping by role name rather than database permission relationships.
+
+This confirms two different authorization evaluation strategies exist. The exact production call sites of both helpers must be mapped before changing or consolidating them. The FastAPI permission dependency itself is database-backed and receives a freshly loaded user through the current-user dependency. Existing role changes revoke sessions in the admin-user route. The role-permission update route does not visibly revoke all sessions of users assigned to the changed role, but because permission checks read the loaded user's current database relationships this requires runtime/session identity-map tests rather than assumption.
+
+### 13.5 Schema constraints confirmed
+
+- `Role` has only `id`, timestamps, unique `name`, optional `description`, users and permissions relationships.
+- `Permission` has only `id`, timestamps, unique `code`, optional `description`, and roles relationship.
+- There is no role active flag, system-role flag, bilingual role-name/description pair, permission module/resource/action/sensitivity metadata, or direct user-permission table.
+- The six canonical roles are seeded by `database/migrations/versions/aa77bb88cc99_seed_six_rbac_roles.py`; the migration snapshots existing role descriptions and permission links before changing canonical seed data and restores them on downgrade.
+- Existing role assignment endpoint in `admin_users.py` replaces the user's roles with one canonical role and revokes active sessions. The underlying many-to-many model supports multiple roles, but the existing API/UI contract does not expose multiple assignments.
+
+### 13.6 Revised Phase 03.1 status
+
+Repository-level source discovery is now substantially complete. Remaining checks that cannot be honestly marked complete from static GitHub source inspection:
+- Full local working-tree reconciliation (not visible through the GitHub connector).
+- Runtime execution of the mapped tests and CI workflows.
+- Database-engine concurrency proof for Super Admin role removal/demotion.
+- Browser verification of all requested eight workflows and responsive/RTL/LTR states.
+- Complete call-site map for both authorization helper implementations.
+
+**Phase 03.1 remains PARTIAL pending executable verification and local-state reconciliation.** No test results are claimed.
