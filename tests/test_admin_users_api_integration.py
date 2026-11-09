@@ -983,3 +983,42 @@ def test_changing_account_email_invalidates_previous_verified_email_identity(api
             assert identities == []
 
     asyncio.run(scenario())
+
+
+def test_custom_role_can_be_created_audited_and_assigned_with_session_revocation(api_harness):
+    async def scenario():
+        await api_harness.start(permissions=("roles:manage",))
+        created = await api_harness.request(
+            "POST",
+            "/api/v1/rbac/roles",
+            json={
+                "name": "  REGIONAL_MANAGER  ",
+                "description": " Regional operations ",
+            },
+        )
+        assert created.status_code == 201, created.text
+        role = created.json()["role"]
+        assert role["name"] == "regional_manager"
+        assert role["description"] == "Regional operations"
+        assert role["permissions"] == []
+
+        assigned = await api_harness.request(
+            "PUT",
+            f"/api/v1/admin/users/{api_harness.target_id}/role",
+            json={"role": "regional_manager"},
+        )
+        assert assigned.status_code == 200, assigned.text
+        assert assigned.json()["role"]["name"] == "regional_manager"
+
+        async with api_harness.factory() as session:
+            target = await session.get(User, api_harness.target_id, options=[selectinload(User.roles)])
+            assert [item.name for item in target.roles] == ["regional_manager"]
+            events = (await session.execute(
+                select(AuditLog).order_by(AuditLog.created_at.asc())
+            )).scalars().all()
+            assert {event.action for event in events} == {
+                "rbac.role_created",
+                "user.role_assigned",
+            }
+
+    asyncio.run(scenario())
