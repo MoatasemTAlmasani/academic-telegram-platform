@@ -52,3 +52,16 @@ Do not solve this by trusting a client-supplied role ID or by weakening the chec
 - No browser acceptance was performed.
 - No database migration, production database access, secrets change, merge, or deployment was performed.
 - Keep PR #34 in Draft until the fixes and isolated automated/browser acceptance evidence are complete.
+
+
+## Finding 03 — Existing sessions after role-permission changes (addressed in current branch; tests not run)
+
+**Location:** `backend/app/api/routes/rbac_admin.py`, `update_role_permissions`.
+
+A permission-set change now revokes all non-revoked sessions belonging to users assigned the affected role in the same database transaction as the permission update. The audit event records the number of sessions revoked.
+
+This is deliberately scoped to sessions of users who currently hold the changed role. It does not revoke sessions for unrelated users or for no-op permission updates.
+
+**Test added:** `test_rbac_permission_change_revokes_sessions_for_users_with_the_role` checks that the route issues the session-revocation update and records its row count in the audit metadata.
+
+**Verification:** Source and test changes only. The test has not been executed; database-engine behavior and full API integration remain unverified.
