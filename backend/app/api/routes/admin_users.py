@@ -869,7 +869,7 @@ class AdminUserRoleAssignmentRequest(BaseModel):
     @field_validator("role", mode="before")
     @classmethod
     def normalize_role_name(cls, value: str) -> str:
-        return value.strip().lower()
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class AdminUserRoleAssignmentResponse(BaseModel):
