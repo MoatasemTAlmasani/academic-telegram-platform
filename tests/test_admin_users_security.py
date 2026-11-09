@@ -16,15 +16,25 @@ from database.models.identity import UserSession
 
 
 class _Result:
-    def __init__(self, value=None, *, rowcount=0):
+    def __init__(self, value=None, *, rowcount=0, items=None):
         self.value = value
         self.rowcount = rowcount
+        self.items = items
 
     def scalar_one_or_none(self):
         return self.value
 
     def scalar_one(self):
         return self.value
+
+    def scalars(self):
+        return self
+
+    def unique(self):
+        return self
+
+    def all(self):
+        return self.items if self.items is not None else []
 
 
 class _Session:
@@ -387,6 +397,111 @@ def test_role_assignment_cannot_exceed_the_actors_effective_permissions():
                 user_id=target_id,
                 payload=admin_users.AdminUserRoleAssignmentRequest(
                     role="regional_manager"
+                ),
+                current_user=actor,
+                session=session,
+            )
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail["unauthorized_permissions"] == ["users:delete"]
+
+    asyncio.run(scenario())
+    assert not session.committed
+    assert not session.added
+
+
+def test_multi_role_assignment_unions_permissions_and_revokes_sessions():
+    actor_id, target_id = uuid4(), uuid4()
+    target = SimpleNamespace(
+        id=target_id,
+        username="multi-role-target",
+        status="ACTIVE",
+        roles=[SimpleNamespace(name="staff")],
+    )
+    manager = SimpleNamespace(
+        id=uuid4(),
+        name="manager",
+        description="Manager",
+        permissions=[SimpleNamespace(code="requests:read")],
+    )
+    support = SimpleNamespace(
+        id=uuid4(),
+        name="support",
+        description="Support",
+        permissions=[SimpleNamespace(code="users:read")],
+    )
+    actor = SimpleNamespace(
+        id=actor_id,
+        roles=[
+            SimpleNamespace(
+                name="super_admin",
+                permissions=[
+                    SimpleNamespace(code="roles:manage"),
+                    SimpleNamespace(code="requests:read"),
+                    SimpleNamespace(code="users:read"),
+                ],
+            )
+        ],
+    )
+    session = _Session([
+        _Result(target),
+        _Result(items=[manager, support]),
+        _Result(rowcount=3),
+    ])
+
+    response = asyncio.run(
+        admin_users.assign_admin_user_roles(
+            user_id=target_id,
+            payload=admin_users.AdminUserRolesAssignmentRequest(
+                role_names=[" SUPPORT ", "manager"]
+            ),
+            current_user=actor,
+            session=session,
+        )
+    )
+
+    assert [role.name for role in response.roles] == ["manager", "support"]
+    assert response.sessions_revoked == 3
+    assert [role.name for role in target.roles] == ["manager", "support"]
+    assert session.committed
+    assert session.added[0].action == "user.roles_assigned"
+    assert session.added[0].event_metadata["before_roles"] == ["staff"]
+    assert session.added[0].event_metadata["after_roles"] == ["manager", "support"]
+
+
+def test_multi_role_assignment_rejects_permissions_beyond_grantor_access():
+    actor_id, target_id = uuid4(), uuid4()
+    target = SimpleNamespace(
+        id=target_id,
+        username="restricted-target",
+        status="ACTIVE",
+        roles=[],
+    )
+    restricted_role = SimpleNamespace(
+        id=uuid4(),
+        name="regional_manager",
+        description="Regional manager",
+        permissions=[SimpleNamespace(code="users:delete")],
+    )
+    actor = SimpleNamespace(
+        id=actor_id,
+        roles=[
+            SimpleNamespace(
+                name="admin",
+                permissions=[SimpleNamespace(code="roles:manage"), SimpleNamespace(code="users:read")],
+            )
+        ],
+    )
+    session = _Session([
+        _Result(target),
+        _Result(items=[restricted_role]),
+    ])
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_users.assign_admin_user_roles(
+                user_id=target_id,
+                payload=admin_users.AdminUserRolesAssignmentRequest(
+                    role_names=["regional_manager"]
                 ),
                 current_user=actor,
                 session=session,
