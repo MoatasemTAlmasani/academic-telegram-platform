@@ -332,3 +332,40 @@
 .recovery-panel input,.recovery-panel select{width:100%;min-height:43px;border:1px solid var(--line);background:#0c192b;color:var(--text);border-radius:9px;padding:10px 12px;margin-bottom:8px}
 .recovery-panel .btn{width:100%;margin-top:8px}
 #recoveryFeedback{min-height:18px;margin:12px 0 0}
+
+
+/* RBAC custom-role creation */
+.role-create-form{display:grid;gap:9px;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:14px;background:var(--panel2)}
+.role-create-form h4{margin:0 0 2px;font-size:11px;color:var(--text)}
+.role-create-form label{display:grid;gap:5px;color:var(--muted);font-size:10px;font-weight:600}
+.role-create-form input{width:100%;min-width:0;min-height:37px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:10px}
+.role-create-form .btn{width:100%;min-height:37px;padding:8px 10px;font-size:10px}
+
+
+.role-metadata-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:12px;margin:0 0 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.role-metadata-form label{display:grid;gap:5px;min-width:0;color:var(--muted);font-size:10px;font-weight:600}
+.role-metadata-form input{width:100%;min-width:0;min-height:36px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:10px}
+.role-metadata-form button{grid-column:1/-1;justify-self:start;min-height:36px;padding:8px 12px;font-size:10px}
+@media(max-width:640px){.role-metadata-form{grid-template-columns:minmax(0,1fr)}.role-metadata-form button{width:100%}}
+
+
+.role-duplicate-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:12px;margin:0 0 14px;border:1px dashed var(--line);border-radius:10px;background:var(--panel)}
+.role-duplicate-form label{display:grid;gap:5px;min-width:0;color:var(--muted);font-size:10px;font-weight:600}
+.role-duplicate-form input{width:100%;min-width:0;min-height:36px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:10px}
+.role-duplicate-form button{grid-column:1/-1;justify-self:start;min-height:36px;padding:8px 12px;font-size:10px}
+@media(max-width:640px){.role-duplicate-form{grid-template-columns:minmax(0,1fr)}.role-duplicate-form button{width:100%}}
+
+
+.role-assignment-picker{display:grid;gap:8px;flex:1 1 100%;min-width:0}
+.role-assignment-picker>span{font-size:11px;font-weight:700;color:var(--text)}
+.role-assignment-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;max-height:260px;overflow:auto;padding:2px}
+.role-assignment-choice{display:flex;align-items:flex-start;gap:9px;min-width:0;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);cursor:pointer}
+.role-assignment-choice input{margin-top:2px;accent-color:var(--accent)}
+.role-assignment-choice span{display:grid;gap:3px;min-width:0}
+.role-assignment-choice b{font-size:11px;color:var(--text);overflow-wrap:anywhere}
+.role-assignment-choice small{font-size:9px;color:var(--muted);overflow-wrap:anywhere}
+
+
+.access-state-note{margin:10px 0;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:10px}
+.access-state-note[data-state="enabled"]{border-color:var(--success-border,var(--line))}
+.access-state-note[data-state="disabled"]{border-color:var(--danger-border,var(--line));background:var(--panel2)}

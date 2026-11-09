@@ -54,12 +54,20 @@ class AdminApiHarness:
             )
             self.actor.roles = [admin_role]
             session.add_all([self.actor, target, other, customer_role])
-            session.add(UserSession(
-                id=self.session_id,
-                user_id=self.other_id,
-                created_at=datetime.now(timezone.utc),
-                expires_at=datetime.now(timezone.utc) + timedelta(days=1),
-            ))
+            session.add_all([
+                UserSession(
+                    id=self.session_id,
+                    user_id=self.other_id,
+                    created_at=datetime.now(timezone.utc),
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+                ),
+                UserSession(
+                    id=uuid4(),
+                    user_id=self.target_id,
+                    created_at=datetime.now(timezone.utc),
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+                ),
+            ])
             await session.commit()
 
         current_user = SimpleNamespace(
@@ -981,5 +989,395 @@ def test_changing_account_email_invalidates_previous_verified_email_identity(api
                 )
             )).scalars().all()
             assert identities == []
+
+    asyncio.run(scenario())
+
+
+def test_custom_role_can_be_created_audited_and_assigned_with_session_revocation(api_harness):
+    async def scenario():
+        await api_harness.start(permissions=("roles:manage",))
+        created = await api_harness.request(
+            "POST",
+            "/api/v1/rbac/roles",
+            json={
+                "name": "  REGIONAL_MANAGER  ",
+                "description": " Regional operations ",
+            },
+        )
+        assert created.status_code == 201, created.text
+        role = created.json()["role"]
+        assert role["name"] == "regional_manager"
+        assert role["description"] == "Regional operations"
+        assert role["permissions"] == []
+
+        updated = await api_harness.request(
+            "PATCH",
+            f"/api/v1/rbac/roles/{role['id']}",
+            json={
+                "name": " AREA_LEAD ",
+                "description": " Area operations ",
+            },
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["role"]["name"] == "area_lead"
+        assert updated.json()["role"]["description"] == "Area operations"
+
+        duplicated = await api_harness.request(
+            "POST",
+            f"/api/v1/rbac/roles/{role['id']}/duplicate",
+            json={
+                "name": "AREA_LEAD_COPY",
+                "description": "Area operations copy",
+            },
+        )
+        assert duplicated.status_code == 201, duplicated.text
+        assert duplicated.json()["role"]["name"] == "area_lead_copy"
+        assert duplicated.json()["role"]["description"] == "Area operations copy"
+
+        assigned = await api_harness.request(
+            "PUT",
+            f"/api/v1/admin/users/{api_harness.target_id}/role",
+            json={"role": "area_lead_copy"},
+        )
+        assert assigned.status_code == 200, assigned.text
+        assert assigned.json()["role"]["name"] == "area_lead_copy"
+        assert assigned.json()["sessions_revoked"] == 1
+
+        async with api_harness.factory() as session:
+            target = await session.get(User, api_harness.target_id, options=[selectinload(User.roles)])
+            assert [item.name for item in target.roles] == ["area_lead_copy"]
+            active_sessions = (await session.execute(
+                select(UserSession).where(
+                    UserSession.user_id == api_harness.target_id,
+                    UserSession.revoked_at.is_(None),
+                )
+            )).scalars().all()
+            assert active_sessions == []
+            events = (await session.execute(
+                select(AuditLog).order_by(AuditLog.created_at.asc())
+            )).scalars().all()
+            assert {event.action for event in events} == {
+                "rbac.role_created",
+                "rbac.role_updated",
+                "rbac.role_duplicated",
+                "user.role_assigned",
+            }
+
+    asyncio.run(scenario())
+
+
+def test_multi_role_assignment_returns_effective_permission_union_and_revokes_sessions(api_harness):
+    async def scenario():
+        await api_harness.start(
+            permissions=("roles:manage", "users:read", "requests:read")
+        )
+        created_roles = []
+        for name in ("regional_reader", "request_reader"):
+            response = await api_harness.request(
+                "POST",
+                "/api/v1/rbac/roles",
+                json={"name": name},
+            )
+            assert response.status_code == 201, response.text
+            created_roles.append(response.json()["role"])
+
+        permission_sets = (
+            ("users:read",),
+            ("requests:read",),
+        )
+        for role, codes in zip(created_roles, permission_sets):
+            updated = await api_harness.request(
+                "PUT",
+                f"/api/v1/rbac/roles/{role['id']}/permissions",
+                json={"permission_codes": list(codes)},
+            )
+            assert updated.status_code == 200, updated.text
+
+        assigned = await api_harness.request(
+            "PUT",
+            f"/api/v1/admin/users/{api_harness.target_id}/roles",
+            json={"role_names": [" REQUEST_READER ", "regional_reader"]},
+        )
+        assert assigned.status_code == 200, assigned.text
+        assert [role["name"] for role in assigned.json()["roles"]] == [
+            "regional_reader",
+            "request_reader",
+        ]
+        assert assigned.json()["sessions_revoked"] == 1
+
+        summary = await api_harness.request(
+            "GET",
+            f"/api/v1/admin/users/{api_harness.target_id}/access-summary",
+        )
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["account_status"] == "ACTIVE"
+        assert summary.json()["access_enabled"] is True
+        assert summary.json()["permissions"] == ["requests:read", "users:read"]
+
+        diagnostic = await api_harness.request(
+            "GET",
+            f"/api/v1/admin/users/{api_harness.target_id}/access-check?permission_code=requests:read",
+        )
+        assert diagnostic.status_code == 200, diagnostic.text
+        assert diagnostic.json()["allowed"] is True
+        assert diagnostic.json()["reason"] == "permission_granted"
+        assert diagnostic.json()["contributing_roles"] == ["request_reader"]
+
+        unknown = await api_harness.request(
+            "GET",
+            f"/api/v1/admin/users/{api_harness.target_id}/access-check?permission_code=not:registered",
+        )
+        assert unknown.status_code == 200, unknown.text
+        assert unknown.json()["allowed"] is False
+        assert unknown.json()["reason"] == "unknown_permission_code"
+
+        async with api_harness.factory() as session:
+            active_sessions = (await session.execute(
+                select(UserSession).where(
+                    UserSession.user_id == api_harness.target_id,
+                    UserSession.revoked_at.is_(None),
+                )
+            )).scalars().all()
+            assert active_sessions == []
+            events = (await session.execute(
+                select(AuditLog).where(AuditLog.resource_id == api_harness.target_id)
+            )).scalars().all()
+            assert any(event.action == "user.roles_assigned" for event in events)
+
+    asyncio.run(scenario())
+
+
+def test_inactive_user_access_summary_keeps_assignments_but_reports_no_effective_permissions(api_harness):
+    async def scenario():
+        await api_harness.start(permissions=("users:read",))
+        async with api_harness.factory() as session:
+            permission = (await session.execute(
+                select(PermissionRecord).where(PermissionRecord.code == "users:read")
+            )).scalar_one()
+            support_role = Role(
+                name="support",
+                description="Support",
+                permissions=[permission],
+            )
+            target = await session.get(User, api_harness.target_id, options=[selectinload(User.roles)])
+            target.status = "INACTIVE"
+            target.roles = [support_role]
+            session.add(support_role)
+            await session.commit()
+
+        response = await api_harness.request(
+            "GET",
+            f"/api/v1/admin/users/{api_harness.target_id}/access-summary",
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["account_status"] == "INACTIVE"
+        assert payload["access_enabled"] is False
+        assert payload["access_block_reason"] == "account_inactive"
+        assert [role["name"] for role in payload["roles"]] == ["support"]
+        assert payload["permissions"] == []
+
+        diagnostic = await api_harness.request(
+            "GET",
+            f"/api/v1/admin/users/{api_harness.target_id}/access-check?permission_code=users:read",
+        )
+        assert diagnostic.status_code == 200, diagnostic.text
+        assert diagnostic.json()["allowed"] is False
+        assert diagnostic.json()["reason"] == "account_inactive"
+        assert diagnostic.json()["contributing_roles"] == ["support"]
+
+    asyncio.run(scenario())
+
+def test_account_creation_accepts_governed_custom_role_and_audits_role_identity(api_harness):
+    async def scenario():
+        await api_harness.start(
+            permissions=("users:create", "users:read", "roles:manage")
+        )
+        async with api_harness.factory() as session:
+            custom_role = Role(
+                name="regional_manager",
+                description="Regional operations",
+                permissions=[
+                    PermissionRecord(code="users:read", description="Read users")
+                ],
+            )
+            session.add(custom_role)
+            await session.commit()
+            role_id = custom_role.id
+
+        response = await api_harness.request(
+            "POST",
+            "/api/v1/admin/users",
+            json={
+                "username": "regional.new",
+                "password": "A-strong-test-password-123",
+                "role": "  REGIONAL_MANAGER  ",
+            },
+        )
+        assert response.status_code == 201, response.text
+        assert [role["name"] for role in response.json()["roles"]] == ["regional_manager"]
+
+        async with api_harness.factory() as session:
+            created = await session.scalar(
+                select(User).where(User.username == "regional.new")
+            )
+            event = await session.scalar(
+                select(AuditLog).where(
+                    AuditLog.resource_id == created.id,
+                    AuditLog.action == "user.created",
+                )
+            )
+            assert created is not None
+            assert event is not None
+            assert event.event_metadata == {
+                "role": "regional_manager",
+                "role_id": str(role_id),
+            }
+
+    asyncio.run(scenario())
+
+
+def test_account_creation_cannot_grant_custom_role_permissions_beyond_actor(api_harness):
+    async def scenario():
+        await api_harness.start(
+            permissions=("users:create", "users:read", "roles:manage")
+        )
+        async with api_harness.factory() as session:
+            session.add(
+                Role(
+                    name="restricted_finance",
+                    description="Must not be granted by this operator",
+                    permissions=[
+                        PermissionRecord(
+                            code="users:delete",
+                            description="Delete users",
+                        )
+                    ],
+                )
+            )
+            await session.commit()
+
+        response = await api_harness.request(
+            "POST",
+            "/api/v1/admin/users",
+            json={
+                "username": "restricted.new",
+                "password": "A-strong-test-password-123",
+                "role": "restricted_finance",
+            },
+        )
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"]["unauthorized_permissions"] == ["users:delete"]
+
+        async with api_harness.factory() as session:
+            assert await session.scalar(
+                select(User).where(User.username == "restricted.new")
+            ) is None
+            assert (await session.execute(select(AuditLog))).scalars().all() == []
+
+    asyncio.run(scenario())
+
+
+def test_account_creation_cannot_grant_super_admin_or_rbac_governance_role(api_harness):
+    async def scenario():
+        await api_harness.start(
+            permissions=("users:create", "users:read", "roles:manage")
+        )
+        async with api_harness.factory() as session:
+            session.add(
+                Role(
+                    name="super_admin",
+                    description="Protected governance role",
+                    permissions=[
+                        PermissionRecord(
+                            code="users:read",
+                            description="Read users",
+                        ),
+                        PermissionRecord(
+                            code="roles:manage",
+                            description="Manage roles",
+                        ),
+                    ],
+                )
+            )
+            await session.commit()
+
+        response = await api_harness.request(
+            "POST",
+            "/api/v1/admin/users",
+            json={
+                "username": "attempt.super",
+                "password": "A-strong-test-password-123",
+                "role": "super_admin",
+            },
+        )
+        assert response.status_code == 403, response.text
+        async with api_harness.factory() as session:
+            assert await session.scalar(
+                select(User).where(User.username == "attempt.super")
+            ) is None
+            assert (await session.execute(select(AuditLog))).scalars().all() == []
+
+    asyncio.run(scenario())
+
+
+def test_role_permission_change_revokes_sessions_for_assigned_users(api_harness):
+    async def scenario():
+        await api_harness.start(
+            permissions=("roles:manage", "users:read", "requests:read")
+        )
+        now = datetime.now(timezone.utc)
+        async with api_harness.factory() as session:
+            user_read = await session.scalar(
+                select(PermissionRecord).where(PermissionRecord.code == "users:read")
+            )
+            assigned_role = Role(
+                name="regional_manager",
+                description="Role used to verify session invalidation",
+                permissions=[user_read],
+            )
+            target = await session.scalar(
+                select(User)
+                .options(selectinload(User.roles))
+                .where(User.id == api_harness.target_id)
+            )
+            target.roles = [assigned_role]
+            target_session = UserSession(
+                user_id=api_harness.target_id,
+                created_at=now,
+                expires_at=now + timedelta(hours=1),
+                ip_address="127.0.0.1",
+                user_agent="rbac-integration-test",
+            )
+            session.add_all([assigned_role, target_session])
+            await session.commit()
+            role_id = assigned_role.id
+            session_id = target_session.id
+
+        response = await api_harness.request(
+            "PUT",
+            f"/api/v1/rbac/roles/{role_id}/permissions",
+            json={"permission_codes": ["requests:read"]},
+        )
+        assert response.status_code == 200, response.text
+        assert [item["code"] for item in response.json()["role"]["permissions"]] == [
+            "requests:read"
+        ]
+
+        async with api_harness.factory() as session:
+            revoked = await session.get(UserSession, session_id)
+            assert revoked is not None
+            assert revoked.revoked_at is not None
+            assert revoked.revoked_reason == "role_permissions_changed"
+            event = await session.scalar(
+                select(AuditLog).where(
+                    AuditLog.action == "rbac.role_permissions_updated",
+                    AuditLog.resource_id == role_id,
+                )
+            )
+            assert event is not None
+            assert event.event_metadata["revoked_sessions"] == 1
+            assert event.event_metadata["before"] == ["users:read"]
+            assert event.event_metadata["after"] == ["requests:read"]
 
     asyncio.run(scenario())

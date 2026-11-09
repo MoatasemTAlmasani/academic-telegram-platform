@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from sqlalchemy import case, delete, func, literal, or_, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,8 +22,7 @@ from backend.app.api.dependencies import get_unit_of_work
 from backend.app.infrastructure.persistence.database import get_session
 from backend.app.infrastructure.persistence.unit_of_work import UnitOfWork
 from backend.app.modules.authentication.permissions import Permission
-from backend.app.modules.authentication.roles import RoleName
-from database.models.identity import Role, User, UserSession
+from database.models.identity import Permission as PermissionModel, Role, User, UserSession
 from database.models.audit import AuditLog
 from database.models.security import ExternalIdentity, LoginAttempt
 from backend.app.modules.authentication.jwt import decode_access_token_with_session
@@ -146,6 +145,64 @@ async def _protect_last_active_admin(
                     status_code=409,
                     detail="The last active Super Admin cannot be deactivated or archived.",
                 )
+
+
+async def _protect_last_active_super_admin(
+    session: AsyncSession,
+    user_id: UUID,
+) -> None:
+    """Serialize Super Admin demotions and preserve the final active account."""
+    from fastapi import HTTPException
+
+    target = await session.execute(
+        select(User.status).where(
+            User.id == user_id,
+            User.roles.any(Role.name == "super_admin"),
+        )
+    )
+    target_status = target.scalar_one_or_none()
+    if target_status is None or str(target_status).upper() != "ACTIVE":
+        return
+
+    # Every demotion locks this same canonical row before counting active owners.
+    super_admin_role = await session.execute(
+        select(Role).where(Role.name == "super_admin").with_for_update()
+    )
+    if super_admin_role.scalar_one_or_none() is None:
+        return
+
+    active_count = await session.execute(
+        select(func.count(User.id)).where(
+            func.upper(User.status) == "ACTIVE",
+            User.deleted_at.is_(None),
+            User.roles.any(Role.name == "super_admin"),
+        )
+    )
+    if (active_count.scalar_one() or 0) <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="The last active Super Admin cannot be demoted or reassigned.",
+        )
+
+
+def _effective_permission_codes(user) -> set[str]:
+    """Return the authenticated user's effective permission union."""
+
+    return {
+        permission.code
+        for role in (getattr(user, "roles", None) or [])
+        for permission in (getattr(role, "permissions", None) or [])
+        if getattr(permission, "code", None)
+    }
+
+
+def _has_super_admin_role(user) -> bool:
+    """Check the canonical Super Admin role, not a client-supplied claim."""
+
+    return any(
+        getattr(role, "name", None) == "super_admin"
+        for role in (getattr(user, "roles", None) or [])
+    )
 
 
 def _safe_user_audit_snapshot(user: User) -> dict[str, str | None]:
@@ -379,7 +436,12 @@ class AdminUserCreateRequest(BaseModel):
     language: str | None = None
     timezone: str | None = None
     status: str = "active"
-    role: str = "customer"
+    role: str = Field(default="customer", min_length=2, max_length=50)
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role_name(cls, value: str) -> str:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 @router.post(
@@ -420,32 +482,54 @@ async def create_admin_user(
             detail="Username or email already exists.",
         )
 
-    try:
-        requested_role = RoleName(payload.role.strip().lower())
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Unsupported account role.") from exc
+    requested_role_name = payload.role
 
-    actor_permissions = {
-        permission.code
-        for assigned_role in (getattr(current_user, "roles", None) or [])
-        for permission in (getattr(assigned_role, "permissions", None) or [])
-    }
-    if requested_role != RoleName.CUSTOMER and Permission.ROLES_MANAGE.value not in actor_permissions:
+    actor_permissions = _effective_permission_codes(current_user)
+    actor_is_super_admin = _has_super_admin_role(current_user)
+
+    # Role assignment is a governed operation: creating an account must not
+    # become a lower-privilege path around the RBAC assignment endpoint.
+    if requested_role_name != "customer" and Permission.ROLES_MANAGE.value not in actor_permissions:
         raise HTTPException(
             status_code=403,
-            detail="Assigning a privileged role requires roles:manage.",
+            detail="Assigning a non-customer role requires roles:manage.",
         )
 
     role_result = await session.execute(
-        select(Role).where(func.lower(Role.name) == requested_role.value)
+        select(Role)
+        .options(selectinload(Role.permissions))
+        .where(func.lower(Role.name) == requested_role_name)
+        .with_for_update()
     )
-
     role = role_result.scalar_one_or_none()
 
     if role is None:
         raise HTTPException(
             status_code=400,
-            detail=f"Role '{payload.role}' does not exist.",
+            detail=f"Role '{requested_role_name}' does not exist.",
+        )
+
+    target_permissions = {
+        permission.code for permission in (role.permissions or [])
+    }
+    if role.name == "super_admin" and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign the Super Admin role.",
+        )
+    if Permission.ROLES_MANAGE.value in target_permissions and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign a role with RBAC governance access.",
+        )
+    unauthorized_permissions = sorted(target_permissions - actor_permissions)
+    if unauthorized_permissions:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "You cannot create an account with permissions beyond your own effective access.",
+                "unauthorized_permissions": unauthorized_permissions,
+            },
         )
 
     if payload.status.upper() not in {"ACTIVE", "INACTIVE", "SUSPENDED"}:
@@ -474,7 +558,7 @@ async def create_admin_user(
         resource_type="user",
         resource_id=user.id,
         description=f"Admin created user '{user.username}'.",
-        event_metadata={"role": payload.role},
+        event_metadata={"role": role.name, "role_id": str(role.id)},
         created_at=user.created_at,
     )
     session.add(audit_log)
@@ -862,14 +946,59 @@ async def delete_admin_user(
 
 
 class AdminUserRoleAssignmentRequest(BaseModel):
-    """Replace a user's single canonical platform role."""
+    """Replace a user's single platform role, including a custom role."""
 
-    role: RoleName
+    role: str = Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role_name(cls, value: str) -> str:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class AdminUserRoleAssignmentResponse(BaseModel):
     user_id: UUID
     role: AdminUserRoleResponse
+    sessions_revoked: int
+
+
+class AdminUserRolesAssignmentRequest(BaseModel):
+    """Replace a user's role set using existing role records."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role_names: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("role_names", mode="before")
+    @classmethod
+    def normalize_role_names(cls, value):
+        if not isinstance(value, list):
+            return value
+        return [
+            item.strip().lower() if isinstance(item, str) else item
+            for item in value
+        ]
+
+    @field_validator("role_names")
+    @classmethod
+    def reject_duplicate_role_names(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("Role names must be unique.")
+        for name in value:
+            if (
+                len(name) < 2
+                or len(name) > 50
+                or not name.isascii()
+                or not name[0].islower()
+                or any(not (character.islower() or character.isdigit() or character == "_") for character in name)
+            ):
+                raise ValueError("Role names must use lowercase snake_case.")
+        return value
+
+
+class AdminUserRolesAssignmentResponse(BaseModel):
+    user_id: UUID
+    roles: list[AdminUserRoleResponse]
     sessions_revoked: int
 
 
@@ -884,10 +1013,10 @@ async def assign_admin_user_role(
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AdminUserRoleAssignmentResponse:
-    """Assign exactly one canonical role, audit it, and revoke stale sessions."""
+    """Assign exactly one existing role, audit it, and revoke stale sessions."""
     from fastapi import HTTPException
 
-    # Lock both the account and the canonical role row to serialize competing changes.
+    # Lock both the account and the selected role row to serialize competing changes.
     user_result = await session.execute(
         select(User)
         .where(User.id == user_id, User.deleted_at.is_(None))
@@ -899,11 +1028,39 @@ async def assign_admin_user_role(
         raise HTTPException(status_code=404, detail="User not found.")
 
     role_result = await session.execute(
-        select(Role).where(Role.name == payload.role.value).with_for_update()
+        select(Role)
+        .options(selectinload(Role.permissions))
+        .where(Role.name == payload.role)
+        .with_for_update()
     )
     new_role = role_result.scalar_one_or_none()
     if new_role is None:
-        raise HTTPException(status_code=409, detail="The six-role catalog migration must be applied before assigning roles.")
+        raise HTTPException(status_code=409, detail="The requested role does not exist.")
+
+    actor_permissions = _effective_permission_codes(current_user)
+    actor_is_super_admin = _has_super_admin_role(current_user)
+    target_permissions = {
+        permission.code for permission in (new_role.permissions or [])
+    }
+    if new_role.name == "super_admin" and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign the Super Admin role.",
+        )
+    if Permission.ROLES_MANAGE.value in target_permissions and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign a role with RBAC governance access.",
+        )
+    unauthorized_permissions = sorted(target_permissions - actor_permissions)
+    if unauthorized_permissions:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "You cannot assign a role with permissions beyond your own effective access.",
+                "unauthorized_permissions": unauthorized_permissions,
+            },
+        )
 
     previous_roles = sorted(role.name for role in user.roles)
     if previous_roles == [new_role.name]:
@@ -919,27 +1076,8 @@ async def assign_admin_user_role(
             detail="Administrators cannot change their own role. Ask another Super Admin to perform this action.",
         )
 
-    if (
-        user.status == "ACTIVE"
-        and "super_admin" in previous_roles
-        and new_role.name != "super_admin"
-    ):
-        super_admin_role = await session.execute(
-            select(Role).where(Role.name == "super_admin").with_for_update()
-        )
-        if super_admin_role.scalar_one_or_none() is not None:
-            active_super_admins = await session.execute(
-                select(func.count(User.id)).where(
-                    func.upper(User.status) == "ACTIVE",
-                    User.deleted_at.is_(None),
-                    User.roles.any(Role.name == "super_admin"),
-                )
-            )
-            if (active_super_admins.scalar_one() or 0) <= 1:
-                raise HTTPException(
-                    status_code=409,
-                    detail="The last active Super Admin cannot be demoted or reassigned.",
-                )
+    if new_role.name != "super_admin" and "super_admin" in previous_roles:
+        await _protect_last_active_super_admin(session, user.id)
 
     user.roles = [new_role]
     revoked_at = datetime.now(timezone.utc)
@@ -972,9 +1110,160 @@ async def assign_admin_user_role(
     )
 
 
-class AdminUserAccessSummaryResponse(BaseModel):
-    """Read-only summary of roles and effective permission codes."""
+@router.put(
+    "/{user_id}/roles",
+    response_model=AdminUserRolesAssignmentResponse,
+    dependencies=[Depends(require_permission(Permission.ROLES_MANAGE))],
+)
+async def assign_admin_user_roles(
+    user_id: UUID,
+    payload: AdminUserRolesAssignmentRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminUserRolesAssignmentResponse:
+    """Replace the assigned role set while enforcing grantor and root-role boundaries."""
+    from fastapi import HTTPException
 
+    user_result = await session.execute(
+        select(User)
+        .where(User.id == user_id, User.deleted_at.is_(None))
+        .options(selectinload(User.roles))
+        .with_for_update()
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    requested_names = sorted(payload.role_names)
+    if "super_admin" in requested_names and len(requested_names) > 1:
+        raise HTTPException(
+            status_code=422,
+            detail="The Super Admin role must be assigned on its own.",
+        )
+
+    if requested_names:
+        role_result = await session.execute(
+            select(Role)
+            .options(selectinload(Role.permissions))
+            .where(Role.name.in_(requested_names))
+            .order_by(Role.name.asc())
+            .with_for_update()
+        )
+        new_roles = role_result.scalars().unique().all()
+    else:
+        new_roles = []
+
+    found_names = {role.name for role in new_roles}
+    missing_names = sorted(set(requested_names) - found_names)
+    if missing_names:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "One or more requested roles do not exist.",
+                "missing_roles": missing_names,
+            },
+        )
+
+    actor_permissions = _effective_permission_codes(current_user)
+    actor_is_super_admin = _has_super_admin_role(current_user)
+    target_permissions = {
+        permission.code
+        for role in new_roles
+        for permission in (role.permissions or [])
+    }
+    if "super_admin" in requested_names and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign the Super Admin role.",
+        )
+    if Permission.ROLES_MANAGE.value in target_permissions and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign a role with RBAC governance access.",
+        )
+    unauthorized_permissions = sorted(target_permissions - actor_permissions)
+    if unauthorized_permissions:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "You cannot assign roles with permissions beyond your own effective access.",
+                "unauthorized_permissions": unauthorized_permissions,
+            },
+        )
+
+    previous_names = sorted(role.name for role in user.roles)
+    if previous_names == requested_names:
+        return AdminUserRolesAssignmentResponse(
+            user_id=user.id,
+            roles=[
+                AdminUserRoleResponse(
+                    id=role.id,
+                    name=role.name,
+                    description=role.description,
+                )
+                for role in sorted(user.roles, key=lambda item: item.name)
+            ],
+            sessions_revoked=0,
+        )
+
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=409,
+            detail="Administrators cannot change their own roles.",
+        )
+
+    if (
+        str(user.status).upper() == "ACTIVE"
+        and "super_admin" in previous_names
+        and "super_admin" not in requested_names
+    ):
+        await _protect_last_active_super_admin(session, user.id)
+
+    user.roles = list(new_roles)
+    revoked_at = datetime.now(timezone.utc)
+    revoked_result = await session.execute(
+        update(UserSession)
+        .where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
+        .values(revoked_at=revoked_at, revoked_reason="roles_changed")
+    )
+    revoked_count = max(0, revoked_result.rowcount or 0)
+
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="user.roles_assigned",
+        resource_type="user",
+        resource_id=user.id,
+        description=f"Role set changed for user '{user.username}'.",
+        event_metadata={
+            "user_id": str(user.id),
+            "before_roles": previous_names,
+            "after_roles": requested_names,
+            "sessions_revoked": revoked_count,
+        },
+        created_at=revoked_at,
+    ))
+    await session.commit()
+
+    return AdminUserRolesAssignmentResponse(
+        user_id=user.id,
+        roles=[
+            AdminUserRoleResponse(
+                id=role.id,
+                name=role.name,
+                description=role.description,
+            )
+            for role in new_roles
+        ],
+        sessions_revoked=revoked_count,
+    )
+
+
+class AdminUserAccessSummaryResponse(BaseModel):
+    """Read-only summary of assigned roles and currently effective access."""
+
+    account_status: str
+    access_enabled: bool
+    access_block_reason: str | None = None
     roles: list[AdminUserRoleResponse]
     permissions: list[str]
 
@@ -1009,12 +1298,132 @@ async def get_admin_user_access_summary(
         )
         for role in user.roles
     ]
+
+    now = datetime.now(timezone.utc)
+    account_status = str(user.status).upper()
+    locked_until = user.locked_until
+    account_expires_at = user.account_expires_at
+    if locked_until is not None and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if account_expires_at is not None and account_expires_at.tzinfo is None:
+        account_expires_at = account_expires_at.replace(tzinfo=timezone.utc)
+
+    if account_status != "ACTIVE":
+        access_block_reason = "account_inactive"
+    elif locked_until is not None and locked_until > now:
+        access_block_reason = "account_locked"
+    elif account_expires_at is not None and account_expires_at <= now:
+        access_block_reason = "account_expired"
+    else:
+        access_block_reason = None
+
+    access_enabled = access_block_reason is None
     permissions = sorted({
         permission.code
         for role in user.roles
         for permission in role.permissions
+    }) if access_enabled else []
+
+    return AdminUserAccessSummaryResponse(
+        account_status=account_status,
+        access_enabled=access_enabled,
+        access_block_reason=access_block_reason,
+        roles=roles,
+        permissions=permissions,
+    )
+
+
+class AdminUserAccessCheckResponse(BaseModel):
+    """Read-only explanation of a permission check for one account."""
+
+    account_status: str
+    access_enabled: bool
+    permission_code: str
+    permission_known: bool
+    allowed: bool
+    reason: str
+    contributing_roles: list[str]
+
+
+@router.get(
+    "/{user_id}/access-check",
+    response_model=AdminUserAccessCheckResponse,
+    dependencies=[Depends(require_permission(Permission.USERS_READ))],
+)
+async def check_admin_user_permission(
+    user_id: UUID,
+    permission_code: str = Query(min_length=1, max_length=150),
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminUserAccessCheckResponse:
+    """Explain whether an account currently has one catalogued permission; never impersonates it."""
+    from fastapi import HTTPException
+
+    normalized_code = permission_code.strip()
+    if not normalized_code:
+        raise HTTPException(status_code=422, detail="permission_code cannot be blank.")
+
+    result = await session.execute(
+        select(User)
+        .options(selectinload(User.roles).selectinload(Role.permissions))
+        .where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    catalog_result = await session.execute(
+        select(PermissionModel.id).where(PermissionModel.code == normalized_code)
+    )
+    permission_known = catalog_result.scalar_one_or_none() is not None
+
+    now = datetime.now(timezone.utc)
+    account_status = str(user.status).upper()
+    locked_until = user.locked_until
+    account_expires_at = user.account_expires_at
+    if locked_until is not None and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if account_expires_at is not None and account_expires_at.tzinfo is None:
+        account_expires_at = account_expires_at.replace(tzinfo=timezone.utc)
+
+    if account_status != "ACTIVE":
+        access_block_reason = "account_inactive"
+    elif locked_until is not None and locked_until > now:
+        access_block_reason = "account_locked"
+    elif account_expires_at is not None and account_expires_at <= now:
+        access_block_reason = "account_expired"
+    else:
+        access_block_reason = None
+
+    contributing_roles = sorted({
+        role.name
+        for role in user.roles
+        if any(
+            permission.code == normalized_code
+            for permission in role.permissions
+        )
     })
-    return AdminUserAccessSummaryResponse(roles=roles, permissions=permissions)
+    if not permission_known:
+        reason = "unknown_permission_code"
+    elif access_block_reason is not None:
+        reason = access_block_reason
+    elif contributing_roles:
+        reason = "permission_granted"
+    else:
+        reason = "permission_not_assigned"
+
+    access_enabled = access_block_reason is None
+    allowed = permission_known and access_enabled and bool(contributing_roles)
+
+    return AdminUserAccessCheckResponse(
+        account_status=account_status,
+        access_enabled=access_enabled,
+        permission_code=normalized_code,
+        permission_known=permission_known,
+        allowed=allowed,
+        reason=reason,
+        contributing_roles=contributing_roles,
+    )
 
 
 class AdminUserAuditEntryResponse(BaseModel):
