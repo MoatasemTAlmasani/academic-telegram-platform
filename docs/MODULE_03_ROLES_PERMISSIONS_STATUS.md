@@ -1,0 +1,294 @@
+# Module 03 — Roles & Permissions (RBAC): Status and Gap Analysis
+
+**Repository:** `MoatasemTAlmasani/academic-telegram-platform`  
+**Baseline inspected:** `main` plus the unmerged roadmap branch `docs/module-03-rbac-roadmap-details`  
+**Working branch:** `feature/module-03-rbac-phase-zero`  
+**Inspection date:** 2026-11-09  
+**Phase:** 03.1 — Inventory and Gap Analysis  
+**Overall status:** `PARTIAL`  
+**Production/database changes:** None  
+**Tests executed during this inspection:** None
+
+> This report records a remote source inspection. It does not claim local working-tree inspection, runtime/browser verification, test execution, production verification, or database inspection. Statuses distinguish source evidence from verified runtime behavior.
+
+## 1. Executive summary
+
+EHTERAF already has a database-backed RBAC foundation and an existing administration UI. It must be extended, not replaced.
+
+Confirmed existing elements include:
+- SQLAlchemy `Role` and `Permission` models and many-to-many `user_roles` / `role_permissions` tables.
+- Six canonical role names and a Python permission enum/catalog.
+- Database-backed permission checks through `require_permission`.
+- Existing role and permission read APIs and a role-permission replacement API.
+- Existing single-role assignment API, account access summary, session revocation, and audit logging.
+- One Roles & Permissions page embedded in the existing admin console, plus user-detail effective-access display and a general audit page.
+
+The current implementation is therefore **PARTIAL**, not absent. The principal gaps are custom role lifecycle, complete multi-role assignment workflows, robust grant-authority rules, richer catalog metadata and filtering, dedicated RBAC workflows/pages, effective-access diagnostics, specialized audit filters/export controls, and comprehensive security/concurrency evidence.
+
+## 2. Authoritative documents inspected
+
+| Document | Inspected ref | Finding |
+|---|---|---|
+| `docs/ROADMAP.md` | `docs/module-03-rbac-roadmap-details` | Contains the expanded Module 03 scope and eight workflows from PR #33. |
+| `docs/ADMIN_SYSTEM_DELIVERY_BLUEPRINT.md` | `main` and roadmap branch | Requires database-backed RBAC, backend enforcement, audit, localization, isolated tests, and evidence-based VERIFIED status. |
+| `docs/EHTERAF_MASTER_REFERENCE.md` | `main` and roadmap branch | Confirms FastAPI modular monolith, Arabic/English, RTL/LTR, no Firebase, and no speculative multi-tenancy. |
+
+PR #33 is still open and unmerged at the time of inspection. The roadmap branch is used as the base for this working branch so the detailed scope is retained. This report does not merge PR #33 or change `main`.
+
+## 3. Existing backend architecture
+
+### 3.1 Models and relationships
+
+Source: `database/models/identity.py`
+
+- `User` has a many-to-many `roles` relationship through `user_roles`.
+- `Role` has a unique `name`, optional `description`, and relationships to users and permissions.
+- `Permission` has a unique `code`, optional `description`, and a relationship to roles.
+- `role_permissions` is a many-to-many association table.
+- `UserSession` stores server-side sessions with expiry and revocation fields.
+- Existing `AuditLog` is used by privileged operations.
+
+Current schema does **not** expose role active/system classification, bilingual role fields, or permission module/resource/action/sensitivity/localization fields. Do not add these automatically; first determine whether they are necessary and whether existing metadata/translation conventions can supply them.
+
+### 3.2 Permission definitions and role constants
+
+Source:
+- `backend/app/modules/authentication/permissions.py`
+- `backend/app/modules/authentication/roles.py`
+
+The current permission enum contains these 30 codes:
+
+```text
+users:read       users:create       users:update       users:delete
+services:read    services:create    services:update    services:delete
+requests:read    requests:create    requests:update
+files:read       files:upload       files:delete
+quotes:read      quotes:create      quotes:update
+content:read     content:create     content:update     content:delete
+campaigns:read   campaigns:create   campaigns:update   campaigns:delete
+telegram:read    telegram:manage
+audit:read
+admin:access
+roles:manage
+```
+
+The canonical roles are `super_admin`, `admin`, `manager`, `staff`, `support`, and `customer`. Python `ROLE_PERMISSIONS` defines canonical permission sets, while the API authorization dependency reads the permissions attached to database role objects. This dual representation is an architectural risk until seeding, synchronization, and runtime usage are traced end-to-end. Do not assume either source can be removed.
+
+Existing codes use the two-part `resource:action` style. Preserve them for compatibility; the proposed `module:resource:action` format must not trigger a bulk rename.
+
+### 3.3 Authorization dependency
+
+Source: `backend/app/api/rbac_dependencies.py`
+
+`require_permission(permission)` obtains the current authenticated user, iterates their assigned roles and each role's database permissions, and returns 403 when the required code is not present.
+
+This is genuine backend enforcement for routes that use the dependency. It does not by itself prove that every protected route in the whole application uses it, or that cached/session-loaded role relationships are refreshed correctly after every change.
+
+### 3.4 Existing RBAC APIs
+
+Source: `backend/app/api/routes/rbac_admin.py`
+
+| Capability | Existing API | Current authorization |
+|---|---|---|
+| List roles with permissions | `GET /rbac/roles` | `admin:access` |
+| List registered permissions | `GET /rbac/permissions` | `admin:access` |
+| Replace a role's permission set | `PUT /rbac/roles/{role_id}/permissions` | `roles:manage` |
+
+The permission-update endpoint currently:
+- Locks the role row with `with_for_update()`.
+- Rejects a missing role.
+- Protects the role whose name is `super_admin`.
+- Reserves `roles:manage` for `super_admin`.
+- Rejects unknown permission codes.
+- Replaces the permission relationship and writes before/after values to `AuditLog`.
+- Commits only when the set changes.
+
+Limitations to address/test:
+- No custom role create/update/duplicate/activate/deactivate lifecycle is exposed in this route file.
+- Read APIs use broad `admin:access`; confirm whether this matches the intended read policy without conflating it with mutation authority.
+- The route checks the target role by its name; protection must be reviewed against the canonical/system-role invariant.
+- Grantor authority is currently narrower only for the reserved `roles:manage` code; the general rule that an operator cannot grant permissions outside their own authority needs explicit review.
+- Concurrency behavior and rollback must be tested on supported database engines; row-lock behavior is not equivalent on every test backend.
+
+### 3.5 User role assignment and effective access
+
+Source: `backend/app/api/routes/admin_users.py`
+
+Existing capabilities include:
+- Paginated/searchable user directory with role filtering.
+- Account create/update/lifecycle routes.
+- `PUT /admin/users/{user_id}/role` to assign one canonical role.
+- A read-only `GET /admin/users/{user_id}/access-summary` returning assigned roles and the union of their database permission codes.
+- Session revocation when a user's role is changed.
+- Audit records for role changes.
+- Self-role-change protection and last active admin/Super Admin checks in relevant account/role flows.
+
+Important limitation: although the database relationship supports multiple roles, the current role-assignment endpoint deliberately replaces the user's roles with exactly one canonical role. The requested multi-role assignment workflow is therefore not implemented end-to-end. Any extension must preserve existing API compatibility and review all account-creation, bulk lifecycle, role-change, session, and audit paths.
+
+The last-admin helper locks canonical role rows before counting active users. Its correctness under simultaneous removal/demotion attempts, across the production database engine and transaction boundaries, is **not verified by this read-only inspection**.
+
+### 3.6 Audit API
+
+Source: `backend/app/api/routes/admin_audit.py`
+
+An existing audit list endpoint provides server-side limit/offset pagination and filters for action, free-text search, resource type, actor, and time range. It requires `audit:read`.
+
+RBAC permission updates and user-role changes write to the existing `AuditLog`; no parallel audit system is needed. A dedicated RBAC audit view, event outcome/correlation metadata coverage, export authorization, and denied-operation coverage remain to be verified or implemented.
+
+## 4. Existing frontend and navigation
+
+Sources:
+- `backend/app/static/admin/console.html`
+- `backend/app/static/admin/console.js`
+
+The current application serves an existing admin console; no separate RBAC application is required.
+
+Confirmed UI:
+- A Roles & Permissions navigation item exists inside the User & Account Management submenu.
+- It is currently gated in navigation by `admin:access`.
+- A `page-roles` screen displays platform roles and a role detail panel.
+- The page has an existing role list and permission editing UI backed by the existing APIs.
+- User details show assigned roles and effective permissions.
+- The account detail screen contains a single canonical role selector for assignment.
+- A general audit page already exists.
+- The console has Arabic/English dictionaries and existing theme/direction behavior.
+
+The current page is one consolidated roles/permissions page, not the eight requested dedicated workflows. The exact completeness of all UI states, keyboard accessibility, and responsive behavior has not been browser-tested in this inspection.
+
+## 5. Requirement status matrix
+
+Status meanings: NOT_STARTED / IN_PROGRESS / PARTIAL / IMPLEMENTED / VERIFIED / BLOCKED.
+
+| Requirement | Status | Evidence / gap |
+|---|---|---|
+| Existing role and permission models | IMPLEMENTED | Existing SQLAlchemy models and association tables. |
+| Permission catalog and canonical codes | PARTIAL | 30 enum codes and DB records model; metadata, integrity/sync and full UI filters need verification. |
+| Backend permission dependency | IMPLEMENTED | DB-role permission lookup in `require_permission`; whole-platform route coverage not audited. |
+| Role list/detail read | PARTIAL | List API exists; dedicated detail and robust pagination/filtering not confirmed. |
+| Custom role lifecycle | NOT_STARTED | No lifecycle endpoints confirmed in inspected RBAC route file. |
+| Role-permission replacement | PARTIAL | Existing transactional/audited endpoint; grantor boundary, conflict semantics and concurrency tests need proof. |
+| User-role assignment | PARTIAL | Existing single canonical role replacement; requested multi-role workflow absent. |
+| Effective permission summary | PARTIAL | Existing read-only summary; permission source mapping and diagnostic access check absent/not confirmed. |
+| Last active Super Admin protection | PARTIAL | Existing helper and role-change checks; concurrent invariant not proven. |
+| Session invalidation after role change | IMPLEMENTED | Existing role assignment revokes sessions; broader permission-change invalidation needs verification. |
+| RBAC audit records | PARTIAL | Existing audit writes and general list endpoint; full RBAC event/outcome/export workflow incomplete. |
+| Eight dedicated RBAC workflows | PARTIAL | Existing combined role page, user access summary and general audit; no evidence of all eight. |
+| Arabic/English and RTL/LTR | PARTIAL | Existing dictionaries and layout behavior; complete RBAC coverage not verified. |
+| Responsive/accessibility acceptance | NOT_STARTED | No browser/device evidence captured in this inspection. |
+| Backend/security/integration tests | PARTIAL | Test implementation inventory and execution still required. |
+| Documentation and acceptance evidence | IN_PROGRESS | This status report is being established; implementation evidence not yet available. |
+
+No item is marked VERIFIED in this report.
+
+## 6. Existing tests and CI
+
+The current repository test inventory and workflow configuration were not completely resolved through this remote file inspection. No tests were executed. Therefore:
+- Do not interpret the absence of test paths in this report as proof that tests do not exist.
+- Before implementation, locate the current RBAC, admin-user, authentication, session, audit, frontend, and CI tests in the repository.
+- Run only isolated test configurations; verify database URLs and fixture setup before executing.
+- Never point tests or migrations at production or at the protected local/production database.
+
+Required test coverage is listed in the approved Module 03 roadmap and should be mapped to existing tests before adding new ones.
+
+## 7. Risks and architectural constraints
+
+1. **Dual authorization representation:** database role-permission relationships and Python `ROLE_PERMISSIONS` constants coexist. Trace seed/update/authentication usage before changing either.
+2. **Single-role API contract:** the current user-role endpoint replaces the role set. Multi-role support must be additive and compatibility-tested.
+3. **Privilege boundary:** reserving `roles:manage` is not equivalent to enforcing a complete grantor authority boundary.
+4. **Last Super Admin concurrency:** existing row locks/counts require database-engine-specific concurrent tests and transaction review.
+5. **Stale authorization:** role changes revoke sessions in one path; permission matrix changes do not visibly revoke all affected sessions in the inspected RBAC route.
+6. **Role lifecycle schema:** active/system/bilingual metadata is not present on the inspected `Role` model. Avoid speculative columns and preserve legacy role identifiers.
+7. **Frontend coupling:** the admin console is a static HTML/JS application. Follow its current conventions; do not introduce a new frontend framework.
+8. **Scope model:** organization/branch scope is not established by this module. Do not invent scope tables or enforcement.
+9. **Remote inspection limitation:** uncommitted Codespaces work is not visible through GitHub. Reconcile the local working tree before any merge or deployment.
+
+## 8. Implementation plan
+
+### 03.1 — Inventory and gap analysis
+- Complete local working-tree/branch reconciliation before any local edits.
+- Locate all relevant test files, seeders, API registration, permission checks, auth/session loading, and frontend event handlers.
+- Map every protected API to its permission requirement.
+- Finalize this report with exact test paths and CI workflows.
+
+### 03.2 — Roles management
+- Add custom role lifecycle only after checking role seeding and compatibility constraints.
+- Preserve the six canonical roles and protect system roles using stable identity/classification, not display-name assumptions.
+- Add validation, duplicate-code/name handling, impact preview, audit, and tests.
+
+### 03.3 — Permission catalog and matrix
+- Treat registered database permission codes as authoritative at runtime, reconcile seed constants safely.
+- Add metadata through existing catalog/i18n patterns where possible.
+- Add safe grouping/filtering, before/after preview, dirty state, conflict handling, and transaction tests.
+- Preserve all existing permission codes.
+
+### 03.4 — User-role assignment
+- Reconcile single-role legacy API with multi-role relationship support.
+- Enforce grantor authority, no self/indirect escalation, inactive-role policy if supported, and last Super Admin invariant.
+- Preserve existing session revocation and audit semantics.
+
+### 03.5 — Effective permissions and security
+- Reuse the existing access summary; add source-role mapping and read-only diagnostics based on the real authorization evaluator.
+- Define and test permission refresh/revocation behavior after grants and revocations.
+- Prove IDOR, cross-scope (only if scopes exist), and concurrent Super Admin protections.
+
+### 03.6 — Audit and dashboard integration
+- Reuse `AuditLog` and existing admin shell.
+- Deliver the eight required navigation workflows as integrated pages/views, without duplicating user/audit capabilities.
+- Complete Arabic/English, RTL/LTR, responsive and accessible states.
+
+### 03.7 — Verification and acceptance
+- Run mapped backend, API, security, concurrency, frontend, and integration tests on isolated databases.
+- Record actual commands, results, CI run links and browser evidence.
+- Mark only evidence-backed requirements VERIFIED.
+
+## 9. Initial affected-file map
+
+| Area | Existing files to inspect/extend |
+|---|---|
+| Models | `database/models/identity.py`, `database/models/audit.py` |
+| Permission definitions | `backend/app/modules/authentication/permissions.py`, `roles.py` |
+| Authorization | `backend/app/api/rbac_dependencies.py`, `backend/app/api/auth_dependencies.py` |
+| RBAC API | `backend/app/api/routes/rbac.py`, `rbac_admin.py` |
+| User-role and access summary | `backend/app/api/routes/admin_users.py` |
+| Audit API | `backend/app/api/routes/admin_audit.py` |
+| Frontend | `backend/app/static/admin/console.html`, `console.js`, associated stylesheet and localization dictionaries |
+| Tests/CI | Exact paths to be added after repository test inventory; no paths inferred here |
+| Documentation | `docs/MODULE_03_ROLES_PERMISSIONS_STATUS.md`, `docs/ROADMAP.md`, `docs/ADMIN_SYSTEM_DELIVERY_BLUEPRINT.md` |
+
+## 10. Test strategy
+
+- First inspect test fixtures and database configuration; assert that the configured database is isolated before running tests.
+- Unit-test permission evaluation and grant-authority policy.
+- API-test anonymous, unauthorized, authorized, invalid IDs, unknown permissions, and validation failures.
+- Test transactional rollback and concurrent matrix edits on the supported database engine.
+- Test concurrent attempts to remove/demote the last active Super Admin.
+- Test multi-role effective permission union and compatibility of the legacy single-role endpoint.
+- Test session invalidation/refresh after role and permission changes.
+- Test audit event completeness and safe metadata.
+- Test all RBAC UI workflows in Arabic/English, RTL/LTR, responsive viewports and loading/empty/error/denied/conflict states.
+- Compare UI effective permissions with backend authorization decisions using the same test identities and isolated fixtures.
+
+## 11. Safety and rollback
+
+- No production DB, records, environment variables, secrets, or deployment settings were accessed or changed by this inspection.
+- No migration was run.
+- No application code was changed in Phase Zero.
+- The report is committed on a feature branch based on the unmerged roadmap branch; `main` remains unchanged.
+- Any future schema change requires a reversible Alembic migration and isolated-database tests.
+- Roll back code through the feature branch/PR; do not reverse production data manually. Database rollback must follow the reviewed migration plan and must never be run against production without separate explicit authorization.
+
+## 12. Phase 03.1 exit status
+
+**Status: IN_PROGRESS**
+
+Completed: remote source inspection of the three approved architecture documents, RBAC models, permission/role definitions, authorization dependency, RBAC admin routes, admin-user RBAC flows, audit API, and admin-console navigation/page markup.
+
+Remaining before declaring 03.1 complete:
+- Reconcile local uncommitted work in Codespaces (not visible to this remote inspection).
+- Locate and map exact test files and CI workflows.
+- Inspect API router registration and seed/synchronization logic.
+- Trace authentication user loading and role-permission refresh behavior.
+- Inspect the full frontend role-page JavaScript handlers and stylesheet behavior.
+- Execute the isolated relevant test suite and record real results.
+
+**Next sub-phase safety:** Do not begin schema changes or role lifecycle implementation until the remaining inventory items above are resolved. Non-destructive test discovery and code-path tracing can proceed safely.
