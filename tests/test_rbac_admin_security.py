@@ -191,3 +191,88 @@ def test_rbac_ui_disables_permission_edits_without_governance_authority():
     assert 'var disabledAttr=canEdit?"":" disabled";' in source
     assert '(canEdit?\'\':\' hidden disabled\')' in source
     assert "The Super Admin permission set is protected." in source
+
+
+def test_custom_role_creation_normalizes_input_and_writes_audit_event():
+    from backend.app.api.routes.rbac_admin import (
+        RBACRoleCreateRequest,
+        create_custom_role,
+    )
+    from database.models.identity import Role
+
+    class CreationSession(_Session):
+        async def flush(self):
+            for item in self.added:
+                if isinstance(item, Role) and item.id is None:
+                    item.id = uuid4()
+
+    actor = SimpleNamespace(id=uuid4())
+    session = CreationSession([_Result(None)])
+    payload = RBACRoleCreateRequest(
+        name="  regional_manager  ",
+        description="  Regional operations  ",
+    )
+
+    response = asyncio.run(
+        create_custom_role(payload=payload, current_user=actor, session=session)
+    )
+
+    assert response.role.name == "regional_manager"
+    assert response.role.description == "Regional operations"
+    assert response.role.permissions == []
+    assert session.committed
+    assert len(session.added) == 2
+    audit = session.added[1]
+    assert audit.actor_id == actor.id
+    assert audit.action == "rbac.role_created"
+    assert audit.resource_type == "role"
+    assert audit.resource_id == response.role.id
+    assert audit.event_metadata == {
+        "role_name": "regional_manager",
+        "description": "Regional operations",
+        "role_type": "custom",
+    }
+
+
+def test_custom_role_creation_rejects_canonical_system_role_names():
+    from backend.app.api.routes.rbac_admin import (
+        RBACRoleCreateRequest,
+        create_custom_role,
+    )
+
+    session = _Session([])
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await create_custom_role(
+                payload=RBACRoleCreateRequest(name="admin"),
+                current_user=SimpleNamespace(id=uuid4()),
+                session=session,
+            )
+        assert exc_info.value.status_code == 409
+
+    asyncio.run(scenario())
+    assert not session.committed
+    assert not session.added
+
+
+def test_custom_role_creation_rejects_duplicate_names():
+    from backend.app.api.routes.rbac_admin import (
+        RBACRoleCreateRequest,
+        create_custom_role,
+    )
+
+    session = _Session([_Result(SimpleNamespace(name="regional_manager"))])
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await create_custom_role(
+                payload=RBACRoleCreateRequest(name="regional_manager"),
+                current_user=SimpleNamespace(id=uuid4()),
+                session=session,
+            )
+        assert exc_info.value.status_code == 409
+
+    asyncio.run(scenario())
+    assert not session.committed
+    assert not session.added
