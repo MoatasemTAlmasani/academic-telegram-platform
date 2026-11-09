@@ -404,3 +404,14 @@ This closes an important privilege-escalation gap in the earlier implementation 
 - Added a bilingual duplicate-role form and extended unit/API integration coverage for the copy rules and privilege boundaries.
 
 **Verification remains PARTIAL / NOT VERIFIED:** no automated test or browser run has been executed in this environment.
+
+
+### Phase 03.6 — Multi-role user assignment (in progress)
+
+- Added a backward-compatible `PUT /api/v1/admin/users/{user_id}/roles` endpoint. The original single-role endpoint remains available for existing clients.
+- The new endpoint validates and normalizes role-name sets, loads all requested roles and their permission records, computes the union of effective permissions, enforces the grantor's privilege boundary, protects Super Admin/RBAC-governance assignment, blocks self-escalation, and preserves the last-active-Super-Admin invariant.
+- Role-set changes revoke the target account's active sessions and write before/after role names to the existing audit log. Empty role sets are supported for explicit access removal; the final active Super Admin remains protected.
+- Replaced the account-detail single-role selector with a responsive, permission-gated multi-role picker populated from the persisted role directory. The existing access summary displays the resulting effective permission union.
+- Added unit and isolated SQLite API integration coverage for multi-role assignment, permission union, session revocation, and grantor-boundary rejection.
+
+**Verification remains PARTIAL / NOT VERIFIED:** automated tests and browser acceptance have not been run.
