@@ -936,6 +936,35 @@ class AdminUserRoleAssignmentResponse(BaseModel):
     sessions_revoked: int
 
 
+class AdminUserRolesAssignmentRequest(BaseModel):
+    """Replace a user's role set using existing role records."""
+
+    role_names: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("role_names", mode="before")
+    @classmethod
+    def normalize_role_names(cls, value):
+        if not isinstance(value, list):
+            return value
+        return [
+            item.strip().lower() if isinstance(item, str) else item
+            for item in value
+        ]
+
+    @field_validator("role_names")
+    @classmethod
+    def reject_duplicate_role_names(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("Role names must be unique.")
+        return value
+
+
+class AdminUserRolesAssignmentResponse(BaseModel):
+    user_id: UUID
+    roles: list[AdminUserRoleResponse]
+    sessions_revoked: int
+
+
 @router.put(
     "/{user_id}/role",
     response_model=AdminUserRoleAssignmentResponse,
@@ -1040,6 +1069,154 @@ async def assign_admin_user_role(
     return AdminUserRoleAssignmentResponse(
         user_id=user.id,
         role=AdminUserRoleResponse(id=new_role.id, name=new_role.name, description=new_role.description),
+        sessions_revoked=revoked_count,
+    )
+
+
+@router.put(
+    "/{user_id}/roles",
+    response_model=AdminUserRolesAssignmentResponse,
+    dependencies=[Depends(require_permission(Permission.ROLES_MANAGE))],
+)
+async def assign_admin_user_roles(
+    user_id: UUID,
+    payload: AdminUserRolesAssignmentRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AdminUserRolesAssignmentResponse:
+    """Replace the assigned role set while enforcing grantor and root-role boundaries."""
+    from fastapi import HTTPException
+
+    user_result = await session.execute(
+        select(User)
+        .where(User.id == user_id, User.deleted_at.is_(None))
+        .options(selectinload(User.roles))
+        .with_for_update()
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    requested_names = sorted(payload.role_names)
+    if "super_admin" in requested_names and len(requested_names) > 1:
+        raise HTTPException(
+            status_code=422,
+            detail="The Super Admin role must be assigned on its own.",
+        )
+
+    if requested_names:
+        role_result = await session.execute(
+            select(Role)
+            .options(selectinload(Role.permissions))
+            .where(Role.name.in_(requested_names))
+            .order_by(Role.name.asc())
+            .with_for_update()
+        )
+        new_roles = role_result.scalars().unique().all()
+    else:
+        new_roles = []
+
+    found_names = {role.name for role in new_roles}
+    missing_names = sorted(set(requested_names) - found_names)
+    if missing_names:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "One or more requested roles do not exist.",
+                "missing_roles": missing_names,
+            },
+        )
+
+    actor_permissions = _effective_permission_codes(current_user)
+    actor_is_super_admin = _has_super_admin_role(current_user)
+    target_permissions = {
+        permission.code
+        for role in new_roles
+        for permission in (role.permissions or [])
+    }
+    if "super_admin" in requested_names and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign the Super Admin role.",
+        )
+    if Permission.ROLES_MANAGE.value in target_permissions and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign a role with RBAC governance access.",
+        )
+    unauthorized_permissions = sorted(target_permissions - actor_permissions)
+    if unauthorized_permissions:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "You cannot assign roles with permissions beyond your own effective access.",
+                "unauthorized_permissions": unauthorized_permissions,
+            },
+        )
+
+    previous_names = sorted(role.name for role in user.roles)
+    if previous_names == requested_names:
+        return AdminUserRolesAssignmentResponse(
+            user_id=user.id,
+            roles=[
+                AdminUserRoleResponse(
+                    id=role.id,
+                    name=role.name,
+                    description=role.description,
+                )
+                for role in sorted(user.roles, key=lambda item: item.name)
+            ],
+            sessions_revoked=0,
+        )
+
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=409,
+            detail="Administrators cannot change their own roles.",
+        )
+
+    if (
+        user.status == "ACTIVE"
+        and "super_admin" in previous_names
+        and "super_admin" not in requested_names
+    ):
+        await _protect_last_active_super_admin(session, user.id)
+
+    user.roles = list(new_roles)
+    revoked_at = datetime.now(timezone.utc)
+    revoked_result = await session.execute(
+        update(UserSession)
+        .where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None))
+        .values(revoked_at=revoked_at, revoked_reason="roles_changed")
+    )
+    revoked_count = max(0, revoked_result.rowcount or 0)
+
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="user.roles_assigned",
+        resource_type="user",
+        resource_id=user.id,
+        description=f"Role set changed for user '{user.username}'.",
+        event_metadata={
+            "user_id": str(user.id),
+            "before_roles": previous_names,
+            "after_roles": requested_names,
+            "sessions_revoked": revoked_count,
+        },
+        created_at=revoked_at,
+    ))
+    await session.commit()
+
+    return AdminUserRolesAssignmentResponse(
+        user_id=user.id,
+        roles=[
+            AdminUserRoleResponse(
+                id=role.id,
+                name=role.name,
+                description=role.description,
+            )
+            for role in new_roles
+        ],
         sessions_revoked=revoked_count,
     )
 
