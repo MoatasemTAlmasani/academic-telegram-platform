@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,7 +17,7 @@ from backend.app.api.rbac_dependencies import require_permission
 from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.permissions import Permission
 from database.models.audit import AuditLog
-from database.models.identity import Role, User, Permission as PermissionModel
+from database.models.identity import Role, User, UserSession, Permission as PermissionModel
 
 
 router = APIRouter(
@@ -667,6 +667,23 @@ async def update_role_permissions(
     if before_codes != after_codes:
         role.permissions = list(permissions)
         now = datetime.now(timezone.utc)
+        # Permission changes affect every account assigned this role. Revoke
+        # their existing sessions in the same transaction so old sessions
+        # cannot outlive a governance change.
+        revoked_result = await session.execute(
+            update(UserSession)
+            .where(
+                UserSession.user_id.in_(
+                    select(User.id).where(User.roles.any(Role.id == role.id))
+                ),
+                UserSession.revoked_at.is_(None),
+            )
+            .values(
+                revoked_at=now,
+                revoked_reason="role_permissions_changed",
+            )
+        )
+        revoked_sessions = max(0, revoked_result.rowcount or 0)
         session.add(
             AuditLog(
                 actor_id=current_user.id,
@@ -678,6 +695,7 @@ async def update_role_permissions(
                     "role_name": role.name,
                     "before": before_codes,
                     "after": after_codes,
+                    "revoked_sessions": revoked_sessions,
                 },
                 created_at=now,
             )
