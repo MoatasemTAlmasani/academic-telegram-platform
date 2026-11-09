@@ -1110,6 +1110,8 @@ def test_multi_role_assignment_returns_effective_permission_union_and_revokes_se
             f"/api/v1/admin/users/{api_harness.target_id}/access-summary",
         )
         assert summary.status_code == 200, summary.text
+        assert summary.json()["account_status"] == "ACTIVE"
+        assert summary.json()["access_enabled"] is True
         assert summary.json()["permissions"] == ["requests:read", "users:read"]
 
         async with api_harness.factory() as session:
@@ -1124,5 +1126,38 @@ def test_multi_role_assignment_returns_effective_permission_union_and_revokes_se
                 select(AuditLog).where(AuditLog.resource_id == api_harness.target_id)
             )).scalars().all()
             assert any(event.action == "user.roles_assigned" for event in events)
+
+    asyncio.run(scenario())
+
+
+def test_inactive_user_access_summary_keeps_assignments_but_reports_no_effective_permissions(api_harness):
+    async def scenario():
+        await api_harness.start(permissions=("users:read",))
+        async with api_harness.factory() as session:
+            permission = (await session.execute(
+                select(PermissionRecord).where(PermissionRecord.code == "users:read")
+            )).scalar_one()
+            support_role = Role(
+                name="support",
+                description="Support",
+                permissions=[permission],
+            )
+            target = await session.get(User, api_harness.target_id)
+            target.status = "INACTIVE"
+            target.roles = [support_role]
+            session.add(support_role)
+            await session.commit()
+
+        response = await api_harness.request(
+            "GET",
+            f"/api/v1/admin/users/{api_harness.target_id}/access-summary",
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["account_status"] == "INACTIVE"
+        assert payload["access_enabled"] is False
+        assert payload["access_block_reason"] == "account_inactive"
+        assert [role["name"] for role in payload["roles"]] == ["support"]
+        assert payload["permissions"] == []
 
     asyncio.run(scenario())
