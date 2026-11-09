@@ -54,12 +54,20 @@ class AdminApiHarness:
             )
             self.actor.roles = [admin_role]
             session.add_all([self.actor, target, other, customer_role])
-            session.add(UserSession(
-                id=self.session_id,
-                user_id=self.other_id,
-                created_at=datetime.now(timezone.utc),
-                expires_at=datetime.now(timezone.utc) + timedelta(days=1),
-            ))
+            session.add_all([
+                UserSession(
+                    id=self.session_id,
+                    user_id=self.other_id,
+                    created_at=datetime.now(timezone.utc),
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+                ),
+                UserSession(
+                    id=uuid4(),
+                    user_id=self.target_id,
+                    created_at=datetime.now(timezone.utc),
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+                ),
+            ])
             await session.commit()
 
         current_user = SimpleNamespace(
@@ -1009,10 +1017,18 @@ def test_custom_role_can_be_created_audited_and_assigned_with_session_revocation
         )
         assert assigned.status_code == 200, assigned.text
         assert assigned.json()["role"]["name"] == "regional_manager"
+        assert assigned.json()["sessions_revoked"] == 1
 
         async with api_harness.factory() as session:
             target = await session.get(User, api_harness.target_id, options=[selectinload(User.roles)])
             assert [item.name for item in target.roles] == ["regional_manager"]
+            active_sessions = (await session.execute(
+                select(UserSession).where(
+                    UserSession.user_id == api_harness.target_id,
+                    UserSession.revoked_at.is_(None),
+                )
+            )).scalars().all()
+            assert active_sessions == []
             events = (await session.execute(
                 select(AuditLog).order_by(AuditLog.created_at.asc())
             )).scalars().all()
