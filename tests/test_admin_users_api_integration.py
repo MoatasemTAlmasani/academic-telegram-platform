@@ -1022,18 +1022,30 @@ def test_custom_role_can_be_created_audited_and_assigned_with_session_revocation
         assert updated.json()["role"]["name"] == "area_lead"
         assert updated.json()["role"]["description"] == "Area operations"
 
+        duplicated = await api_harness.request(
+            "POST",
+            f"/api/v1/rbac/roles/{role['id']}/duplicate",
+            json={
+                "name": "AREA_LEAD_COPY",
+                "description": "Area operations copy",
+            },
+        )
+        assert duplicated.status_code == 201, duplicated.text
+        assert duplicated.json()["role"]["name"] == "area_lead_copy"
+        assert duplicated.json()["role"]["description"] == "Area operations copy"
+
         assigned = await api_harness.request(
             "PUT",
             f"/api/v1/admin/users/{api_harness.target_id}/role",
-            json={"role": "area_lead"},
+            json={"role": "area_lead_copy"},
         )
         assert assigned.status_code == 200, assigned.text
-        assert assigned.json()["role"]["name"] == "area_lead"
+        assert assigned.json()["role"]["name"] == "area_lead_copy"
         assert assigned.json()["sessions_revoked"] == 1
 
         async with api_harness.factory() as session:
             target = await session.get(User, api_harness.target_id, options=[selectinload(User.roles)])
-            assert [item.name for item in target.roles] == ["area_lead"]
+            assert [item.name for item in target.roles] == ["area_lead_copy"]
             active_sessions = (await session.execute(
                 select(UserSession).where(
                     UserSession.user_id == api_harness.target_id,
@@ -1047,6 +1059,7 @@ def test_custom_role_can_be_created_audited_and_assigned_with_session_revocation
             assert {event.action for event in events} == {
                 "rbac.role_created",
                 "rbac.role_updated",
+                "rbac.role_duplicated",
                 "user.role_assigned",
             }
 
