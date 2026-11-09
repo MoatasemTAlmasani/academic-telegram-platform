@@ -1319,3 +1319,64 @@ def test_account_creation_cannot_grant_super_admin_or_rbac_governance_role(api_h
             assert (await session.execute(select(AuditLog))).scalars().all() == []
 
     asyncio.run(scenario())
+
+
+def test_role_permission_change_revokes_sessions_for_assigned_users(api_harness):
+    async def scenario():
+        await api_harness.start(
+            permissions=("roles:manage", "users:read", "requests:read")
+        )
+        now = datetime.now(timezone.utc)
+        async with api_harness.factory() as session:
+            user_read = await session.scalar(
+                select(PermissionRecord).where(PermissionRecord.code == "users:read")
+            )
+            request_read = await session.scalar(
+                select(PermissionRecord).where(PermissionRecord.code == "requests:read")
+            )
+            assigned_role = Role(
+                name="regional_manager",
+                description="Role used to verify session invalidation",
+                permissions=[user_read],
+            )
+            target = await session.get(User, api_harness.target_id)
+            target.roles = [assigned_role]
+            target_session = UserSession(
+                user_id=api_harness.target_id,
+                created_at=now,
+                expires_at=now + timedelta(hours=1),
+                ip_address="127.0.0.1",
+                user_agent="rbac-integration-test",
+            )
+            session.add_all([assigned_role, target_session])
+            await session.commit()
+            role_id = assigned_role.id
+            session_id = target_session.id
+
+        response = await api_harness.request(
+            "PUT",
+            f"/api/v1/rbac/roles/{role_id}/permissions",
+            json={"permission_codes": ["requests:read"]},
+        )
+        assert response.status_code == 200, response.text
+        assert [item["code"] for item in response.json()["role"]["permissions"]] == [
+            "requests:read"
+        ]
+
+        async with api_harness.factory() as session:
+            revoked = await session.get(UserSession, session_id)
+            assert revoked is not None
+            assert revoked.revoked_at is not None
+            assert revoked.revoked_reason == "role_permissions_changed"
+            event = await session.scalar(
+                select(AuditLog).where(
+                    AuditLog.action == "rbac.role_permissions_updated",
+                    AuditLog.resource_id == role_id,
+                )
+            )
+            assert event is not None
+            assert event.event_metadata["revoked_sessions"] == 1
+            assert event.event_metadata["before"] == ["users:read"]
+            assert event.event_metadata["after"] == ["requests:read"]
+
+    asyncio.run(scenario())
