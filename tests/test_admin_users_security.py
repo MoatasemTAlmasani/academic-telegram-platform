@@ -214,3 +214,186 @@ def test_sensitive_account_mutations_lock_target_rows_before_changes():
     )
     for handler in guarded_handlers:
         assert ".with_for_update()" in inspect.getsource(handler), handler.__name__
+
+
+def test_custom_role_assignment_is_supported_and_revokes_existing_sessions():
+    actor_id, target_id, role_id = uuid4(), uuid4(), uuid4()
+    previous_role = SimpleNamespace(name="staff")
+    target = SimpleNamespace(
+        id=target_id,
+        username="target-user",
+        status="ACTIVE",
+        roles=[previous_role],
+    )
+    custom_role = SimpleNamespace(
+        id=role_id,
+        name="regional_manager",
+        description="Regional operations",
+        permissions=[],
+    )
+    session = _Session([
+        _Result(target),
+        _Result(custom_role),
+        _Result(rowcount=2),
+    ])
+
+    payload = admin_users.AdminUserRoleAssignmentRequest(
+        role="  REGIONAL_MANAGER  "
+    )
+    response = asyncio.run(
+        admin_users.assign_admin_user_role(
+            user_id=target_id,
+            payload=payload,
+            current_user=SimpleNamespace(
+                id=actor_id,
+                roles=[
+                    SimpleNamespace(
+                        name="super_admin",
+                        permissions=[
+                            SimpleNamespace(code="roles:manage"),
+                            SimpleNamespace(code="users:read"),
+                        ],
+                    )
+                ],
+            ),
+            session=session,
+        )
+    )
+
+    assert response.role.name == "regional_manager"
+    assert response.sessions_revoked == 2
+    assert target.roles == [custom_role]
+    assert session.committed
+    assert session.added[0].action == "user.role_assigned"
+    assert session.added[0].event_metadata["before_roles"] == ["staff"]
+    assert session.added[0].event_metadata["after_roles"] == ["regional_manager"]
+
+
+def test_custom_role_assignment_cannot_demote_the_last_active_super_admin():
+    actor_id, target_id = uuid4(), uuid4()
+    target = SimpleNamespace(
+        id=target_id,
+        username="last-super-admin",
+        status="ACTIVE",
+        roles=[SimpleNamespace(name="super_admin")],
+    )
+    replacement_role = SimpleNamespace(
+        id=uuid4(),
+        name="regional_manager",
+        description="Regional operations",
+        permissions=[],
+    )
+    super_admin_role = SimpleNamespace(name="super_admin")
+    session = _Session([
+        _Result(target),
+        _Result(replacement_role),
+        _Result("ACTIVE"),
+        _Result(super_admin_role),
+        _Result(1),
+    ])
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_users.assign_admin_user_role(
+                user_id=target_id,
+                payload=admin_users.AdminUserRoleAssignmentRequest(
+                    role="regional_manager"
+                ),
+                current_user=SimpleNamespace(id=actor_id),
+                session=session,
+            )
+        assert exc_info.value.status_code == 409
+        assert "last active Super Admin" in exc_info.value.detail
+
+    asyncio.run(scenario())
+    assert len(session.statements) == 5
+    assert session.statements[3]._for_update_arg is not None
+    assert not session.committed
+    assert not session.added
+    assert [role.name for role in target.roles] == ["super_admin"]
+
+
+def test_role_assignment_cannot_grant_super_admin_to_non_super_admin_actor():
+    actor_id, target_id = uuid4(), uuid4()
+    target = SimpleNamespace(
+        id=target_id,
+        username="target-user",
+        status="ACTIVE",
+        roles=[],
+    )
+    super_admin_role = SimpleNamespace(
+        id=uuid4(),
+        name="super_admin",
+        description="Protected role",
+        permissions=[],
+    )
+    session = _Session([_Result(target), _Result(super_admin_role)])
+    actor = SimpleNamespace(
+        id=actor_id,
+        roles=[
+            SimpleNamespace(
+                name="admin",
+                permissions=[SimpleNamespace(code="roles:manage")],
+            )
+        ],
+    )
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_users.assign_admin_user_role(
+                user_id=target_id,
+                payload=admin_users.AdminUserRoleAssignmentRequest(role="super_admin"),
+                current_user=actor,
+                session=session,
+            )
+        assert exc_info.value.status_code == 403
+
+    asyncio.run(scenario())
+    assert not session.committed
+    assert not session.added
+
+
+def test_role_assignment_cannot_exceed_the_actors_effective_permissions():
+    actor_id, target_id = uuid4(), uuid4()
+    target = SimpleNamespace(
+        id=target_id,
+        username="target-user",
+        status="ACTIVE",
+        roles=[],
+    )
+    custom_role = SimpleNamespace(
+        id=uuid4(),
+        name="regional_manager",
+        description="Regional manager",
+        permissions=[SimpleNamespace(code="users:delete")],
+    )
+    actor = SimpleNamespace(
+        id=actor_id,
+        roles=[
+            SimpleNamespace(
+                name="admin",
+                permissions=[
+                    SimpleNamespace(code="roles:manage"),
+                    SimpleNamespace(code="users:read"),
+                ],
+            )
+        ],
+    )
+    session = _Session([_Result(target), _Result(custom_role)])
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_users.assign_admin_user_role(
+                user_id=target_id,
+                payload=admin_users.AdminUserRoleAssignmentRequest(
+                    role="regional_manager"
+                ),
+                current_user=actor,
+                session=session,
+            )
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail["unauthorized_permissions"] == ["users:delete"]
+
+    asyncio.run(scenario())
+    assert not session.committed
+    assert not session.added
