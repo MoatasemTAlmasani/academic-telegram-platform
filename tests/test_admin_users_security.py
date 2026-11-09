@@ -255,3 +255,45 @@ def test_custom_role_assignment_is_supported_and_revokes_existing_sessions():
     assert session.added[0].action == "user.role_assigned"
     assert session.added[0].event_metadata["before_roles"] == ["staff"]
     assert session.added[0].event_metadata["after_roles"] == ["regional_manager"]
+
+
+def test_custom_role_assignment_cannot_demote_the_last_active_super_admin():
+    actor_id, target_id = uuid4(), uuid4()
+    target = SimpleNamespace(
+        id=target_id,
+        username="last-super-admin",
+        status="ACTIVE",
+        roles=[SimpleNamespace(name="super_admin")],
+    )
+    replacement_role = SimpleNamespace(
+        id=uuid4(),
+        name="regional_manager",
+        description="Regional operations",
+    )
+    super_admin_role = SimpleNamespace(name="super_admin")
+    session = _Session([
+        _Result(target),
+        _Result(replacement_role),
+        _Result(super_admin_role),
+        _Result(1),
+    ])
+
+    async def scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_users.assign_admin_user_role(
+                user_id=target_id,
+                payload=admin_users.AdminUserRoleAssignmentRequest(
+                    role="regional_manager"
+                ),
+                current_user=SimpleNamespace(id=actor_id),
+                session=session,
+            )
+        assert exc_info.value.status_code == 409
+        assert "last active Super Admin" in exc_info.value.detail
+
+    asyncio.run(scenario())
+    assert len(session.statements) == 4
+    assert session.statements[2]._for_update_arg is not None
+    assert not session.committed
+    assert not session.added
+    assert [role.name for role in target.roles] == ["super_admin"]
