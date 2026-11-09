@@ -148,6 +148,44 @@ async def _protect_last_active_admin(
                 )
 
 
+async def _protect_last_active_super_admin(
+    session: AsyncSession,
+    user_id: UUID,
+) -> None:
+    """Serialize Super Admin demotions and preserve the final active account."""
+    from fastapi import HTTPException
+
+    target = await session.execute(
+        select(User.status).where(
+            User.id == user_id,
+            User.roles.any(Role.name == "super_admin"),
+        )
+    )
+    target_status = target.scalar_one_or_none()
+    if target_status is None or str(target_status).upper() != "ACTIVE":
+        return
+
+    # Every demotion locks this same canonical row before counting active owners.
+    super_admin_role = await session.execute(
+        select(Role).where(Role.name == "super_admin").with_for_update()
+    )
+    if super_admin_role.scalar_one_or_none() is None:
+        return
+
+    active_count = await session.execute(
+        select(func.count(User.id)).where(
+            func.upper(User.status) == "ACTIVE",
+            User.deleted_at.is_(None),
+            User.roles.any(Role.name == "super_admin"),
+        )
+    )
+    if (active_count.scalar_one() or 0) <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="The last active Super Admin cannot be demoted or reassigned.",
+        )
+
+
 def _safe_user_audit_snapshot(user: User) -> dict[str, str | None]:
     """Return approved non-secret account fields for before/after audit metadata."""
 
@@ -924,27 +962,8 @@ async def assign_admin_user_role(
             detail="Administrators cannot change their own role. Ask another Super Admin to perform this action.",
         )
 
-    if (
-        user.status == "ACTIVE"
-        and "super_admin" in previous_roles
-        and new_role.name != "super_admin"
-    ):
-        super_admin_role = await session.execute(
-            select(Role).where(Role.name == "super_admin").with_for_update()
-        )
-        if super_admin_role.scalar_one_or_none() is not None:
-            active_super_admins = await session.execute(
-                select(func.count(User.id)).where(
-                    func.upper(User.status) == "ACTIVE",
-                    User.deleted_at.is_(None),
-                    User.roles.any(Role.name == "super_admin"),
-                )
-            )
-            if (active_super_admins.scalar_one() or 0) <= 1:
-                raise HTTPException(
-                    status_code=409,
-                    detail="The last active Super Admin cannot be demoted or reassigned.",
-                )
+    if new_role.name != "super_admin" and "super_admin" in previous_roles:
+        await _protect_last_active_super_admin(session, user.id)
 
     user.roles = [new_role]
     revoked_at = datetime.now(timezone.utc)
