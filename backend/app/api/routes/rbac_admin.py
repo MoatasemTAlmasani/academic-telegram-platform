@@ -46,6 +46,8 @@ class RBACRoleResponse(BaseModel):
 class RBACRoleCreateRequest(BaseModel):
     """Validated input for creating a non-system custom role."""
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
     description: str | None = Field(default=None, max_length=500)
 
@@ -69,6 +71,8 @@ class RBACRoleCreateResponse(BaseModel):
 
 class RBACRoleUpdateRequest(BaseModel):
     """Partial metadata update for an existing custom role."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
     description: str | None = Field(default=None, max_length=500)
