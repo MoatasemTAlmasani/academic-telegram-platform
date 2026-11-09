@@ -346,3 +346,18 @@ Repository-level source discovery is now substantially complete. Remaining check
 - Complete call-site map for both authorization helper implementations.
 
 **Phase 03.1 remains PARTIAL pending executable verification and local-state reconciliation.** No test results are claimed.
+
+
+## Phase 03.2 — First implementation slice (in progress)
+
+**Implemented in this branch; not yet runtime-verified:**
+
+- Added `POST /api/v1/rbac/roles` to create a custom role using the existing `roles` table and its current `name` / `description` fields. No migration or new model fields were introduced.
+- Custom role names are normalized to lowercase snake_case, bounded in length, and prevented from using the six canonical system-role names.
+- Creation requires the existing `roles:manage` permission, handles duplicate-name conflicts, and writes a `rbac.role_created` audit event.
+- Extended the existing user-role assignment request to accept an existing custom role name as well as the canonical names. Assignment remains protected by `roles:manage`, locks the target user and selected role, preserves the existing self-change / last-Super-Admin protections, records before/after roles, and revokes active sessions.
+- Added focused unit-level coverage and an isolated SQLite API integration scenario for custom-role creation, audit, assignment, and session revocation.
+
+**Verification status:** `PARTIAL / NOT VERIFIED`. Tests were added but have not been executed in this environment. The current PR base is not `main`, and the inspected CI workflows trigger PR runs only when targeting `main`; therefore no CI run is expected from the current draft PR target. No production database, production data, secrets, or deployment were accessed or changed.
+
+**Remaining for this slice:** execute the targeted and full test suites in CI or an isolated development environment; inspect the resulting workflow logs; add the admin-console create-role workflow and browser acceptance coverage. Custom-role permission assignment is already supported by the existing permission-matrix endpoint, subject to the same `roles:manage` authority and existing protection against granting `roles:manage` to non-Super-Admin roles.
