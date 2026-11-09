@@ -1114,6 +1114,23 @@ def test_multi_role_assignment_returns_effective_permission_union_and_revokes_se
         assert summary.json()["access_enabled"] is True
         assert summary.json()["permissions"] == ["requests:read", "users:read"]
 
+        diagnostic = await api_harness.request(
+            "GET",
+            f"/api/v1/admin/users/{api_harness.target_id}/access-check?permission_code=requests:read",
+        )
+        assert diagnostic.status_code == 200, diagnostic.text
+        assert diagnostic.json()["allowed"] is True
+        assert diagnostic.json()["reason"] == "permission_granted"
+        assert diagnostic.json()["contributing_roles"] == ["request_reader"]
+
+        unknown = await api_harness.request(
+            "GET",
+            f"/api/v1/admin/users/{api_harness.target_id}/access-check?permission_code=not:registered",
+        )
+        assert unknown.status_code == 200, unknown.text
+        assert unknown.json()["allowed"] is False
+        assert unknown.json()["reason"] == "unknown_permission_code"
+
         async with api_harness.factory() as session:
             active_sessions = (await session.execute(
                 select(UserSession).where(
@@ -1159,5 +1176,14 @@ def test_inactive_user_access_summary_keeps_assignments_but_reports_no_effective
         assert payload["access_block_reason"] == "account_inactive"
         assert [role["name"] for role in payload["roles"]] == ["support"]
         assert payload["permissions"] == []
+
+        diagnostic = await api_harness.request(
+            "GET",
+            f"/api/v1/admin/users/{api_harness.target_id}/access-check?permission_code=users:read",
+        )
+        assert diagnostic.status_code == 200, diagnostic.text
+        assert diagnostic.json()["allowed"] is False
+        assert diagnostic.json()["reason"] == "account_inactive"
+        assert diagnostic.json()["contributing_roles"] == ["support"]
 
     asyncio.run(scenario())
