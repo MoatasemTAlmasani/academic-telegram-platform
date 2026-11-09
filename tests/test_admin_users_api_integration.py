@@ -1331,15 +1331,16 @@ def test_role_permission_change_revokes_sessions_for_assigned_users(api_harness)
             user_read = await session.scalar(
                 select(PermissionRecord).where(PermissionRecord.code == "users:read")
             )
-            request_read = await session.scalar(
-                select(PermissionRecord).where(PermissionRecord.code == "requests:read")
-            )
             assigned_role = Role(
                 name="regional_manager",
                 description="Role used to verify session invalidation",
                 permissions=[user_read],
             )
-            target = await session.get(User, api_harness.target_id)
+            target = await session.scalar(
+                select(User)
+                .options(selectinload(User.roles))
+                .where(User.id == api_harness.target_id)
+            )
             target.roles = [assigned_role]
             target_session = UserSession(
                 user_id=api_harness.target_id,
