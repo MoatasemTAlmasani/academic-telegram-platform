@@ -170,7 +170,7 @@ Status meanings: NOT_STARTED / IN_PROGRESS / PARTIAL / IMPLEMENTED / VERIFIED / 
 | User-role assignment | PARTIAL | Existing single canonical role replacement; requested multi-role workflow absent. |
 | Effective permission summary | PARTIAL | Existing read-only summary; permission source mapping and diagnostic access check absent/not confirmed. |
 | Last active Super Admin protection | PARTIAL | Existing helper and role-change checks; concurrent invariant not proven. |
-| Session invalidation after role change | IMPLEMENTED | Existing role assignment revokes sessions; broader permission-change invalidation needs verification. |
+| Session invalidation after role change or permission change | IN_PROGRESS | Role assignment revokes sessions; the current branch now also revokes sessions for users assigned a role when its permission set changes. Runtime verification remains outstanding. |
 | RBAC audit records | PARTIAL | Existing audit writes and general list endpoint; full RBAC event/outcome/export workflow incomplete. |
 | Eight dedicated RBAC workflows | PARTIAL | Existing combined role page, user access summary and general audit; no evidence of all eight. |
 | Arabic/English and RTL/LTR | PARTIAL | Existing dictionaries and layout behavior; complete RBAC coverage not verified. |
@@ -443,3 +443,8 @@ The endpoint does not evaluate resource-specific or branch scope because those p
 - The end-to-end API scenario already exercises create → rename/description update → duplicate → assign → verify session revocation and audit events.
 
 **Verification remains PARTIAL / NOT VERIFIED:** tests are authored but have not been executed, and the browser workflow has not been exercised interactively.
+
+
+### Current branch update — permission-change session invalidation
+
+The RBAC permission update route now revokes every non-revoked session belonging to users assigned the changed role, in the same transaction as the permission-set update. The corresponding audit event records the revoked-session count. A focused security test was added, but it has not been executed. This remains source-level implementation evidence, not VERIFIED acceptance.
