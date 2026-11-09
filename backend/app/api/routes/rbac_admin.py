@@ -252,6 +252,126 @@ async def create_custom_role(
     )
 
 
+@router.patch(
+    "/roles/{role_id}",
+    response_model=RBACRoleUpdateResponse,
+    dependencies=[Depends(require_permission(Permission.ROLES_MANAGE))],
+)
+async def update_custom_role(
+    role_id: UUID,
+    payload: RBACRoleUpdateRequest,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Update the name/description of a custom role without mutating system roles."""
+
+    role_result = await session.execute(
+        select(Role)
+        .options(selectinload(Role.permissions))
+        .where(Role.id == role_id)
+        .with_for_update()
+    )
+    role = role_result.scalar_one_or_none()
+    if role is None:
+        raise HTTPException(status_code=404, detail="Role not found.")
+
+    canonical_names = {
+        "super_admin",
+        "admin",
+        "manager",
+        "staff",
+        "support",
+        "customer",
+    }
+    if role.name in canonical_names:
+        raise HTTPException(
+            status_code=409,
+            detail="Canonical system roles cannot be edited.",
+        )
+
+    if "name" in payload.model_fields_set and payload.name is None:
+        raise HTTPException(status_code=422, detail="Role name cannot be null.")
+
+    before = {"name": role.name, "description": role.description}
+    next_name = payload.name if "name" in payload.model_fields_set else role.name
+    next_description = (
+        payload.description
+        if "description" in payload.model_fields_set
+        else role.description
+    )
+
+    if next_name in canonical_names:
+        raise HTTPException(
+            status_code=409,
+            detail="Canonical system role names are reserved.",
+        )
+
+    if next_name != role.name:
+        duplicate = await session.execute(
+            select(Role)
+            .where(func.lower(Role.name) == next_name, Role.id != role.id)
+            .with_for_update()
+        )
+        if duplicate.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="A role with this name already exists.",
+            )
+
+    after = {"name": next_name, "description": next_description}
+    if before != after:
+        role.name = next_name
+        role.description = next_description
+        try:
+            await session.flush()
+        except IntegrityError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="A role with this name already exists.",
+            ) from exc
+
+        now = datetime.now(timezone.utc)
+        session.add(
+            AuditLog(
+                actor_id=current_user.id,
+                action="rbac.role_updated",
+                resource_type="role",
+                resource_id=role.id,
+                description=f"Updated custom role '{role.name}'.",
+                event_metadata={
+                    "before": before,
+                    "after": after,
+                },
+                created_at=now,
+            )
+        )
+        await session.commit()
+
+    refreshed_result = await session.execute(
+        select(Role)
+        .options(selectinload(Role.permissions))
+        .where(Role.id == role.id)
+    )
+    role = refreshed_result.scalar_one()
+
+    return RBACRoleUpdateResponse(
+        role=RBACRoleResponse(
+            id=role.id,
+            name=role.name,
+            description=role.description,
+            permissions=[
+                RBACPermissionResponse(
+                    id=permission.id,
+                    code=permission.code,
+                    description=permission.description,
+                )
+                for permission in role.permissions
+            ],
+        )
+    )
+
+
 @router.put(
     "/roles/{role_id}/permissions",
     response_model=RBACRolePermissionUpdateResponse,
