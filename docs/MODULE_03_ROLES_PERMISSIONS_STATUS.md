@@ -448,3 +448,8 @@ The endpoint does not evaluate resource-specific or branch scope because those p
 ### Current branch update — permission-change session invalidation
 
 The RBAC permission update route now revokes every non-revoked session belonging to users assigned the changed role, in the same transaction as the permission-set update. The corresponding audit event records the revoked-session count. A focused security test was added, but it has not been executed. This remains source-level implementation evidence, not VERIFIED acceptance.
+
+
+### Current branch update — RBAC overview in the admin console
+
+The Roles & Permissions page now requests the existing database-backed RBAC overview endpoint and displays six metrics: total roles, system roles, custom roles, registered permissions, users with roles, and recent RBAC changes. If the overview endpoint is unavailable, the role list and permission editor remain usable and the metrics show an unavailable state. A static UI wiring test was added but has not been executed. This is implemented source, not browser-verified acceptance.
