@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,7 +17,7 @@ from backend.app.api.rbac_dependencies import require_permission
 from backend.app.infrastructure.persistence.database import get_session
 from backend.app.modules.authentication.permissions import Permission
 from database.models.audit import AuditLog
-from database.models.identity import Role, Permission as PermissionModel
+from database.models.identity import Role, User, Permission as PermissionModel
 
 
 router = APIRouter(
