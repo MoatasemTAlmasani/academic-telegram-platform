@@ -660,7 +660,7 @@ def test_rbac_permission_change_revokes_sessions_for_users_with_the_role():
     assert session.committed
     assert len(session.statements) == 4
     revoke_statement = session.statements[2]
-    assert "role_permissions_changed" in str(revoke_statement)
+    assert "user_sessions" in str(revoke_statement)
     audit = next(item for item in session.added if item.action == "rbac.role_permissions_updated")
     assert audit.event_metadata["revoked_sessions"] == 3
     assert audit.event_metadata["before"] == []
