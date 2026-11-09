@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from sqlalchemy import case, delete, func, literal, or_, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -862,9 +862,14 @@ async def delete_admin_user(
 
 
 class AdminUserRoleAssignmentRequest(BaseModel):
-    """Replace a user's single canonical platform role."""
+    """Replace a user's single platform role, including a custom role."""
 
-    role: RoleName
+    role: str = Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role_name(cls, value: str) -> str:
+        return value.strip().lower()
 
 
 class AdminUserRoleAssignmentResponse(BaseModel):
@@ -884,7 +889,7 @@ async def assign_admin_user_role(
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AdminUserRoleAssignmentResponse:
-    """Assign exactly one canonical role, audit it, and revoke stale sessions."""
+    """Assign exactly one existing role, audit it, and revoke stale sessions."""
     from fastapi import HTTPException
 
     # Lock both the account and the canonical role row to serialize competing changes.
@@ -899,7 +904,7 @@ async def assign_admin_user_role(
         raise HTTPException(status_code=404, detail="User not found.")
 
     role_result = await session.execute(
-        select(Role).where(Role.name == payload.role.value).with_for_update()
+        select(Role).where(Role.name == payload.role).with_for_update()
     )
     new_role = role_result.scalar_one_or_none()
     if new_role is None:
