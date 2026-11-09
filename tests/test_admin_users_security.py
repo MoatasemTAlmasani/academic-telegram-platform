@@ -528,3 +528,17 @@ def test_user_access_panel_uses_permission_gated_multi_role_assignment_ui():
     assert 'value==="super_admin"&&input.checked' in script
     assert '"/roles",{method:"PUT"' in script
     assert 'form.hidden=!has("roles:manage")' in script
+
+def test_user_creation_role_picker_loads_the_database_role_catalogue():
+    from pathlib import Path
+
+    html = Path("backend/app/static/admin/console.html").read_text(encoding="utf-8")
+    script = Path("backend/app/static/admin/console.js").read_text(encoding="utf-8")
+
+    assert 'id="newUserRole"' in html
+    assert '<option value="customer">Customer — العميل</option>' in html
+    assert 'async function loadUserCreationRoles()' in script
+    assert 'api("/rbac/roles")' in script
+    assert 'form.dataset.roleCatalogReady="true"' in script
+    assert 'form.dataset.roleCatalogReady!=="true"' in script
+    assert 'await loadUserCreationRoles()' in script
