@@ -327,7 +327,7 @@ def test_custom_role_update_normalizes_metadata_and_records_before_after_audit()
             return None
 
     actor = SimpleNamespace(id=uuid4())
-    session = UpdateSession([_Result(role), _Result(None)])
+    session = UpdateSession([_Result(role), _Result(None), _Result(role)])
     payload = RBACRoleUpdateRequest(
         name="  AREA_LEAD  ",
         description="  Area operations  ",
