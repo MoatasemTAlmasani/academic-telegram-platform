@@ -61,6 +61,9 @@ async function loadUserAccessSummary(userId){
   var data=await api("/admin/users/"+encodeURIComponent(userId)+"/access-summary");
   roles.innerHTML=(data.roles||[]).map(function(role){return '<span class="status-pill">'+esc(role.name)+'</span>';}).join(" ")||"—";
   permissions.innerHTML=(data.permissions||[]).map(function(code){return '<code class="permission-code">'+esc(code)+'</code>';}).join("")||"—";
+  var accessState=$("userAccessState"),blockMessages={account_inactive:lang==="ar"?"الحساب غير نشط؛ لا توجد صلاحيات فعالة حالياً.":"Account is inactive; no permissions are currently effective.",account_locked:lang==="ar"?"الحساب مقفل مؤقتاً؛ لا توجد صلاحيات فعالة حالياً.":"Account is temporarily locked; no permissions are currently effective.",account_expired:lang==="ar"?"انتهت صلاحية الحساب؛ لا توجد صلاحيات فعالة حالياً.":"Account has expired; no permissions are currently effective."};
+  accessState.textContent=data.access_enabled?(lang==="ar"?"الوصول مفعّل · "+data.account_status:"Access enabled · "+data.account_status):(blockMessages[data.access_block_reason]|| (lang==="ar"?"الوصول غير مفعّل":"Access is disabled"));
+  accessState.dataset.state=data.access_enabled?"enabled":"disabled";
   if(has("roles:manage")){
    var catalog=await api("/rbac/roles"),assigned=new Set((data.roles||[]).map(function(role){return role.id;}));
    choices.innerHTML=(catalog||[]).map(function(role){return '<label class="role-assignment-choice"><input type="checkbox" data-user-role-choice value="'+esc(role.name)+'" '+(assigned.has(role.id)?"checked":"")+'> <span><b>'+esc(role.name)+'</b><small>'+esc(role.description||"")+' · '+(role.permissions||[]).length+' '+t("permissionCount")+'</small></span></label>';}).join("")||'<p class="muted">'+t("noRecords")+'</p>';
