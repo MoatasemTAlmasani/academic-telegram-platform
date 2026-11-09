@@ -17,6 +17,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import selectinload
 
 from backend.app.api.routes.admin_users import (
     AdminUserRoleAssignmentRequest,
@@ -209,12 +210,11 @@ def test_concurrent_super_admin_demotion_preserves_one_active_super_admin() -> N
 
                 demoted_users = await session.execute(
                     select(User)
-                    .options()
+                    .options(selectinload(User.roles))
                     .where(User.id.in_([first_id, second_id]))
                 )
                 role_names = []
                 for user in demoted_users.scalars().all():
-                    await session.refresh(user, attribute_names=["roles"])
                     role_names.append([role.name for role in user.roles])
                 assert sorted(role_names) == [["regional_manager"], ["super_admin"]]
         finally:
