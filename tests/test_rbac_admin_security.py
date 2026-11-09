@@ -262,7 +262,7 @@ def test_custom_role_creation_rejects_duplicate_names():
         create_custom_role,
     )
 
-    session = _Session([_Result(SimpleNamespace(name="regional_manager"))])
+    session = _Session([_Result(SimpleNamespace(name="REGIONAL_MANAGER"))])
 
     async def scenario():
         with pytest.raises(HTTPException) as exc_info:
