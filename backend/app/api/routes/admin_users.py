@@ -186,6 +186,26 @@ async def _protect_last_active_super_admin(
         )
 
 
+def _effective_permission_codes(user) -> set[str]:
+    """Return the authenticated user's effective permission union."""
+
+    return {
+        permission.code
+        for role in (getattr(user, "roles", None) or [])
+        for permission in (getattr(role, "permissions", None) or [])
+        if getattr(permission, "code", None)
+    }
+
+
+def _has_super_admin_role(user) -> bool:
+    """Check the canonical Super Admin role, not a client-supplied claim."""
+
+    return any(
+        getattr(role, "name", None) == "super_admin"
+        for role in (getattr(user, "roles", None) or [])
+    )
+
+
 def _safe_user_audit_snapshot(user: User) -> dict[str, str | None]:
     """Return approved non-secret account fields for before/after audit metadata."""
 
@@ -942,11 +962,39 @@ async def assign_admin_user_role(
         raise HTTPException(status_code=404, detail="User not found.")
 
     role_result = await session.execute(
-        select(Role).where(Role.name == payload.role).with_for_update()
+        select(Role)
+        .options(selectinload(Role.permissions))
+        .where(Role.name == payload.role)
+        .with_for_update()
     )
     new_role = role_result.scalar_one_or_none()
     if new_role is None:
         raise HTTPException(status_code=409, detail="The requested role does not exist.")
+
+    actor_permissions = _effective_permission_codes(current_user)
+    actor_is_super_admin = _has_super_admin_role(current_user)
+    target_permissions = {
+        permission.code for permission in (new_role.permissions or [])
+    }
+    if new_role.name == "super_admin" and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign the Super Admin role.",
+        )
+    if Permission.ROLES_MANAGE.value in target_permissions and not actor_is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin may assign a role with RBAC governance access.",
+        )
+    unauthorized_permissions = sorted(target_permissions - actor_permissions)
+    if unauthorized_permissions:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "You cannot assign a role with permissions beyond your own effective access.",
+                "unauthorized_permissions": unauthorized_permissions,
+            },
+        )
 
     previous_roles = sorted(role.name for role in user.roles)
     if previous_roles == [new_role.name]:
