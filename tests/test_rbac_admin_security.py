@@ -14,9 +14,10 @@ from backend.app.api.routes.rbac_admin import (
 
 
 class _Result:
-    def __init__(self, value=None, items=None):
+    def __init__(self, value=None, items=None, rowcount=0):
         self.value = value
         self.items = items
+        self.rowcount = rowcount
 
     def scalar_one_or_none(self):
         return self.value
@@ -622,3 +623,45 @@ def test_custom_role_metadata_update_rejects_case_insensitive_duplicate():
     asyncio.run(scenario())
     assert not session.committed
     assert not session.added
+
+
+def test_rbac_permission_change_revokes_sessions_for_users_with_the_role():
+    role = SimpleNamespace(
+        id=uuid4(),
+        name="regional_manager",
+        description="Regional manager",
+        permissions=[],
+    )
+    permission = SimpleNamespace(
+        id=uuid4(),
+        code="users:read",
+        description="Read users",
+    )
+    actor = _actor_with_permissions("roles:manage", "users:read")
+    session = _Session([
+        _Result(role),
+        _Result(items=[permission]),
+        _Result(rowcount=3),
+        _Result(role),
+    ])
+
+    response = asyncio.run(
+        update_role_permissions(
+            role_id=role.id,
+            payload=RBACRolePermissionUpdateRequest(
+                permission_codes=["users:read"]
+            ),
+            current_user=actor,
+            session=session,
+        )
+    )
+
+    assert response.role.name == "regional_manager"
+    assert session.committed
+    assert len(session.statements) == 4
+    revoke_statement = session.statements[2]
+    assert "role_permissions_changed" in str(revoke_statement)
+    audit = next(item for item in session.added if item.action == "rbac.role_permissions_updated")
+    assert audit.event_metadata["revoked_sessions"] == 3
+    assert audit.event_metadata["before"] == []
+    assert audit.event_metadata["after"] == ["users:read"]
