@@ -354,3 +354,13 @@
 .role-duplicate-form input{width:100%;min-width:0;min-height:36px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:10px}
 .role-duplicate-form button{grid-column:1/-1;justify-self:start;min-height:36px;padding:8px 12px;font-size:10px}
 @media(max-width:640px){.role-duplicate-form{grid-template-columns:minmax(0,1fr)}.role-duplicate-form button{width:100%}}
+
+
+.role-assignment-picker{display:grid;gap:8px;flex:1 1 100%;min-width:0}
+.role-assignment-picker>span{font-size:11px;font-weight:700;color:var(--text)}
+.role-assignment-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;max-height:260px;overflow:auto;padding:2px}
+.role-assignment-choice{display:flex;align-items:flex-start;gap:9px;min-width:0;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);cursor:pointer}
+.role-assignment-choice input{margin-top:2px;accent-color:var(--accent)}
+.role-assignment-choice span{display:grid;gap:3px;min-width:0}
+.role-assignment-choice b{font-size:11px;color:var(--text);overflow-wrap:anywhere}
+.role-assignment-choice small{font-size:9px;color:var(--muted);overflow-wrap:anywhere}
