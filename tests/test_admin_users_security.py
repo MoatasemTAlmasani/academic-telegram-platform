@@ -214,3 +214,44 @@ def test_sensitive_account_mutations_lock_target_rows_before_changes():
     )
     for handler in guarded_handlers:
         assert ".with_for_update()" in inspect.getsource(handler), handler.__name__
+
+
+def test_custom_role_assignment_is_supported_and_revokes_existing_sessions():
+    actor_id, target_id, role_id = uuid4(), uuid4(), uuid4()
+    previous_role = SimpleNamespace(name="staff")
+    target = SimpleNamespace(
+        id=target_id,
+        username="target-user",
+        status="ACTIVE",
+        roles=[previous_role],
+    )
+    custom_role = SimpleNamespace(
+        id=role_id,
+        name="regional_manager",
+        description="Regional operations",
+    )
+    session = _Session([
+        _Result(target),
+        _Result(custom_role),
+        _Result(rowcount=2),
+    ])
+
+    payload = admin_users.AdminUserRoleAssignmentRequest(
+        role="  REGIONAL_MANAGER  "
+    )
+    response = asyncio.run(
+        admin_users.assign_admin_user_role(
+            user_id=target_id,
+            payload=payload,
+            current_user=SimpleNamespace(id=actor_id),
+            session=session,
+        )
+    )
+
+    assert response.role.name == "regional_manager"
+    assert response.sessions_revoked == 2
+    assert target.roles == [custom_role]
+    assert session.committed
+    assert session.added[0].action == "user.role_assigned"
+    assert session.added[0].event_metadata["before_roles"] == ["staff"]
+    assert session.added[0].event_metadata["after_roles"] == ["regional_manager"]
