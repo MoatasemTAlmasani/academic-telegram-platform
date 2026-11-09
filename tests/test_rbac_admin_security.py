@@ -136,6 +136,7 @@ def test_rbac_permission_change_is_audited_with_before_and_after_codes():
     session = _Session([
         _Result(role),
         _Result(items=[new_permission]),
+        _Result(rowcount=0),
         _Result(role),
     ])
 
@@ -165,6 +166,7 @@ def test_rbac_permission_change_is_audited_with_before_and_after_codes():
         "role_name": "manager",
         "before": ["users:read"],
         "after": ["requests:read"],
+        "revoked_sessions": 0,
     }
 
 
