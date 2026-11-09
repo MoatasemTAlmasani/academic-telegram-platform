@@ -285,3 +285,119 @@ def test_custom_role_creation_ui_is_gated_by_roles_manage_and_uses_existing_api(
     assert 'has("roles:manage")?\'<form id="createRoleForm"' in source
     assert 'api("/rbac/roles",{method:"POST"' in source
     assert 'selectedRole=created.role.id' in source
+
+
+def test_custom_role_update_normalizes_metadata_and_records_before_after_audit():
+    from backend.app.api.routes.rbac_admin import (
+        RBACRoleUpdateRequest,
+        update_custom_role,
+    )
+
+    role_id = uuid4()
+    existing_permission = SimpleNamespace(
+        id=uuid4(),
+        code="users:read",
+        description="Read users",
+    )
+    role = SimpleNamespace(
+        id=role_id,
+        name="regional_manager",
+        description="Old description",
+        permissions=[existing_permission],
+    )
+
+    class UpdateSession(_Session):
+        async def flush(self):
+            return None
+
+    actor = SimpleNamespace(id=uuid4())
+    session = UpdateSession([_Result(role), _Result(None)])
+    payload = RBACRoleUpdateRequest(
+        name="  AREA_LEAD  ",
+        description="  Area operations  ",
+    )
+
+    response = asyncio.run(
+        update_custom_role(
+            role_id=role_id,
+            payload=payload,
+            current_user=actor,
+            session=session,
+        )
+    )
+
+    assert response.role.name == "area_lead"
+    assert response.role.description == "Area operations"
+    assert [permission.code for permission in response.role.permissions] == ["users:read"]
+    assert role.name == "area_lead"
+    assert session.statements[0]._for_update_arg is not None
+    assert session.committed
+    audit = session.added[0]
+    assert audit.actor_id == actor.id
+    assert audit.action == "rbac.role_updated"
+    assert audit.resource_type == "role"
+    assert audit.resource_id == role_id
+    assert audit.event_metadata == {
+        "before": {
+            "name": "regional_manager",
+            "description": "Old description",
+        },
+        "after": {
+            "name": "area_lead",
+            "description": "Area operations",
+        },
+    }
+
+
+def test_custom_role_update_rejects_system_roles_and_duplicate_names():
+    from backend.app.api.routes.rbac_admin import (
+        RBACRoleUpdateRequest,
+        update_custom_role,
+    )
+
+    system_role = SimpleNamespace(
+        id=uuid4(),
+        name="super_admin",
+        description="Protected",
+        permissions=[],
+    )
+    system_session = _Session([_Result(system_role)])
+
+    async def system_scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await update_custom_role(
+                role_id=system_role.id,
+                payload=RBACRoleUpdateRequest(description="Changed"),
+                current_user=SimpleNamespace(id=uuid4()),
+                session=system_session,
+            )
+        assert exc_info.value.status_code == 409
+
+    asyncio.run(system_scenario())
+    assert not system_session.committed
+    assert not system_session.added
+
+    custom_role = SimpleNamespace(
+        id=uuid4(),
+        name="regional_manager",
+        description="Regional operations",
+        permissions=[],
+    )
+    duplicate_session = _Session([
+        _Result(custom_role),
+        _Result(SimpleNamespace(name="area_lead")),
+    ])
+
+    async def duplicate_scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await update_custom_role(
+                role_id=custom_role.id,
+                payload=RBACRoleUpdateRequest(name="area_lead"),
+                current_user=SimpleNamespace(id=uuid4()),
+                session=duplicate_session,
+            )
+        assert exc_info.value.status_code == 409
+
+    asyncio.run(duplicate_scenario())
+    assert not duplicate_session.committed
+    assert not duplicate_session.added
