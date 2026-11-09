@@ -956,6 +956,14 @@ class AdminUserRolesAssignmentRequest(BaseModel):
     def reject_duplicate_role_names(cls, value: list[str]) -> list[str]:
         if len(value) != len(set(value)):
             raise ValueError("Role names must be unique.")
+        for name in value:
+            if (
+                len(name) < 2
+                or len(name) > 50
+                or not name[0].islower()
+                or any(not (character.islower() or character.isdigit() or character == "_") for character in name)
+            ):
+                raise ValueError("Role names must use lowercase snake_case.")
         return value
 
 
