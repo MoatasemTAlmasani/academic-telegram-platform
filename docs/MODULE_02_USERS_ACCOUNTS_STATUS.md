@@ -205,3 +205,20 @@ This section supersedes older statements above that describe the repository as u
 - No production database access or migration was performed. SMTP remains unconfigured in production pending a verified sender and credentials, followed by a real delivery smoke test.
 
 **Module 02 remains `PARTIAL`.** Browser/device E2E acceptance, secure CSV import/invitation, retention/deletion policy, and cross-module governance remain open requirements.
+
+## Public password-recovery browser acceptance — 2026-11-09
+
+- Production browser testing found that the public `/login` page did not expose a recovery-channel selector and therefore submitted the API's default `telegram` channel even when the identifier was an email address. The admin recovery screen already had a channel selector; the gap was specific to the public sign-in flow.
+- **PR #31** corrected this and was merged to `main` as `e6639c87b70acc5f11fea48bb41d65ed76215de8`. The public recovery form now offers verified Telegram and verified email in Arabic and English, submits the selected channel on both recovery-request and code-verification requests, and displays channel-specific confirmation text.
+- The merged production deployment reached **READY** and retained the `ehteraf-tech.vercel.app` production alias.
+- Headless Chrome smoke tests against the live production login page used an intercepted/mock recovery-request endpoint (no real recovery request was sent):
+  - Email selection submitted `channel: "email"` and displayed the verified-email confirmation.
+  - Telegram remained the backward-compatible default and submitted `channel: "telegram"` with Telegram-specific confirmation.
+  - English translation rendered the expected channel label and both verified-channel options.
+  - Mobile viewport 390px and desktop viewport 1365px had no horizontal overflow; no browser page errors were observed.
+- The full Python workflow passed **177 tests, 1 skipped, 2 warnings**; Phase 01 verification passed **178 tests, 2 warnings**. The skip is the expected PostgreSQL concurrency test in the workflow without its dedicated disposable database.
+- Production `/api/v1/health` returned HTTP 200. The post-deployment 10-minute production error/fatal runtime-log query returned no entries.
+- **Not tested end-to-end:** real email/Telegram code delivery and password change; the browser API was deliberately mocked to avoid touching production account data. SMTP credentials/sender remain unconfigured. The authenticated admin dashboard and its user-management submenu were not exercised because no test administrator session was supplied.
+- No production database access, writes, or migrations were performed during this test.
+
+**Module 02 remains `PARTIAL`.** Actual delivery verification, authenticated admin browser acceptance, secure CSV import/invitation, retention/deletion policy, and cross-module governance remain open.
