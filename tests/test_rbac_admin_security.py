@@ -453,3 +453,109 @@ def test_rbac_update_cannot_grant_permissions_beyond_the_actors_effective_access
     asyncio.run(scenario())
     assert not session.committed
     assert not session.added
+
+
+def test_custom_role_duplication_copies_only_authorized_non_governance_permissions():
+    from backend.app.api.routes.rbac_admin import (
+        RBACRoleCreateRequest,
+        duplicate_custom_role,
+    )
+    from database.models.identity import Role
+
+    source_role = SimpleNamespace(
+        id=uuid4(),
+        name="admin",
+        description="Administrator template",
+        permissions=[
+            SimpleNamespace(
+                id=uuid4(),
+                code="users:read",
+                description="Read users",
+            ),
+            SimpleNamespace(
+                id=uuid4(),
+                code="roles:manage",
+                description="Manage roles",
+            ),
+        ],
+    )
+
+    class DuplicateSession(_Session):
+        async def flush(self):
+            for item in self.added:
+                if isinstance(item, Role) and item.id is None:
+                    item.id = uuid4()
+
+    actor = _actor_with_permissions("roles:manage", "users:read")
+    session = DuplicateSession([_Result(source_role), _Result(None)])
+    response = asyncio.run(
+        duplicate_custom_role(
+            role_id=source_role.id,
+            payload=RBACRoleCreateRequest(name="regional_admin"),
+            current_user=actor,
+            session=session,
+        )
+    )
+
+    assert response.role.name == "regional_admin"
+    assert response.role.description == "Administrator template"
+    assert [permission.code for permission in response.role.permissions] == ["users:read"]
+    assert session.committed
+    audit = session.added[1]
+    assert audit.action == "rbac.role_duplicated"
+    assert audit.event_metadata["source_role_name"] == "admin"
+    assert audit.event_metadata["new_role_name"] == "regional_admin"
+    assert audit.event_metadata["copied_permission_codes"] == ["users:read"]
+    assert audit.event_metadata["excluded_permission_codes"] == ["roles:manage"]
+
+
+def test_custom_role_duplication_rejects_super_admin_and_unauthorized_permissions():
+    from backend.app.api.routes.rbac_admin import (
+        RBACRoleCreateRequest,
+        duplicate_custom_role,
+    )
+
+    protected_source = SimpleNamespace(
+        id=uuid4(),
+        name="super_admin",
+        description="Protected",
+        permissions=[],
+    )
+    protected_session = _Session([_Result(protected_source)])
+
+    async def protected_scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await duplicate_custom_role(
+                role_id=protected_source.id,
+                payload=RBACRoleCreateRequest(name="copy_of_root"),
+                current_user=_actor_with_permissions("roles:manage"),
+                session=protected_session,
+            )
+        assert exc_info.value.status_code == 409
+
+    asyncio.run(protected_scenario())
+    assert not protected_session.committed
+    assert not protected_session.added
+
+    source = SimpleNamespace(
+        id=uuid4(),
+        name="admin",
+        description="Administrator template",
+        permissions=[SimpleNamespace(code="users:delete", description="Delete users")],
+    )
+    unauthorized_session = _Session([_Result(source), _Result(None)])
+
+    async def unauthorized_scenario():
+        with pytest.raises(HTTPException) as exc_info:
+            await duplicate_custom_role(
+                role_id=source.id,
+                payload=RBACRoleCreateRequest(name="limited_copy"),
+                current_user=_actor_with_permissions("roles:manage", "users:read"),
+                session=unauthorized_session,
+            )
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail["unauthorized_permissions"] == ["users:delete"]
+
+    asyncio.run(unauthorized_scenario())
+    assert not unauthorized_session.committed
+    assert not unauthorized_session.added
