@@ -89,6 +89,7 @@ def test_admin_user_routes_enforce_the_exact_least_privilege_permission_matrix()
         ("POST", "/admin/users/{user_id}/lifecycle"): {Permission.USERS_UPDATE},
         ("DELETE", "/admin/users/{user_id}"): {Permission.USERS_DELETE},
         ("PUT", "/admin/users/{user_id}/role"): {Permission.ROLES_MANAGE},
+        ("PUT", "/admin/users/{user_id}/roles"): {Permission.ROLES_MANAGE},
         ("GET", "/admin/users/{user_id}/access-summary"): {Permission.USERS_READ},
         ("GET", "/admin/users/{user_id}/audit-history"): {Permission.AUDIT_READ},
         ("GET", "/admin/users/{user_id}/login-attempts"): {Permission.USERS_READ},
